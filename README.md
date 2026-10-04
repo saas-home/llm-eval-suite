@@ -121,7 +121,29 @@ python3 benchmarks/reasoning.py
 
 ---
 
-## Cross-Model Comparison Engine
+## Native Arena Mode (Live Concurrent Evaluation)
+
+Run real-time, side-by-side head-to-head evaluations between two active inference backends simultaneously:
+
+```bash
+python3 compare.py \
+  --live \
+  --endpoint1 http://127.0.0.1:8888/v1 --model1 qwen3.8-27b \
+  --endpoint2 http://172.16.16.29:8000/v1 --model2 qwen3.8-flash \
+  --out results/live_comparison.md
+```
+*(Also accessible directly via `eval.py`: `python3 eval.py --live-compare --endpoint1 ... --endpoint2 ...`)*
+
+### How Native Arena Mode Works:
+
+1. **Parallel Threading**: Concurrently connects to both endpoints in parallel worker threads.
+2. **Simultaneous Dispatch**: Sends each test prompt to both servers at the exact same moment.
+3. **Live Streaming Dashboard**: Displays real-time token speeds (`tok/s`), accumulated tokens, and Time-To-First-Token (`TTFT`) side-by-side on terminal.
+4. **Automated Advantage & Report Generation**: Evaluates correctness/constraints on outputs, computes relative advantages (throughput speedup %, latency reduction, token conciseness), and exports both Markdown and JSON reports.
+
+---
+
+## Offline Cross-Model Comparison Engine
 
 Evaluate how efficiently Model A solves problems compared to Model B using saved JSON reports:
 

@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
-DEFAULT_HEALTH_URL = _ep.replace("/v1", "/health")
+DEFAULT_HEALTH_URL = f"{_ep[:-3]}/health" if _ep.endswith("/v1") else f"{_ep}/health"
 
 SAMPLE_PROMPTS = [
     "Write a detailed Python function implementing merge sort with clear explanations and docstrings.",

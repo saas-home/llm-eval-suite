@@ -44,14 +44,15 @@ IMAGE_PATH = _resolve_image_path()
 DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "results")
 os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
 
-# ANSI terminal colors
-BOLD = "\033[1m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-CYAN = "\033[36m"
-MAGENTA = "\033[35m"
-RESET = "\033[0m"
+# ANSI terminal colors (respect NO_COLOR env and non-TTY pipes)
+NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
+BOLD = "" if NO_COLOR else "\033[1m"
+GREEN = "" if NO_COLOR else "\033[32m"
+YELLOW = "" if NO_COLOR else "\033[33m"
+RED = "" if NO_COLOR else "\033[31m"
+CYAN = "" if NO_COLOR else "\033[36m"
+MAGENTA = "" if NO_COLOR else "\033[35m"
+RESET = "" if NO_COLOR else "\033[0m"
 
 def log(msg, bold=False, color=""):
     prefix = bold and BOLD or ""
@@ -140,7 +141,8 @@ class LLMClient:
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     res_json = json.loads(resp.read().decode("utf-8"))
                 total_time = time.perf_counter() - t0
-                choice = res_json.get("choices", [{}])[0]
+                choices = res_json.get("choices") or [{}]
+                choice = choices[0] if choices else {}
                 msg = choice.get("message", {})
                 content = msg.get("content") or ""
                 reasoning = msg.get("reasoning_content") or ""
@@ -149,7 +151,7 @@ class LLMClient:
                 usage = res_json.get("usage", {})
                 prompt_tokens = usage.get("prompt_tokens", 0)
                 completion_tokens = usage.get("completion_tokens", 0)
-                cached_tokens = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                cached_tokens = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                 speed = completion_tokens / total_time if total_time > 0 else 0.0
                 return {
                     "content": content if content else full_text,
@@ -175,6 +177,7 @@ class LLMClient:
                 completion_tokens = 0
                 cached_tokens = 0
                 tool_calls = None
+                tool_calls_acc = {}  # Accumulate streamed tool call deltas by index
                 with urllib.request.urlopen(req, timeout=timeout) as resp:
                     for line in resp:
                         l = line.decode("utf-8", errors="replace").strip()
@@ -190,12 +193,26 @@ class LLMClient:
                         if "usage" in c and c["usage"]:
                             prompt_tokens = c["usage"].get("prompt_tokens", prompt_tokens)
                             completion_tokens = c["usage"].get("completion_tokens", completion_tokens)
-                            cached_tokens = c["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                            cached_tokens = (c["usage"].get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                         choices = c.get("choices", [])
                         if choices:
                             delta = choices[0].get("delta", {})
                             if "tool_calls" in delta and delta["tool_calls"]:
-                                tool_calls = delta["tool_calls"]
+                                for tc_delta in delta["tool_calls"]:
+                                    tc_idx = tc_delta.get("index", 0)
+                                    if tc_idx not in tool_calls_acc:
+                                        tool_calls_acc[tc_idx] = {
+                                            "id": tc_delta.get("id", ""),
+                                            "type": tc_delta.get("type", "function"),
+                                            "function": {"name": "", "arguments": ""}
+                                        }
+                                    if tc_delta.get("id"):
+                                        tool_calls_acc[tc_idx]["id"] = tc_delta["id"]
+                                    fn_delta = tc_delta.get("function", {})
+                                    if fn_delta.get("name"):
+                                        tool_calls_acc[tc_idx]["function"]["name"] = fn_delta["name"]
+                                    if fn_delta.get("arguments"):
+                                        tool_calls_acc[tc_idx]["function"]["arguments"] += fn_delta["arguments"]
                             reasoning_part = delta.get("reasoning_content") or ""
                             content_part = delta.get("content") or ""
                             chunk_text = reasoning_part + content_part
@@ -215,10 +232,13 @@ class LLMClient:
                 ttft = (t_first - t0) if t_first else total_time
                 gen_time = (t_end - t_first) if t_first else total_time
                 comp_tok = completion_tokens if completion_tokens > 0 else token_count
-                speed = (comp_tok / gen_time) if gen_time > 0 else 0.0
+                speed = ((comp_tok - 1) / gen_time) if gen_time > 0 and comp_tok > 1 else (comp_tok / gen_time if gen_time > 0 else 0.0)
                 content_str = "".join(content_chunks)
                 reasoning_str = "".join(reasoning_chunks)
                 full_text = "".join(chunks)
+                # Finalize accumulated streaming tool calls
+                if tool_calls_acc:
+                    tool_calls = [tool_calls_acc[i] for i in sorted(tool_calls_acc)]
                 return {
                     "content": content_str if content_str else full_text,
                     "reasoning": reasoning_str,
@@ -323,8 +343,7 @@ def extract_python_code(raw_content: str, prefer_class: str = None) -> str:
         code = m.group(1).strip() if m else raw_content.strip()
         code = re.sub(r"```\s*$", "", code).strip()
 
-    # Strip any stray markdown code fence lines to guarantee valid Python syntax
-    return "\n".join(line for line in code.splitlines() if not line.strip().startswith("```")).strip()
+    return code
 
 
 # ============================================================================
@@ -344,11 +363,13 @@ def run_test_streaming(client: LLMClient):
     log(f"  -> TTFT Latency: {res['ttft']*1000:.2f} ms")
     log(f"  -> Tokens Emitted: {res['completion_tokens']}")
     log(f"  -> Generation Speed: {res['decode_speed']:.2f} tok/s")
+    status = "FAIL" if (res.get("error") or res.get("completion_tokens", 0) == 0) else "PASS"
     return {
-        "status": "PASS",
+        "status": status,
         "ttft_ms": round(res["ttft"] * 1000, 2),
         "tokens": res["completion_tokens"],
-        "tok_s": round(res["decode_speed"], 2)
+        "tok_s": round(res["decode_speed"], 2),
+        "error": res.get("error")
     }
 
 # ----------------------------------------------------------------------------
@@ -452,16 +473,20 @@ def run_test_capabilities(client: LLMClient):
         log(f"  Executing: {name}...")
         res = client.call([{"role": "user", "content": prompt}], max_tokens=max_t, stream=True)
         log(f"    -> Emitted: {res['completion_tokens']} toks | Speed: {res['decode_speed']:.2f} tok/s | TTFT: {res['ttft']*1000:.1f} ms")
+        task_st = "FAIL" if (res.get("error") or res.get("completion_tokens", 0) == 0) else "PASS"
         results.append({
             "id": tid,
             "name": name,
             "tokens": res["completion_tokens"],
             "speed_tok_s": round(res["decode_speed"], 2),
-            "ttft_ms": round(res["ttft"] * 1000, 1)
+            "ttft_ms": round(res["ttft"] * 1000, 1),
+            "status": task_st,
+            "error": res.get("error")
         })
-    avg_speed = sum(r["speed_tok_s"] for r in results) / len(results)
+    avg_speed = sum(r["speed_tok_s"] for r in results) / max(1, len(results))
+    overall_st = "PASS" if all(r["status"] == "PASS" for r in results) else "FAIL"
     return {
-        "status": "PASS",
+        "status": overall_st,
         "average_speed_tok_s": round(avg_speed, 2),
         "tasks": results
     }
@@ -674,6 +699,18 @@ def run_test_prefix_caching(client: LLMClient):
     cached_tokens = r2.get("cached_tokens", 0)
     speedup = (cold_ttft / warm_ttft) if warm_ttft > 0 else 1.0
     
+    if r1.get("error") or r2.get("error"):
+        err = r1.get("error") or r2.get("error")
+        log(f"    -> Prefix cache test failed with error: {err}", color=RED)
+        return {
+            "status": "FAIL",
+            "cold_ttft_s": 0.0,
+            "warm_ttft_s": 0.0,
+            "speedup_ratio": 1.0,
+            "cached_tokens_reported": 0,
+            "error": err
+        }
+
     caching_active = speedup >= 2.0 or cached_tokens > 0
     status = "PASS (ACTIVE)" if caching_active else "INACTIVE / COLD"
     log(f"    -> Warm Request TTFT: {warm_ttft:.3f} s (Reported Cached Tokens: {cached_tokens})")
@@ -725,7 +762,7 @@ def run_test_client_abort(client: LLMClient):
     try:
         r = client.call([{"role": "user", "content": "Reply with 'OK'."}], max_tokens=10, stream=False, timeout=15)
         rec_time = time.perf_counter() - t_rec_start
-        follow_up_ok = "OK" in r["content"].upper() or len(r["content"]) > 0
+        follow_up_ok = ("OK" in r.get("content", "").upper() or len(r.get("content", "")) > 0) and not r.get("error")
         status = "PASS" if (follow_up_ok and rec_time < 5.0) else "DEGRADED"
         log(f"    -> Follow-up Response Time: {rec_time*1000:.1f} ms | Recovered: {follow_up_ok} -> {status}")
         return {
@@ -750,9 +787,9 @@ def run_test_stop_sequences(client: LLMClient):
         "Count from 1 to 10 as words separated by commas. After the word 'four', output ' HALT_GENERATION' and then continue counting."
     )
     res = client.call([{"role": "user", "content": prompt}], max_tokens=100, stop=stop_words, temperature=0.0, stream=False)
-    text = res["content"]
+    text = res.get("content", "")
     
-    halt_stopped = "HALT_GENERATION" not in text and ("four" in text.lower())
+    halt_stopped = (not res.get("error")) and ("HALT_GENERATION" not in text) and ("four" in text.lower())
     log(f"  -> Generated Text: {text.strip()}")
     log(f"  -> Stop word suppressed & execution terminated: {halt_stopped}")
     
@@ -760,7 +797,9 @@ def run_test_stop_sequences(client: LLMClient):
     log("  -> Verifying greedy deterministic consistency across repeated runs (temp=0.0)...")
     r_det1 = client.call([{"role": "user", "content": "Compute sha256 checksum purpose in distributed ledgers."}], max_tokens=80, temperature=0.0, seed=42)
     r_det2 = client.call([{"role": "user", "content": "Compute sha256 checksum purpose in distributed ledgers."}], max_tokens=80, temperature=0.0, seed=42)
-    deterministic = r_det1["content"] == r_det2["content"]
+    deterministic = (not r_det1.get("error") and not r_det2.get("error")
+                     and len(r_det1.get("content", "")) > 0
+                     and (r_det1.get("content") == r_det2.get("content")))
     log(f"  -> Exact Match Across Repeated Seeded Generations: {deterministic}")
     
     status = "PASS" if (halt_stopped and deterministic) else ("PARTIAL" if (halt_stopped or deterministic) else "FAIL")
@@ -1007,43 +1046,55 @@ def run_test_context_scaling(client: LLMClient, milestones: list):
         )
         try:
             res = client.call([{"role": "user", "content": prompt_text}], max_tokens=600, stream=True, timeout=1200)
-            actual_prompt = res["prompt_tokens"] if res["prompt_tokens"] > 0 else target
-            cached_tokens = res.get("cached_tokens", 0)
-            uncached_tokens = max(0, actual_prompt - cached_tokens)
-            
-            # Compute both raw cold hardware throughput and effective throughput
-            cold_speed = (uncached_tokens / res["ttft"]) if res["ttft"] > 0 and uncached_tokens > 0 else (actual_prompt / res["ttft"] if res["ttft"] > 0 else 0.0)
-            effective_speed = (actual_prompt / res["ttft"]) if res["ttft"] > 0 else 0.0
+            if res.get("error") or res.get("completion_tokens", 0) == 0:
+                actual_prompt = res.get("prompt_tokens", 0) or target
+                cached_tokens = res.get("cached_tokens", 0)
+                cold_speed = 0.0
+                effective_speed = 0.0
+                needle_matched = False
+                acc_str = "ERROR"
+                step_status = "FAIL"
+            else:
+                actual_prompt = res["prompt_tokens"] if res["prompt_tokens"] > 0 else target
+                cached_tokens = res.get("cached_tokens", 0)
+                uncached_tokens = max(0, actual_prompt - cached_tokens)
+                
+                # Compute both raw cold hardware throughput and effective throughput
+                cold_speed = (uncached_tokens / res["ttft"]) if res["ttft"] > 0 and uncached_tokens > 0 else (actual_prompt / res["ttft"] if res["ttft"] > 0 else 0.0)
+                effective_speed = (actual_prompt / res["ttft"]) if res["ttft"] > 0 else 0.0
 
-            text = res.get("text", "") or res.get("content", "")
-            needle_matched = secret_hex in text
-            acc_str = "RECALLED" if needle_matched else "MISSED"
-            step_status = "PASS" if needle_matched else "PARTIAL"
+                text = res.get("text", "") or res.get("content", "")
+                needle_matched = secret_hex in text
+                acc_str = "RECALLED" if needle_matched else "MISSED"
+                step_status = "PASS" if needle_matched else "PARTIAL"
 
             row = (
                 f"{target:>11,d} | "
                 f"{actual_prompt:>14,d} | "
                 f"{cached_tokens:>8,d} | "
-                f"{res['ttft']:>10.3f} | "
+                f"{res.get('ttft', 0.0):>10.3f} | "
                 f"{cold_speed:>12.1f} | "
                 f"{effective_speed:>12.1f} | "
-                f"{res['decode_speed']:>12.2f} | "
+                f"{res.get('decode_speed', 0.0):>12.2f} | "
                 f"{acc_str:>10} | "
                 f"{step_status:>8}"
             )
-            log(row)
-            scaling_results.append({
+            log(row, color=RED if step_status == "FAIL" else None)
+            step_record = {
                 "target_tokens": target,
                 "actual_prompt_tokens": actual_prompt,
                 "cached_tokens": cached_tokens,
-                "ttft_s": round(res["ttft"], 3),
+                "ttft_s": round(res.get("ttft", 0.0), 3),
                 "cold_prefill_tok_s": round(cold_speed, 1),
                 "effective_prefill_tok_s": round(effective_speed, 1),
-                "decode_tok_s": round(res["decode_speed"], 2),
-                "completion_tokens": res["completion_tokens"],
+                "decode_tok_s": round(res.get("decode_speed", 0.0), 2),
+                "completion_tokens": res.get("completion_tokens", 0),
                 "needle_matched": needle_matched,
                 "status": step_status
-            })
+            }
+            if res.get("error"):
+                step_record["error"] = res["error"]
+            scaling_results.append(step_record)
         except Exception as e:
             row = f"{target:>11,d} | {'ERROR':>14} | {'-':>8} | {'-':>10} | {str(e)[:25]:>12} | {'-':>12} | {'-':>12} | {'-':>10} | {'FAIL':>8}"
             log(row, color=RED)
@@ -1750,32 +1801,38 @@ def extract_test_metrics(test_key: str, data):
         return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
 
     if test_key == "concurrency":
-        levels = list(data.values())
+        if not isinstance(data, dict):
+            return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
+        levels = [l for l in data.values() if isinstance(l, dict)]
         if not levels:
-            return {"status": "SKIPPED", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": "-"}
-        all_passed = all("PASS" in l.get("status", "") for l in levels)
+            st = data.get("status", "FAIL")
+            err = data.get("error", "-")
+            return {"status": st, "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": err}
+        all_passed = all("PASS" in str(l.get("status", "")) for l in levels)
         st = "PASS" if all_passed else "FAIL"
         tot_tokens = sum(l.get("total_tokens", 0) for l in levels)
-        max_agg = max(l.get("aggregate_tok_s", 0) for l in levels)
+        max_agg = max((l.get("aggregate_tok_s", 0) for l in levels), default=0.0)
         score = 1.0 if all_passed else 0.0
         desc = f"Max Agg: {max_agg:.1f} tok/s"
         return {"status": st, "tokens": tot_tokens, "tok_s": round(max_agg, 2), "ttft_ms": 0.0, "score": score, "desc": desc}
 
     if test_key == "capabilities_4tasks":
-        tasks = data.get("tasks", [])
+        if not isinstance(data, dict):
+            return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
+        tasks = [t for t in data.get("tasks", []) if isinstance(t, dict)]
         tot_tokens = sum(t.get("tokens", 0) for t in tasks)
         avg_speed = data.get("average_speed_tok_s", 0.0)
         ttfts = [t.get("ttft_ms", 0) for t in tasks if t.get("ttft_ms")]
         avg_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
-        st = data.get("status", "PASS")
-        score = 1.0 if st == "PASS" else 0.0
-        desc = f"{len(tasks)}/4 Tasks OK"
+        st = data.get("status", "PASS" if tasks else "FAIL")
+        score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
+        desc = f"{len(tasks)}/4 Tasks OK" if tasks else data.get("error", "Failed")
         return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
 
     st = data.get("status", "N/A")
     tokens = data.get("completion_tokens", 0) or data.get("tokens", 0)
     tok_s = data.get("tok_s", 0.0) or data.get("decode_speed", 0.0)
-    ttft_ms = data.get("ttft_ms", 0.0) or (data.get("ttft", 0.0) * 1000.0)
+    ttft_ms = data.get("ttft_ms", 0.0) or ((data.get("ttft") or 0.0) * 1000.0)
     score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
 
     desc = "-"
@@ -1823,7 +1880,164 @@ def extract_test_metrics(test_key: str, data):
     }
 
 
+def normalize_report(report: dict) -> dict:
+    """Normalizes report structures from eval.py or compare.py to guarantee consistent results dict."""
+    if not isinstance(report, dict):
+        return {"model": "unknown", "endpoint": "unknown", "results": {}}
+
+    rep = dict(report)
+    if "model" not in rep:
+        rep["model"] = rep.get("model1") or rep.get("target_model") or "unknown"
+    if "endpoint" not in rep:
+        rep["endpoint"] = rep.get("base_url") or rep.get("endpoint1") or rep.get("url") or "unknown"
+
+    res = rep.get("results")
+    if isinstance(res, list):
+        res_dict = {}
+        for item in res:
+            if isinstance(item, dict):
+                tid = item.get("task_id") or item.get("id") or item.get("name")
+                if tid:
+                    res_dict[tid] = item
+        all_passed = all("PASS" in str(item.get("status", "")) for item in res if isinstance(item, dict))
+        any_passed = any("PASS" in str(item.get("status", "")) or "PARTIAL" in str(item.get("status", "")) for item in res if isinstance(item, dict))
+        st = "PASS" if all_passed else ("PARTIAL" if any_passed else "FAIL")
+        speeds = [item.get("tok_per_sec", 0.0) for item in res if isinstance(item, dict) and item.get("tok_per_sec")]
+        avg_spd = sum(speeds) / len(speeds) if speeds else 0.0
+        res_dict["capabilities_4tasks"] = {
+            "status": st,
+            "average_speed_tok_s": round(avg_spd, 2),
+            "tasks": res
+        }
+        rep["results"] = res_dict
+    elif not isinstance(res, dict):
+        rep["results"] = {}
+
+    return rep
+
+
+def compute_relative_advantages(m1: dict, m2: dict) -> dict:
+    """Computes relative advantages and executive verdict between two evaluated models."""
+    name1 = m1.get("model", "Model A")
+    name2 = m2.get("model", "Model B")
+
+    # 1. Effectiveness
+    eff_a = m1.get("effectiveness_rate_pct", 0.0)
+    eff_b = m2.get("effectiveness_rate_pct", 0.0)
+    diff_eff = eff_a - eff_b
+    if diff_eff > 0:
+        adv_eff = f"Model A (+{diff_eff:.1f}%)"
+    elif diff_eff < 0:
+        adv_eff = f"Model B (+{-diff_eff:.1f}%)"
+    else:
+        adv_eff = "Equal"
+
+    # 2. Token Economy
+    te_a = m1.get("token_economy_tokens_per_passed_task", 0.0)
+    te_b = m2.get("token_economy_tokens_per_passed_task", 0.0)
+    if te_a > 0 and te_b > 0:
+        if te_a < te_b:
+            ratio = te_b / te_a
+            pct = ((te_b - te_a) / te_b) * 100
+            adv_te = f"Model A ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
+        elif te_b < te_a:
+            ratio = te_a / te_b
+            pct = ((te_a - te_b) / te_a) * 100
+            adv_te = f"Model B ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
+        else:
+            adv_te = "Equal"
+    else:
+        adv_te = "-"
+
+    # 3. Total Tokens Emitted
+    tot_a = m1.get("total_tokens_emitted", 0)
+    tot_b = m2.get("total_tokens_emitted", 0)
+    if tot_a < tot_b:
+        adv_tot = f"Model A ({tot_b - tot_a:,} fewer tokens)"
+    elif tot_b < tot_a:
+        adv_tot = f"Model B ({tot_a - tot_b:,} fewer tokens)"
+    else:
+        adv_tot = "Equal"
+
+    # 4. Generation Speed
+    spd_a = m1.get("avg_decode_tok_s", 0.0)
+    spd_b = m2.get("avg_decode_tok_s", 0.0)
+    if spd_a > 0 and spd_b > 0:
+        if spd_a > spd_b:
+            diff_spd = ((spd_a - spd_b) / spd_b) * 100
+            adv_spd = f"Model A (+{diff_spd:.1f}% faster)"
+        elif spd_b > spd_a:
+            diff_spd = ((spd_b - spd_a) / spd_a) * 100
+            adv_spd = f"Model B (+{diff_spd:.1f}% faster)"
+        else:
+            adv_spd = "Equal"
+    else:
+        adv_spd = "-"
+
+    # 5. First Token Latency (TTFT)
+    ttft_a = m1.get("avg_ttft_ms", 0.0)
+    ttft_b = m2.get("avg_ttft_ms", 0.0)
+    if ttft_a > 0 and ttft_b > 0:
+        if ttft_a < ttft_b:
+            adv_ttft = f"Model A ({ttft_b / ttft_a:.2f}x lower latency)"
+        elif ttft_b < ttft_a:
+            adv_ttft = f"Model B ({ttft_a / ttft_b:.2f}x lower latency)"
+        else:
+            adv_ttft = "Equal"
+    else:
+        adv_ttft = "-"
+
+    # 6. Total Wall Clock Time
+    wall_a = m1.get("total_wall_time_s", 0.0)
+    wall_b = m2.get("total_wall_time_s", 0.0)
+    if wall_a < wall_b:
+        adv_wall = f"Model A ({wall_b - wall_a:.1f}s faster)"
+    elif wall_b < wall_a:
+        adv_wall = f"Model B ({wall_a - wall_b:.1f}s faster)"
+    else:
+        adv_wall = "Equal"
+
+    # 7. Composite Efficiency Index
+    ei_a = m1.get("efficiency_index", 0.0)
+    ei_b = m2.get("efficiency_index", 0.0)
+    if ei_a > ei_b:
+        adv_ei = f"Model A (+{ei_a - ei_b:.1f} pts)"
+    elif ei_b > ei_a:
+        adv_ei = f"Model B (+{ei_b - ei_a:.1f} pts)"
+    else:
+        adv_ei = "Equal"
+
+    # Executive Verdict
+    if eff_a > eff_b and te_a <= te_b:
+        verdict = f"MODEL A ({name1}) DOMINATES: Delivers superior effectiveness (+{diff_eff:.1f}%) while maintaining higher token economy ({te_a:.1f} vs {te_b:.1f} tokens/task)."
+    elif eff_b > eff_a and te_b <= te_a:
+        verdict = f"MODEL B ({name2}) DOMINATES: Delivers superior effectiveness (+{-diff_eff:.1f}%) while maintaining higher token economy ({te_b:.1f} vs {te_a:.1f} tokens/task)."
+    elif eff_a > eff_b:
+        verdict = f"MODEL A ({name1}) is MORE EFFECTIVE (+{diff_eff:.1f}% accuracy), while Model B had token economy of {te_b:.1f} tokens/task."
+    elif eff_b > eff_a:
+        verdict = f"MODEL B ({name2}) is MORE EFFECTIVE (+{-diff_eff:.1f}% accuracy), while Model A had token economy of {te_a:.1f} tokens/task."
+    elif spd_a > spd_b * 1.15:
+        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL A ({name1}) LEADS ON THROUGHPUT (+{((spd_a - spd_b)/spd_b)*100:.1f}% faster decode speed)."
+    elif spd_b > spd_a * 1.15:
+        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL B ({name2}) LEADS ON THROUGHPUT (+{((spd_b - spd_a)/spd_a)*100:.1f}% faster decode speed)."
+    else:
+        verdict = f"Both models achieved IDENTICAL effectiveness ({eff_a:.1f}%). Model A speed: {spd_a:.1f} tok/s vs Model B speed: {spd_b:.1f} tok/s."
+
+    return {
+        "adv_eff": adv_eff,
+        "adv_te": adv_te,
+        "adv_tot": adv_tot,
+        "adv_spd": adv_spd,
+        "adv_ttft": adv_ttft,
+        "adv_wall": adv_wall,
+        "adv_ei": adv_ei,
+        "verdict": verdict,
+        "diff_eff": diff_eff,
+    }
+
+
 def compute_executive_summary(report: dict) -> dict:
+    report = normalize_report(report)
     results = report.get("results", {})
     evaluated = 0
     passed = 0
@@ -2146,8 +2360,9 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
         try:
             with open(fp, "r") as f:
                 data = json.load(f)
-                reports.append(data)
-                summaries.append(compute_executive_summary(data))
+                norm_data = normalize_report(data)
+                reports.append(norm_data)
+                summaries.append(compute_executive_summary(norm_data))
         except Exception as e:
             log(f"Error reading {fp}: {e}", color=RED)
             sys.exit(1)
@@ -2167,97 +2382,56 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
     log(exec_hdr, bold=True)
     log("-" * 100)
 
+    adv = compute_relative_advantages(m1, m2)
+
     # 1. Effectiveness
     eff_a = m1['effectiveness_rate_pct']
     eff_b = m2['effectiveness_rate_pct']
-    diff_eff = eff_a - eff_b
-    if diff_eff > 0:
-        adv_eff = f"Model A (+{diff_eff:.1f}%)"
-    elif diff_eff < 0:
-        adv_eff = f"Model B (+{-diff_eff:.1f}%)"
-    else:
-        adv_eff = "Equal"
     pass_a_str = f"{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)"
     pass_b_str = f"{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)"
-    log(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv_eff}")
+    log(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv['adv_eff']}")
 
     # 2. Token Economy
     te_a = m1['token_economy_tokens_per_passed_task']
     te_b = m2['token_economy_tokens_per_passed_task']
-    if te_a > 0 and te_b > 0:
-        if te_a < te_b:
-            ratio = te_b / te_a
-            pct = ((te_b - te_a) / te_b) * 100
-            adv_te = f"Model A ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        elif te_b < te_a:
-            ratio = te_a / te_b
-            pct = ((te_a - te_b) / te_a) * 100
-            adv_te = f"Model B ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        else:
-            adv_te = "Equal"
-    else:
-        adv_te = "-"
     te_a_str = f"{te_a:.1f} tokens/task"
     te_b_str = f"{te_b:.1f} tokens/task"
-    log(f"{'Token Economy (Tokens/Victory)':<35} | {te_a_str:<26} | {te_b_str:<26} | {adv_te}")
+    log(f"{'Token Economy (Tokens/Victory)':<35} | {te_a_str:<26} | {te_b_str:<26} | {adv['adv_te']}")
 
     # 3. Total Tokens Emitted
     tot_a = m1['total_tokens_emitted']
     tot_b = m2['total_tokens_emitted']
-    adv_tot = f"Model A ({tot_b - tot_a:,} fewer tokens)" if tot_a < tot_b else (f"Model B ({tot_a - tot_b:,} fewer tokens)" if tot_b < tot_a else "Equal")
     tot_a_str = f"{tot_a:,} tokens"
     tot_b_str = f"{tot_b:,} tokens"
-    log(f"{'Total Solution Tokens Consumed':<35} | {tot_a_str:<26} | {tot_b_str:<26} | {adv_tot}")
+    log(f"{'Total Solution Tokens Consumed':<35} | {tot_a_str:<26} | {tot_b_str:<26} | {adv['adv_tot']}")
 
     # 4. Generation Speed
     spd_a = m1['avg_decode_tok_s']
     spd_b = m2['avg_decode_tok_s']
-    if spd_a > 0 and spd_b > 0:
-        if spd_a > spd_b:
-            diff_spd = ((spd_a - spd_b) / spd_b) * 100
-            adv_spd = f"Model A (+{diff_spd:.1f}% faster)"
-        elif spd_b > spd_a:
-            diff_spd = ((spd_b - spd_a) / spd_a) * 100
-            adv_spd = f"Model B (+{diff_spd:.1f}% faster)"
-        else:
-            adv_spd = "Equal"
-    else:
-        adv_spd = "-"
     spd_a_str = f"{spd_a:.2f} tok/s"
     spd_b_str = f"{spd_b:.2f} tok/s"
-    log(f"{'Mean Decode Speed (Throughput)':<35} | {spd_a_str:<26} | {spd_b_str:<26} | {adv_spd}")
+    log(f"{'Mean Decode Speed (Throughput)':<35} | {spd_a_str:<26} | {spd_b_str:<26} | {adv['adv_spd']}")
 
     # 5. First Token Latency (TTFT)
     ttft_a = m1['avg_ttft_ms']
     ttft_b = m2['avg_ttft_ms']
-    if ttft_a > 0 and ttft_b > 0:
-        if ttft_a < ttft_b:
-            adv_ttft = f"Model A ({ttft_b / ttft_a:.2f}x lower latency)"
-        elif ttft_b < ttft_a:
-            adv_ttft = f"Model B ({ttft_a / ttft_b:.2f}x lower latency)"
-        else:
-            adv_ttft = "Equal"
-    else:
-        adv_ttft = "-"
     ttft_a_str = f"{ttft_a:.1f} ms"
     ttft_b_str = f"{ttft_b:.1f} ms"
-    log(f"{'Mean Time-To-First-Token (TTFT)':<35} | {ttft_a_str:<26} | {ttft_b_str:<26} | {adv_ttft}")
+    log(f"{'Mean Time-To-First-Token (TTFT)':<35} | {ttft_a_str:<26} | {ttft_b_str:<26} | {adv['adv_ttft']}")
 
     # 6. Total Wall Clock Time
     wall_a = m1['total_wall_time_s']
     wall_b = m2['total_wall_time_s']
-    adv_wall = f"Model A ({wall_b - wall_a:.1f}s faster)" if wall_a < wall_b else (f"Model B ({wall_a - wall_b:.1f}s faster)" if wall_b < wall_a else "Equal")
     wall_a_str = f"{wall_a:.2f} s"
     wall_b_str = f"{wall_b:.2f} s"
-    log(f"{'Total Benchmark Suite Time':<35} | {wall_a_str:<26} | {wall_b_str:<26} | {adv_wall}")
+    log(f"{'Total Benchmark Suite Time':<35} | {wall_a_str:<26} | {wall_b_str:<26} | {adv['adv_wall']}")
 
     # 7. Composite Efficiency Index
     ei_a = m1['efficiency_index']
     ei_b = m2['efficiency_index']
-    adv_ei = f"Model A (+{ei_a - ei_b:.1f} pts)" if ei_a > ei_b else (f"Model B (+{ei_b - ei_a:.1f} pts)" if ei_b > ei_a else "Equal")
     ei_a_str = f"{ei_a:.1f} / 100"
     ei_b_str = f"{ei_b:.1f} / 100"
-    log(f"{'Composite Efficiency Index':<35} | {ei_a_str:<26} | {ei_b_str:<26} | {adv_ei}")
+    log(f"{'Composite Efficiency Index':<35} | {ei_a_str:<26} | {ei_b_str:<26} | {adv['adv_ei']}")
     log("="*100)
 
     # Detailed Domain Matrix
@@ -2268,8 +2442,8 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
     log(dom_hdr, bold=True)
     log("-" * 100)
 
-    res_a = reports[0].get("results", {})
-    res_b = reports[1].get("results", {})
+    res_a = reports[0].get("results") or {}
+    res_b = reports[1].get("results") or {}
     table_rows = []
 
     for num, key, name in TEST_CATALOG:
@@ -2283,28 +2457,28 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
         sa_str = f"{da['status']} ({da['tokens']}t | {da['tok_s']}t/s)" if da["status"] != "SKIPPED" else "SKIPPED"
         sb_str = f"{db['status']} ({db['tokens']}t | {db['tok_s']}t/s)" if db["status"] != "SKIPPED" else "SKIPPED"
 
-        adv = "-"
+        adv_domain = "-"
         if "PASS" in da["status"] and "PASS" not in db["status"]:
-            adv = "Model A Victory"
+            adv_domain = "Model A Victory"
         elif "PASS" in db["status"] and "PASS" not in da["status"]:
-            adv = "Model B Victory"
+            adv_domain = "Model B Victory"
         elif "PASS" in da["status"] and "PASS" in db["status"]:
             if da["tokens"] > 0 and db["tokens"] > 0:
                 if da["tokens"] < db["tokens"]:
                     ratio = db["tokens"] / da["tokens"]
-                    adv = f"Model A ({ratio:.1f}x fewer tokens)"
+                    adv_domain = f"Model A ({ratio:.1f}x fewer tokens)"
                 elif db["tokens"] < da["tokens"]:
                     ratio = da["tokens"] / db["tokens"]
-                    adv = f"Model B ({ratio:.1f}x fewer tokens)"
+                    adv_domain = f"Model B ({ratio:.1f}x fewer tokens)"
                 else:
-                    adv = "Tied"
+                    adv_domain = "Tied"
             else:
-                adv = "Both Passed"
+                adv_domain = "Both Passed"
         elif "FAIL" in da["status"] and "FAIL" in db["status"]:
-            adv = "Both Failed"
+            adv_domain = "Both Failed"
 
-        log(f"{label:<32} | {sa_str:<26} | {sb_str:<26} | {adv}")
-        table_rows.append((num, name, da, db, adv))
+        log(f"{label:<32} | {sa_str:<26} | {sb_str:<26} | {adv_domain}")
+        table_rows.append((num, name, da, db, adv_domain))
 
     log("="*100)
 
@@ -2312,17 +2486,7 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
     log("\n" + "="*100, bold=True)
     log("                                  EXECUTIVE VERDICT                                     ", bold=True, color=GREEN)
     log("="*100, bold=True)
-    if eff_a > eff_b and te_a <= te_b:
-        verdict = f"MODEL A ({m1['model']}) DOMINATES: Delivers superior effectiveness (+{diff_eff:.1f}%) while maintaining higher token economy ({te_a:.1f} vs {te_b:.1f} tokens/task)."
-    elif eff_b > eff_a and te_b <= te_a:
-        verdict = f"MODEL B ({m2['model']}) DOMINATES: Delivers superior effectiveness (+{-diff_eff:.1f}%) while maintaining higher token economy ({te_b:.1f} vs {te_a:.1f} tokens/task)."
-    elif eff_a > eff_b:
-        verdict = f"MODEL A ({m1['model']}) is MORE EFFECTIVE (+{diff_eff:.1f}% accuracy), while Model B had token economy of {te_b:.1f} tokens/task."
-    elif eff_b > eff_a:
-        verdict = f"MODEL B ({m2['model']}) is MORE EFFECTIVE (+{-diff_eff:.1f}% accuracy), while Model A had token economy of {te_a:.1f} tokens/task."
-    else:
-        verdict = f"Both models achieved IDENTICAL effectiveness ({eff_a:.1f}%). Model A speed: {spd_a:.1f} tok/s vs Model B speed: {spd_b:.1f} tok/s."
-
+    verdict = adv["verdict"]
     log(f"  {verdict}\n", bold=True)
     log("="*100 + "\n")
 
@@ -2345,13 +2509,13 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
         "",
         "| Metric / Dimension | Model A (`" + str(m1['model']) + "`) | Model B (`" + str(m2['model']) + "`) | Relative Advantage |",
         "|:---|:---|:---|:---|",
-        f"| **Effectiveness (Accuracy)** | `{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)` | `{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)` | **{adv_eff}** |",
-        f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv_te}** |",
-        f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv_tot}** |",
-        f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv_spd}** |",
-        f"| **Mean Time-to-First-Token (TTFT)** | `{ttft_a:.1f} ms` | `{ttft_b:.1f} ms` | **{adv_ttft}** |",
-        f"| **Total Benchmark Wall Time** | `{wall_a:.2f} s` | `{wall_b:.2f} s` | **{adv_wall}** |",
-        f"| **Composite Efficiency Index** | `{ei_a:.1f} / 100` | `{ei_b:.1f} / 100` | **{adv_ei}** |",
+        f"| **Effectiveness (Accuracy)** | `{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)` | `{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)` | **{adv['adv_eff']}** |",
+        f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv['adv_te']}** |",
+        f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv['adv_tot']}** |",
+        f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv['adv_spd']}** |",
+        f"| **Mean Time-to-First-Token (TTFT)** | `{ttft_a:.1f} ms` | `{ttft_b:.1f} ms` | **{adv['adv_ttft']}** |",
+        f"| **Total Benchmark Wall Time** | `{wall_a:.2f} s` | `{wall_b:.2f} s` | **{adv['adv_wall']}** |",
+        f"| **Composite Efficiency Index** | `{ei_a:.1f} / 100` | `{ei_b:.1f} / 100` | **{adv['adv_ei']}** |",
         "",
         "## Domain-by-Domain Comparison Matrix",
         "",
@@ -2359,10 +2523,10 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
         "|:---|:---|:---|:---|:---|",
     ]
 
-    for num, name, da, db, adv in table_rows:
+    for num, name, da, db, adv_row in table_rows:
         sa_str = f"{da['status']} ({da['tokens']}t, {da['tok_s']}t/s)" if da["status"] != "SKIPPED" else "SKIPPED"
         sb_str = f"{db['status']} ({db['tokens']}t, {db['tok_s']}t/s)" if db["status"] != "SKIPPED" else "SKIPPED"
-        md_lines.append(f"| {num} | {name} | {sa_str} | {sb_str} | **{adv}** |")
+        md_lines.append(f"| {num} | {name} | {sa_str} | {sb_str} | **{adv_row}** |")
 
     md_lines.extend([
         "",
@@ -2510,10 +2674,41 @@ def main():
                         help="Compare two or more JSON benchmark reports head-to-head for efficiency and effectiveness (e.g. --compare results/eval_modelA.json results/eval_modelB.json)")
     parser.add_argument("--compare-out", default=None,
                         help="Optional markdown path to export the cross-model comparison report")
+    parser.add_argument("--live", "--live-compare", action="store_true",
+                        help="Native Arena Mode: Live concurrent benchmark comparing two endpoints side-by-side in real time")
+    parser.add_argument("--endpoint1", "--url1", default=None,
+                        help="First LLM server base endpoint for live arena comparison (e.g. http://127.0.0.1:8888/v1)")
+    parser.add_argument("--model1", default=None, help="First model name or ID for live arena comparison")
+    parser.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
+    parser.add_argument("--endpoint2", "--url2", default=None,
+                        help="Second LLM server base endpoint for live arena comparison (e.g. http://172.16.16.29:8000/v1)")
+    parser.add_argument("--model2", default=None, help="Second model name or ID for live arena comparison")
+    parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
     args = parser.parse_args()
 
     if args.compare:
         compare_benchmark_reports(args.compare, output_markdown=args.compare_out)
+        return
+
+    if args.live or (args.endpoint1 and args.endpoint2):
+        from compare import run_live_arena
+        ep1 = args.endpoint1 or args.endpoint or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")
+        ep2 = args.endpoint2
+        m1 = args.model1 or args.model
+        m2 = args.model2
+        out_path = args.compare_out or args.out or None
+        if not ep1 or not ep2:
+            log("Error: Arena Mode (--live / --live-compare) requires both --endpoint1 and --endpoint2.", color=RED)
+            sys.exit(1)
+        run_live_arena(
+            endpoint1=ep1,
+            model1=m1,
+            endpoint2=ep2,
+            model2=m2,
+            api_key1=args.api_key1,
+            api_key2=args.api_key2,
+            output_file=out_path
+        )
         return
 
     log("\n" + "="*88, bold=True)
