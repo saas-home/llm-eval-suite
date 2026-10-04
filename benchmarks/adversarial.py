@@ -654,7 +654,8 @@ def test_frontier_depth_precision(client: BenchmarkClient, target_context=120000
 def main():
     default_ep = os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1"
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    default_out = os.path.join(base_dir, "results", "hardened_adversarial_results.json")
+    root_dir = os.path.dirname(base_dir)
+    default_out = os.path.join(root_dir, "results", "hardened_adversarial_results.json")
 
     parser = argparse.ArgumentParser(description="Enterprise Hardened Adversarial & Agentic Benchmark.")
     parser.add_argument("--endpoint", "-e", default=default_ep, help="Server endpoint")

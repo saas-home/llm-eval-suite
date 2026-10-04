@@ -17,6 +17,7 @@ import uuid
 import argparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
@@ -151,7 +152,7 @@ def main():
     parser.add_argument("--tokens", type=int, nargs="+", default=[200000], help="Context token target(s)")
     parser.add_argument("--gen-tokens", type=int, default=64, help="Max generation tokens")
     parser.add_argument("--no-salt", action="store_true", help="Disable unique salt prepending (allows warm prefix caching)")
-    parser.add_argument("--out", default=os.path.join(BASE_DIR, "results", "context_benchmark_results.json"), help="Optional output JSON path")
+    parser.add_argument("--out", default=os.path.join(ROOT_DIR, "results", "context_benchmark_results.json"), help="Optional output JSON path")
     args = parser.parse_args()
 
     print("=" * 96)

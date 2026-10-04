@@ -8,12 +8,15 @@ import os
 import argparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+
 def _resolve_image_path():
     for rel in [os.path.join("assets", "invoice.png"), os.path.join("assets", "image.png"), "invoice.png", "image.png"]:
-        p = os.path.join(BASE_DIR, rel)
-        if os.path.exists(p):
-            return p
-    return os.path.join(BASE_DIR, "assets", "invoice.png")
+        for d in [ROOT_DIR, BASE_DIR]:
+            p = os.path.join(d, rel)
+            if os.path.exists(p):
+                return p
+    return os.path.join(ROOT_DIR, "assets", "invoice.png")
 
 IMAGE_PATH = _resolve_image_path()
 
@@ -27,7 +30,7 @@ def main():
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help="Model name")
     parser.add_argument("--image", default=IMAGE_PATH, help="Path to test image")
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help="API key for authentication")
-    parser.add_argument("--out", default=os.path.join(BASE_DIR, "results", "vision_result.json"), help="Output JSON path")
+    parser.add_argument("--out", default=os.path.join(ROOT_DIR, "results", "vision_result.json"), help="Output JSON path")
     args = parser.parse_args()
 
     if not os.path.exists(args.image):

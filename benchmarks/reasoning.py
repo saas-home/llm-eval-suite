@@ -29,7 +29,8 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "results")
+ROOT_DIR = os.path.dirname(BASE_DIR)
+DEFAULT_RESULTS_DIR = os.path.join(ROOT_DIR, "results")
 os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
 
 BOLD = "\033[1m"

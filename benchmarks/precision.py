@@ -18,6 +18,7 @@ import urllib.error
 import argparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
@@ -239,7 +240,7 @@ def main():
     parser.add_argument("--url", default=DEFAULT_API_URL, help="API completion endpoint")
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help="Model name or ID")
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help="API key")
-    parser.add_argument("--out", default=os.path.join(BASE_DIR, "results", "extreme_precision_results.json"), help="Path to output JSON")
+    parser.add_argument("--out", default=os.path.join(ROOT_DIR, "results", "extreme_precision_results.json"), help="Path to output JSON")
     args = parser.parse_args()
     
     results = []

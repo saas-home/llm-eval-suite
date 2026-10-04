@@ -29,21 +29,23 @@ Point it at any endpoint—**vLLM**, **SGLang**, **Ollama**, **llama.cpp**, **Ex
 ```
 llm-eval-suite/
 ├── eval.py                   # Flagship 22-stage evaluation harness & comparison CLI
-├── compare.py                # Cross-model head-to-head comparison CLI
-├── benchmark_context.py      # Standalone: Long-context scaling (8k to 200k+ tokens)
-├── benchmark_concurrency.py  # Standalone: Multi-client continuous batching stress test
-├── benchmark_stream.py       # Standalone: TTFT and streaming latency evaluation
-├── benchmark_vision.py       # Standalone: Multimodal document extraction benchmark
-├── test_adversarial.py       # Standalone: Multi-turn adversarial agent & recovery
-├── test_reasoning.py         # Standalone: Deep parallel tree reasoning & logic search
-├── test_precision.py         # Standalone: High-entropy ledger reconciliation
-├── test_code_synthesis.py    # Standalone: Dynamic execution & fuzz testing on generated code
-├── test_needle_recall.py     # Standalone: High-entropy key-value needle retrieval
+├── compare.py                # Cross-model head-to-head comparison CLI (offline, zero-GPU)
+├── benchmarks/               # Individual standalone test probes & stress tests
+│   ├── context.py            # Long-context scaling (8k to 200k+ tokens)
+│   ├── concurrency.py        # Multi-client continuous batching stress test
+│   ├── streaming.py          # TTFT and streaming latency evaluation
+│   ├── vision.py             # Multimodal document extraction benchmark
+│   ├── adversarial.py        # Multi-turn adversarial agent & recovery protocol
+│   ├── reasoning.py          # Deep parallel tree reasoning & logic search
+│   ├── precision.py          # High-entropy ledger reconciliation
+│   ├── code_synthesis.py     # Dynamic execution & fuzz testing on generated code
+│   └── needle_recall.py      # High-entropy key-value needle retrieval
 ├── assets/
 │   └── invoice.png           # High-resolution invoice document for vision evaluation
 ├── results/                  # Evaluated benchmark JSON reports and Markdown comparisons
 ├── pyproject.toml            # Optional packaging metadata
-├── requirements.txt          # Notes zero dependencies
+├── requirements.txt          # Notes zero dependencies (100% Python stdlib)
+├── LICENSE                   # Apache 2.0 License
 └── README.md                 # Full documentation
 ```
 
@@ -91,6 +93,30 @@ python3 eval.py --suite adversarial
 # Run specific tests by number or alias
 python3 eval.py --test 14,20,22
 python3 eval.py --test context_scaling,aime
+```
+
+### 4. Run Standalone Specialized Probes
+
+Each benchmark probe in `benchmarks/` can also be executed independently:
+
+```bash
+# Long context prefill & decode scaling (8k up to 200k+)
+python3 benchmarks/context.py --tokens 8000 32000 64000 128000 200000
+
+# Continuous batching and concurrency stress test
+python3 benchmarks/concurrency.py --parallel 8 --tokens 256
+
+# Streaming TTFT & decode throughput
+python3 benchmarks/streaming.py
+
+# Multimodal document extraction
+python3 benchmarks/vision.py
+
+# Multi-turn adversarial agent & error recovery
+python3 benchmarks/adversarial.py
+
+# Deep parallel tree reasoning & logic search
+python3 benchmarks/reasoning.py
 ```
 
 ---
