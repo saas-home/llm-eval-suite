@@ -639,80 +639,17 @@ def run_live_arena(
     sum2 = compute_model_summary("model2", m2, ep2)
 
     # Relative advantage calculations for Executive Summary
+    from eval import compute_relative_advantages
+    adv = compute_relative_advantages(sum1, sum2)
+    verdict = adv["verdict"]
+
     eff_a, eff_b = sum1["effectiveness_rate_pct"], sum2["effectiveness_rate_pct"]
-    diff_eff = eff_a - eff_b
-    if diff_eff > 0:
-        adv_eff = f"Model A (+{diff_eff:.1f}%)"
-    elif diff_eff < 0:
-        adv_eff = f"Model B (+{-diff_eff:.1f}%)"
-    else:
-        adv_eff = "Equal"
-
     te_a, te_b = sum1["token_economy_tokens_per_passed_task"], sum2["token_economy_tokens_per_passed_task"]
-    if te_a > 0 and te_b > 0:
-        if te_a < te_b:
-            ratio = te_b / te_a
-            pct = ((te_b - te_a) / te_b) * 100
-            adv_te = f"Model A ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        elif te_b < te_a:
-            ratio = te_a / te_b
-            pct = ((te_a - te_b) / te_a) * 100
-            adv_te = f"Model B ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        else:
-            adv_te = "Equal"
-    else:
-        adv_te = "-"
-
     tot_a, tot_b = sum1["total_tokens_emitted"], sum2["total_tokens_emitted"]
-    adv_tot = f"Model A ({tot_b - tot_a:,} fewer tokens)" if tot_a < tot_b else (f"Model B ({tot_a - tot_b:,} fewer tokens)" if tot_b < tot_a else "Equal")
-
     spd_a, spd_b = sum1["avg_decode_tok_s"], sum2["avg_decode_tok_s"]
-    if spd_a > 0 and spd_b > 0:
-        if spd_a > spd_b:
-            diff_spd = ((spd_a - spd_b) / spd_b) * 100
-            adv_spd = f"Model A (+{diff_spd:.1f}% faster)"
-        elif spd_b > spd_a:
-            diff_spd = ((spd_b - spd_a) / spd_a) * 100
-            adv_spd = f"Model B (+{diff_spd:.1f}% faster)"
-        else:
-            adv_spd = "Equal"
-    else:
-        adv_spd = "-"
-
     ttft_a, ttft_b = sum1["avg_ttft_ms"], sum2["avg_ttft_ms"]
-    if ttft_a > 0 and ttft_b > 0:
-        if ttft_a < ttft_b:
-            adv_ttft = f"Model A ({ttft_b / ttft_a:.2f}x lower latency)"
-        elif ttft_b < ttft_a:
-            adv_ttft = f"Model B ({ttft_a / ttft_b:.2f}x lower latency)"
-        else:
-            adv_ttft = "Equal"
-    else:
-        adv_ttft = "-"
-
     wall_a, wall_b = sum1["total_wall_time_s"], sum2["total_wall_time_s"]
-    adv_wall = f"Model A ({wall_b - wall_a:.1f}s faster)" if wall_a < wall_b else (f"Model B ({wall_a - wall_b:.1f}s faster)" if wall_b < wall_a else "Equal")
-
     ei_a, ei_b = sum1["efficiency_index"], sum2["efficiency_index"]
-    adv_ei = f"Model A (+{ei_a - ei_b:.1f} pts)" if ei_a > ei_b else (f"Model B (+{ei_b - ei_a:.1f} pts)" if ei_b > ei_a else "Equal")
-
-    # Executive Verdict
-    if eff_a > eff_b and te_a <= te_b:
-        verdict = f"MODEL A ({m1}) DOMINATES: Superior effectiveness (+{diff_eff:.1f}%) while maintaining higher token economy ({te_a:.1f} vs {te_b:.1f} tokens/task)."
-    elif eff_b > eff_a and te_b <= te_a:
-        verdict = f"MODEL B ({m2}) DOMINATES: Superior effectiveness (+{-diff_eff:.1f}%) while maintaining higher token economy ({te_b:.1f} vs {te_a:.1f} tokens/task)."
-    elif eff_a > eff_b:
-        verdict = f"MODEL A ({m1}) is MORE EFFECTIVE (+{diff_eff:.1f}% accuracy), while Model B had token economy of {te_b:.1f} tokens/task."
-    elif eff_b > eff_a:
-        verdict = f"MODEL B ({m2}) is MORE EFFECTIVE (+{-diff_eff:.1f}% accuracy), while Model A had token economy of {te_a:.1f} tokens/task."
-    elif spd_a > spd_b * 1.15:
-        diff_p = ((spd_a - spd_b) / spd_b) * 100
-        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL A ({m1}) LEADS ON THROUGHPUT (+{diff_p:.1f}% faster)."
-    elif spd_b > spd_a * 1.15:
-        diff_p = ((spd_b - spd_a) / spd_a) * 100
-        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL B ({m2}) LEADS ON THROUGHPUT (+{diff_p:.1f}% faster)."
-    else:
-        verdict = f"Both models performed comparably with identical effectiveness ({eff_a:.1f}%). Model A speed: {spd_a:.1f} tok/s vs Model B speed: {spd_b:.1f} tok/s."
 
     # Print Executive CLI Report
     print("\n" + "=" * 100)
@@ -738,13 +675,13 @@ def run_live_arena(
     ei_a_str = f"{ei_a:.1f} / 100"
     ei_b_str = f"{ei_b:.1f} / 100"
 
-    print(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv_eff}")
-    print(f"{'Token Economy (Tokens/Victory)':<35} | {te_a_str:<26} | {te_b_str:<26} | {adv_te}")
-    print(f"{'Total Solution Tokens Consumed':<35} | {tot_a_str:<26} | {tot_b_str:<26} | {adv_tot}")
-    print(f"{'Mean Decode Speed (Throughput)':<35} | {spd_a_str:<26} | {spd_b_str:<26} | {adv_spd}")
-    print(f"{'Mean Time-To-First-Token (TTFT)':<35} | {ttft_a_str:<26} | {ttft_b_str:<26} | {adv_ttft}")
-    print(f"{'Total Generation Wall Time':<35} | {wall_a_str:<26} | {wall_b_str:<26} | {adv_wall}")
-    print(f"{'Composite Efficiency Index':<35} | {ei_a_str:<26} | {ei_b_str:<26} | {adv_ei}")
+    print(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv['adv_eff']}")
+    print(f"{'Token Economy (Tokens/Victory)':<35} | {te_a_str:<26} | {te_b_str:<26} | {adv['adv_te']}")
+    print(f"{'Total Solution Tokens Consumed':<35} | {tot_a_str:<26} | {tot_b_str:<26} | {adv['adv_tot']}")
+    print(f"{'Mean Decode Speed (Throughput)':<35} | {spd_a_str:<26} | {spd_b_str:<26} | {adv['adv_spd']}")
+    print(f"{'Mean Time-To-First-Token (TTFT)':<35} | {ttft_a_str:<26} | {ttft_b_str:<26} | {adv['adv_ttft']}")
+    print(f"{'Total Generation Wall Time':<35} | {wall_a_str:<26} | {wall_b_str:<26} | {adv['adv_wall']}")
+    print(f"{'Composite Efficiency Index':<35} | {ei_a_str:<26} | {ei_b_str:<26} | {adv['adv_ei']}")
     print("=" * 100)
 
     # Domain matrix CLI
@@ -794,13 +731,13 @@ def run_live_arena(
         "",
         f"| Metric / Dimension | Model A (`{m1}`) | Model B (`{m2}`) | Relative Advantage |",
         "|:---|:---|:---|:---|",
-        f"| **Effectiveness (Accuracy)** | `{sum1['passed']}/{sum1['total_evaluated']} ({eff_a:.1f}%)` | `{sum2['passed']}/{sum2['total_evaluated']} ({eff_b:.1f}%)` | **{adv_eff}** |",
-        f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv_te}** |",
-        f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv_tot}** |",
-        f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv_spd}** |",
-        f"| **Mean Time-to-First-Token (TTFT)** | `{ttft_a:.1f} ms` | `{ttft_b:.1f} ms` | **{adv_ttft}** |",
-        f"| **Total Generation Wall Time** | `{wall_a:.2f} s` | `{wall_b:.2f} s` | **{adv_wall}** |",
-        f"| **Composite Efficiency Index** | `{ei_a:.1f} / 100` | `{ei_b:.1f} / 100` | **{adv_ei}** |",
+        f"| **Effectiveness (Accuracy)** | `{sum1['passed']}/{sum1['total_evaluated']} ({eff_a:.1f}%)` | `{sum2['passed']}/{sum2['total_evaluated']} ({eff_b:.1f}%)` | **{adv['adv_eff']}** |",
+        f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv['adv_te']}** |",
+        f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv['adv_tot']}** |",
+        f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv['adv_spd']}** |",
+        f"| **Mean Time-to-First-Token (TTFT)** | `{ttft_a:.1f} ms` | `{ttft_b:.1f} ms` | **{adv['adv_ttft']}** |",
+        f"| **Total Generation Wall Time** | `{wall_a:.2f} s` | `{wall_b:.2f} s` | **{adv['adv_wall']}** |",
+        f"| **Composite Efficiency Index** | `{ei_a:.1f} / 100` | `{ei_b:.1f} / 100` | **{adv['adv_ei']}** |",
         "",
         "## Arena Task Comparison Matrix",
         "",
@@ -849,12 +786,12 @@ def run_live_arena(
             "model1": sum1,
             "model2": sum2,
             "relative_advantages": {
-                "effectiveness": adv_eff,
-                "token_economy": adv_te,
-                "total_tokens": adv_tot,
-                "decode_speed": adv_spd,
-                "ttft": adv_ttft,
-                "efficiency_index": adv_ei,
+                "effectiveness": adv["adv_eff"],
+                "token_economy": adv["adv_te"],
+                "total_tokens": adv["adv_tot"],
+                "decode_speed": adv["adv_spd"],
+                "ttft": adv["adv_ttft"],
+                "efficiency_index": adv["adv_ei"],
             },
             "verdict": verdict,
         },
@@ -891,104 +828,56 @@ def run_benchmark(base_url: str, output_file: str, model: str = "qwen3.8-27b-exl
 
     for idx, task in enumerate(BENCHMARK_TASKS, 1):
         print(f"\n[{idx}/{len(BENCHMARK_TASKS)}] Running {task['id']} ({task['name']})...")
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": task["system"]},
-                {"role": "user", "content": task["prompt"]},
-            ],
-            "max_tokens": task["max_tokens"],
-            "temperature": task["temperature"],
-            "stream": True,
-            "stream_options": {"include_usage": True}
+        state = {
+            "tokens": 0,
+            "tok_s": 0.0,
+            "ttft_ms": None,
+            "status": "CONNECTING",
+            "chunks": [],
+            "error": None,
+            "t_start": None,
+            "t_first": None,
+            "t_end": None,
+            "completion_tokens": 0,
+            "total_time_s": 0.0,
         }
+        _stream_worker(task, base_url, model, headers, state)
 
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            f"{base_url}/chat/completions",
-            data=data,
-            headers=headers,
-        )
+        if state["error"] and not state["chunks"]:
+            print(f"  -> Error executing {task['id']}: {state['error']}")
+            results.append({"task_id": task["id"], "error": state["error"], "status": "FAIL"})
+            continue
 
-        t_start = time.perf_counter()
-        t_first_token = None
-        output_chunks = []
-        token_count = 0
-        completion_tokens = 0
+        full_output = "".join(state["chunks"])
+        final_tokens = state["tokens"]
+        total_time = state["total_time_s"]
+        ttft_ms = state["ttft_ms"] if state["ttft_ms"] is not None else 0.0
+        tok_s = state["tok_s"]
 
-        try:
-            with urllib.request.urlopen(req, timeout=300) as response:
-                for line in response:
-                    line = line.decode("utf-8", errors="replace").strip()
-                    if not line or not line.startswith("data: "):
-                        continue
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                    except Exception:
-                        continue
+        print(f"  -> Generated {final_tokens} tokens in {total_time:.2f}s")
+        print(f"  -> TTFT (prefill latency): {ttft_ms:.1f} ms")
+        print(f"  -> Decode Speed: {tok_s:.2f} tok/s")
 
-                    if "error" in chunk:
-                        print(f"\n[ERROR from server]: {chunk['error']}", flush=True)
-                        break
+        eval_res = evaluate_arena_task(task["id"], full_output)
 
-                    if "usage" in chunk and chunk["usage"]:
-                        completion_tokens = chunk["usage"].get("completion_tokens", completion_tokens)
+        task_res = {
+            "task_id": task["id"],
+            "name": task["name"],
+            "category": task["category"],
+            "tokens": final_tokens,
+            "total_time_s": round(total_time, 3),
+            "ttft_ms": round(ttft_ms, 1),
+            "tok_per_sec": round(tok_s, 2),
+            "status": eval_res["status"],
+            "score": eval_res["score"],
+            "eval_details": eval_res["details"],
+            "output_sample": full_output[:400] + "..." if len(full_output) > 400 else full_output,
+            "full_output": full_output,
+        }
+        if state["error"]:
+            task_res["error"] = state["error"]
 
-                    choices = chunk.get("choices") or []
-                    if not choices:
-                        continue
-
-                    if choices[0].get("finish_reason") == "error":
-                        err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
-                        print(f"\n[ERROR from model]: {err_msg}", flush=True)
-                        break
-
-                    delta = choices[0].get("delta", {})
-                    text_piece = delta.get("content") or delta.get("reasoning_content") or ""
-                    if text_piece:
-                        if t_first_token is None:
-                            t_first_token = time.perf_counter()
-                        output_chunks.append(text_piece)
-                        token_count += 1
-
-            t_end = time.perf_counter()
-            total_time = t_end - t_start
-            ttft = (t_first_token - t_start) if t_first_token else total_time
-            gen_time = (t_end - t_first_token) if t_first_token else total_time
-            final_tokens = completion_tokens if completion_tokens > 0 else token_count
-            tok_s = ((final_tokens - 1) / gen_time) if gen_time > 0 and final_tokens > 1 else (final_tokens / gen_time if gen_time > 0 else 0.0)
-
-            full_output = "".join(output_chunks)
-
-            print(f"  -> Generated {final_tokens} tokens in {total_time:.2f}s")
-            print(f"  -> TTFT (prefill latency): {ttft*1000:.1f} ms")
-            print(f"  -> Decode Speed: {tok_s:.2f} tok/s")
-
-            eval_res = evaluate_arena_task(task["id"], full_output)
-
-            task_res = {
-                "task_id": task["id"],
-                "name": task["name"],
-                "category": task["category"],
-                "tokens": final_tokens,
-                "total_time_s": round(total_time, 3),
-                "ttft_ms": round(ttft * 1000, 1),
-                "tok_per_sec": round(tok_s, 2),
-                "status": eval_res["status"],
-                "score": eval_res["score"],
-                "eval_details": eval_res["details"],
-                "output_sample": full_output[:400] + "..." if len(full_output) > 400 else full_output,
-                "full_output": full_output,
-            }
-
-            results.append(task_res)
-
-        except Exception as e:
-            print(f"  -> Error executing {task['id']}: {e}")
-            results.append({"task_id": task["id"], "error": str(e), "status": "FAIL"})
+        results.append(task_res)
 
     # Summary
     avg_speed = sum(r.get("tok_per_sec", 0) for r in results if "tok_per_sec" in r) / max(1, len([r for r in results if "tok_per_sec" in r]))
@@ -1008,19 +897,7 @@ def run_benchmark(base_url: str, output_file: str, model: str = "qwen3.8-27b-exl
     return summary
 
 
-if __name__ == "__main__":
-    # If JSON benchmark reports are passed as arguments, execute offline head-to-head comparison
-    json_args = [a for a in sys.argv[1:] if a.endswith(".json") and not a.startswith("--out=")]
-    if len(json_args) >= 2 or (len(sys.argv) > 1 and not sys.argv[1].startswith("-") and sys.argv[1].endswith(".json")):
-        from eval import compare_benchmark_reports
-        out_md = None
-        if "--out" in sys.argv:
-            idx = sys.argv.index("--out")
-            if idx + 1 < len(sys.argv):
-                out_md = sys.argv[idx + 1]
-        compare_benchmark_reports(json_args, output_markdown=out_md)
-        sys.exit(0)
-
+def main():
     default_url = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
     parser = argparse.ArgumentParser(description="LLM Inference Arena & Comparison Harness (Native Arena Mode or Offline Report Comparison)")
 
@@ -1044,13 +921,15 @@ if __name__ == "__main__":
     # Output & Reports
     parser.add_argument("--out", "-o", default=None, help="Output path for Markdown comparison (.md) or JSON (.json)")
     parser.add_argument("--reports", nargs="+", help="Compare two or more JSON reports offline head-to-head")
+    parser.add_argument("report_paths", nargs="*", help="JSON reports to compare offline head-to-head")
 
     args = parser.parse_args()
+    reports = args.reports or args.report_paths
 
     # Route 1: Offline Report Comparison
-    if args.reports:
+    if reports:
         from eval import compare_benchmark_reports
-        compare_benchmark_reports(args.reports, output_markdown=args.out if args.out and args.out.endswith(".md") else None)
+        compare_benchmark_reports(reports, output_markdown=args.out if args.out and args.out.endswith(".md") else None)
 
     # Route 2: Native Arena Mode (Live Concurrent Comparison)
     elif args.live or (args.endpoint1 and args.endpoint2):
@@ -1073,3 +952,7 @@ if __name__ == "__main__":
     else:
         out_file = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "compare_benchmark.json")
         run_benchmark(args.url, out_file, model=args.model, api_key=args.api_key)
+
+
+if __name__ == "__main__":
+    main()

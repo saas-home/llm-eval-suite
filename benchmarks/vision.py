@@ -82,13 +82,17 @@ def main():
         with urllib.request.urlopen(req, timeout=300) as resp:
             for line in resp:
                 line_str = line.decode("utf-8", errors="replace").strip()
-                if not line_str or line_str == "data: [DONE]":
+                if not line_str:
                     continue
-                if line_str.startswith("data: "):
-                    try:
-                        data = json.loads(line_str[6:])
-                    except Exception:
-                        continue
+                if not line_str.startswith("data:"):
+                    continue
+                data_str = line_str[5:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    data = json.loads(data_str)
+                except Exception:
+                    continue
 
                     if "error" in data:
                         print(f"\n[ERROR from server]: {data['error']}", flush=True)
