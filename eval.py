@@ -2510,10 +2510,41 @@ def main():
                         help="Compare two or more JSON benchmark reports head-to-head for efficiency and effectiveness (e.g. --compare results/eval_modelA.json results/eval_modelB.json)")
     parser.add_argument("--compare-out", default=None,
                         help="Optional markdown path to export the cross-model comparison report")
+    parser.add_argument("--live", "--live-compare", action="store_true",
+                        help="Native Arena Mode: Live concurrent benchmark comparing two endpoints side-by-side in real time")
+    parser.add_argument("--endpoint1", "--url1", default=None,
+                        help="First LLM server base endpoint for live arena comparison (e.g. http://127.0.0.1:8888/v1)")
+    parser.add_argument("--model1", default=None, help="First model name or ID for live arena comparison")
+    parser.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
+    parser.add_argument("--endpoint2", "--url2", default=None,
+                        help="Second LLM server base endpoint for live arena comparison (e.g. http://172.16.16.29:8000/v1)")
+    parser.add_argument("--model2", default=None, help="Second model name or ID for live arena comparison")
+    parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
     args = parser.parse_args()
 
     if args.compare:
         compare_benchmark_reports(args.compare, output_markdown=args.compare_out)
+        return
+
+    if args.live or (args.endpoint1 and args.endpoint2):
+        from compare import run_live_arena
+        ep1 = args.endpoint1 or args.endpoint or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")
+        ep2 = args.endpoint2
+        m1 = args.model1 or args.model
+        m2 = args.model2
+        out_path = args.compare_out or args.out or None
+        if not ep1 or not ep2:
+            log("Error: Arena Mode (--live / --live-compare) requires both --endpoint1 and --endpoint2.", color=RED)
+            sys.exit(1)
+        run_live_arena(
+            endpoint1=ep1,
+            model1=m1,
+            endpoint2=ep2,
+            model2=m2,
+            api_key1=args.api_key1,
+            api_key2=args.api_key2,
+            output_file=out_path
+        )
         return
 
     log("\n" + "="*88, bold=True)
