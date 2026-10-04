@@ -1,0 +1,5 @@
+# llm-eval-suite requires ZERO external dependencies.
+# The entire benchmark suite is implemented using the Python 3.8+ Standard Library
+# (urllib, json, threading, concurrent.futures, socket, subprocess).
+#
+# Minimum requirement: Python >= 3.8

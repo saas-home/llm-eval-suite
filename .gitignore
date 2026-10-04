@@ -1,0 +1,20 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Output Results (Keep template comparison reports, ignore ad-hoc evaluation dumps)
+results/*.json
+!results/.gitkeep
+!results/samples/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
