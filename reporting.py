@@ -11,6 +11,7 @@ import sys
 import json
 import re
 import time
+import hashlib
 
 from client import log, BOLD, GREEN, YELLOW, RED, CYAN, RESET, DEFAULT_RESULTS_DIR
 
@@ -44,6 +45,98 @@ TEST_CATALOG = [
     (21, "swe_bench_bug_patch", "SWE-bench (Traceback Fix)"),
     (22, "aime_olympiad", "AIME Olympiad (Math Reasoning)"),
 ]
+
+
+# ============================================================================
+# INFRASTRUCTURE-FAILURE CLASSIFICATION (completion rate)
+# ============================================================================
+# A test that fails because the *serving environment* broke (network error,
+# timeout, 5xx, rate limit) measures the infrastructure, not the model. Those
+# are excluded from effectiveness and reported via completion_rate instead.
+_INFRA_PATTERNS = (
+    "HTTPError 5",       # 5xx server errors
+    "HTTPError 429",     # rate limit
+    "Bad Gateway",
+    "Service Unavailable",
+    "Gateway Time-out",
+    "timed out",
+    "timeout",
+    "TimeoutError",
+    "Connection refused",
+    "Connection reset",
+    "ConnectionError",
+    "Connection aborted",
+    "Max retries exceeded",
+    "RemoteProtocolError",
+    "NewConnectionError",
+    "Name or service not known",
+    "Temporary failure in name resolution",
+)
+
+
+def _looks_like_infra_error(text):
+    if not text:
+        return False
+    t = str(text)
+    return any(p in t for p in _INFRA_PATTERNS)
+
+
+def _classify_infra(data):
+    """True if a test result represents an infrastructure failure (network /
+    timeout / 5xx / 429) rather than a model-quality failure."""
+    if data is None:
+        return False
+    if isinstance(data, str):
+        return _looks_like_infra_error(data)
+    if isinstance(data, list):
+        sub = [d for d in data if isinstance(d, dict)]
+        if not sub:
+            return False
+        return all(_classify_infra(d) for d in sub)
+    if isinstance(data, dict):
+        if data.get("failure_kind") in ("infra", "rate_limit"):
+            return True
+        if "error" in data and _looks_like_infra_error(data.get("error")):
+            return True
+    return False
+
+
+# ============================================================================
+# CONFIG FINGERPRINT (comparability)
+# ============================================================================
+def build_config_fingerprint(report):
+    """Hash the comparable config (model, context, parallel, milestones, suite)
+    so two runs can be checked for comparability before a head-to-head compare."""
+    comparable = {
+        "model": report.get("model"),
+        "max_context_tokens": report.get("max_context_tokens"),
+        "parallel_streams": report.get("parallel_streams"),
+        "context_milestones": report.get("context_milestones"),
+        "suite": report.get("suite"),
+    }
+    blob = json.dumps(comparable, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
+
+
+# ============================================================================
+# STAR RATING (at-a-glance quality)
+# ============================================================================
+def star_rating(eff_pct, completion_pct):
+    """1-5 star at-a-glance rating. Capped at 3 stars when the serving
+    environment was too flaky (completion < 80%) to trust the score."""
+    if eff_pct >= 95:
+        stars = 5
+    elif eff_pct >= 85:
+        stars = 4
+    elif eff_pct >= 70:
+        stars = 3
+    elif eff_pct >= 50:
+        stars = 2
+    else:
+        stars = 1
+    if completion_pct < 80:
+        stars = min(stars, 3)
+    return stars
 
 
 def extract_test_metrics(test_key: str, data):
@@ -309,6 +402,9 @@ def compute_executive_summary(report: dict) -> dict:
     passed = 0
     partial = 0
     failed = 0
+    infra_excluded = 0
+    infra_excluded_tests = []
+    total_seen = 0
     total_tokens = 0
     passed_tokens = 0
     speeds = []
@@ -320,6 +416,14 @@ def compute_executive_summary(report: dict) -> dict:
         data = results[test_key]
         m = extract_test_metrics(test_key, data)
         if m["status"] == "SKIPPED":
+            continue
+        total_seen += 1
+        # Infrastructure failures (network / timeout / 5xx / 429) measure the
+        # serving environment, not the model. Exclude them from effectiveness
+        # and surface them via completion_rate instead.
+        if "FAIL" in m["status"] and _classify_infra(data):
+            infra_excluded += 1
+            infra_excluded_tests.append(test_key)
             continue
         evaluated += 1
         if "PASS" in m["status"]:
@@ -338,6 +442,7 @@ def compute_executive_summary(report: dict) -> dict:
             ttfts.append(m["ttft_ms"])
 
     pass_rate_pct = ((passed + 0.5 * partial) / evaluated * 100.0) if evaluated > 0 else 0.0
+    completion_rate_pct = (evaluated / total_seen * 100.0) if total_seen > 0 else 100.0
     avg_tokens_per_test = (total_tokens / evaluated) if evaluated > 0 else 0.0
     avg_tokens_per_passed = (passed_tokens / (passed + 0.5 * partial)) if (passed + partial) > 0 else 0.0
     avg_speed = (sum(speeds) / len(speeds)) if speeds else 0.0
@@ -351,10 +456,16 @@ def compute_executive_summary(report: dict) -> dict:
         "model": report.get("model", "unknown"),
         "endpoint": report.get("endpoint", "unknown"),
         "total_evaluated": evaluated,
+        "total_seen": total_seen,
+        "infra_excluded": infra_excluded,
+        "infra_excluded_tests": infra_excluded_tests,
         "passed": passed,
         "partial": partial,
         "failed": failed,
         "effectiveness_rate_pct": round(pass_rate_pct, 1),
+        "completion_rate_pct": round(completion_rate_pct, 1),
+        "star_rating": star_rating(pass_rate_pct, completion_rate_pct),
+        "config_fingerprint": build_config_fingerprint(report),
         "total_tokens_emitted": total_tokens,
         "token_economy_tokens_per_passed_task": round(avg_tokens_per_passed, 1),
         "avg_tokens_per_test": round(avg_tokens_per_test, 1),
@@ -379,6 +490,14 @@ def print_summary_table(report):
     log(f"  Max Context Cap : {report.get('max_context_tokens', 0):,} tokens")
     log(f"  Parallel Setting: {report.get('parallel_streams', 1)} concurrent clients")
     log(f"  Total Wall Time : {report.get('total_suite_wall_time_s', 0):.2f} s")
+    summary = report.get("summary", {})
+    if summary:
+        stars = summary.get("star_rating", 0)
+        star_str = "*" * stars + "." * (5 - stars) if stars else "-"
+        log(f"  Quality Rating  : {star_str}  ({summary.get('star_rating', 0)}/5)")
+        log(f"  Completion Rate : {summary.get('completion_rate_pct', 100.0):.1f}%  ({summary.get('total_evaluated', 0)}/{summary.get('total_seen', 0)} tests scored)")
+        if summary.get("infra_excluded", 0) > 0:
+            log(f"  Infra Excluded  : {summary.get('infra_excluded', 0)} test(s) excluded (network/timeout/5xx/429) -- not a model signal", color=YELLOW)
     log("="*88)
 
     header = f"{'Evaluation Domain':<38} | {'Status':<10} | {'Key Metric / Latency':<20} | {'Throughput'}"
@@ -643,6 +762,15 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
 
     log(f"  Model A : {name1}", bold=True)
     log(f"  Model B : {name2}\n", bold=True)
+
+    # Comparability check: warn if the two runs used different configs so a
+    # context/parallel/milestone difference isn't mistaken for a model difference.
+    fp1 = m1.get("config_fingerprint")
+    fp2 = m2.get("config_fingerprint")
+    if fp1 and fp2 and fp1 != fp2:
+        log("  ⚠ COMPARABILITY WARNING: the two runs have different config fingerprints", color=YELLOW, bold=True)
+        log("    (model / context / parallel / milestones / suite differ). Treat results as not directly comparable.", color=YELLOW)
+        log("")
 
     exec_hdr = f"{'Core Performance Metric':<35} | {'Model A (' + str(m1['model'])[:16] + ')':<26} | {'Model B (' + str(m2['model'])[:16] + ')':<26} | {'Advantage'}"
     log(exec_hdr, bold=True)

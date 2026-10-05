@@ -287,5 +287,117 @@ class TestArenaEvaluatorTaskRouting(unittest.TestCase):
         )
 
 
+class TestInfraClassification(unittest.TestCase):
+    """T2: infrastructure failures are distinguished from model failures."""
+
+    def test_5xx_is_infra(self):
+        self.assertTrue(reporting._classify_infra({"status": "FAIL", "error": "HTTPError 502: Bad Gateway"}))
+
+    def test_429_is_infra(self):
+        self.assertTrue(reporting._classify_infra({"status": "FAIL", "error": "HTTPError 429: Too Many Requests"}))
+
+    def test_timeout_is_infra(self):
+        self.assertTrue(reporting._classify_infra({"status": "FAIL", "error": "timed out"}))
+
+    def test_failure_kind_is_infra(self):
+        self.assertTrue(reporting._classify_infra({"status": "FAIL", "failure_kind": "infra"}))
+
+    def test_model_failure_is_not_infra(self):
+        self.assertFalse(reporting._classify_infra({"status": "FAIL", "constraints_passed": 0}))
+
+    def test_list_all_infra(self):
+        data = [{"error": "HTTPError 503: Service Unavailable"}, {"error": "timed out"}]
+        self.assertTrue(reporting._classify_infra(data))
+
+    def test_list_mixed_is_not_infra(self):
+        data = [{"error": "HTTPError 503"}, {"status": "FAIL", "matched": False}]
+        self.assertFalse(reporting._classify_infra(data))
+
+
+class TestConfigFingerprint(unittest.TestCase):
+    """T3: comparable configs hash identically; differing configs do not."""
+
+    def _rep(self, **kw):
+        base = {"model": "m", "max_context_tokens": 204800, "parallel_streams": 2,
+                "context_milestones": [4000, 8000], "suite": "all"}
+        base.update(kw)
+        return base
+
+    def test_stable(self):
+        self.assertEqual(reporting.build_config_fingerprint(self._rep()),
+                         reporting.build_config_fingerprint(self._rep()))
+
+    def test_differs_on_context(self):
+        self.assertNotEqual(reporting.build_config_fingerprint(self._rep()),
+                            reporting.build_config_fingerprint(self._rep(max_context_tokens=131072)))
+
+    def test_differs_on_parallel(self):
+        self.assertNotEqual(reporting.build_config_fingerprint(self._rep()),
+                            reporting.build_config_fingerprint(self._rep(parallel_streams=4)))
+
+
+class TestStarRating(unittest.TestCase):
+    """T6: star rating bands + completion-rate cap."""
+
+    def test_bands(self):
+        self.assertEqual(reporting.star_rating(97, 100), 5)
+        self.assertEqual(reporting.star_rating(90, 100), 4)
+        self.assertEqual(reporting.star_rating(75, 100), 3)
+        self.assertEqual(reporting.star_rating(55, 100), 2)
+        self.assertEqual(reporting.star_rating(20, 100), 1)
+
+    def test_completion_cap(self):
+        # High effectiveness but flaky environment caps at 3 stars.
+        self.assertEqual(reporting.star_rating(97, 50), 3)
+
+
+class TestCompletionRate(unittest.TestCase):
+    """T2: infra failures are excluded from effectiveness but counted in completion."""
+
+    def _report(self, results):
+        return {"model": "m", "endpoint": "e", "max_context_tokens": 204800,
+                "parallel_streams": 2, "context_milestones": [4000], "suite": "all",
+                "total_suite_wall_time_s": 10.0, "results": results}
+
+    def test_infra_excluded_from_effectiveness(self):
+        # 1 pass, 1 model-fail, 1 infra-fail. Effectiveness over 2 completed = 50%.
+        results = {
+            "streaming": {"status": "PASS", "completion_tokens": 100, "tok_s": 30.0, "ttft_ms": 100.0},
+            "vision": {"status": "FAIL", "matched": False},
+            "concurrency": {"status": "FAIL", "error": "HTTPError 502: Bad Gateway"},
+        }
+        s = reporting.compute_executive_summary(self._report(results))
+        self.assertEqual(s["total_seen"], 3)
+        self.assertEqual(s["infra_excluded"], 1)
+        self.assertEqual(s["total_evaluated"], 2)
+        self.assertEqual(s["effectiveness_rate_pct"], 50.0)
+        self.assertEqual(s["completion_rate_pct"], round(2 / 3 * 100, 1))
+
+    def test_all_completed_full_completion(self):
+        results = {"streaming": {"status": "PASS", "completion_tokens": 100, "tok_s": 30.0, "ttft_ms": 100.0}}
+        s = reporting.compute_executive_summary(self._report(results))
+        self.assertEqual(s["completion_rate_pct"], 100.0)
+        self.assertEqual(s["infra_excluded"], 0)
+
+
+class TestBackoff(unittest.TestCase):
+    """T1: backoff is jittered, capped, and honors Retry-After for 429."""
+
+    def test_5xx_bounded(self):
+        for i in range(20):
+            d = client._backoff_delay(i, 500)
+            self.assertGreaterEqual(d, 0.0)
+            self.assertLessEqual(d, client._RETRY_CAP_SECONDS)
+
+    def test_429_larger_and_capped(self):
+        for i in range(20):
+            d = client._backoff_delay(i, 429)
+            self.assertGreaterEqual(d, 0.0)
+            self.assertLessEqual(d, client._RATE_LIMIT_CAP_SECONDS)
+
+    def test_retry_after_honored(self):
+        self.assertEqual(client._backoff_delay(0, 429, retry_after=7.0), 7.0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1522,6 +1522,164 @@ def run_test_aime_olympiad_math(client: LLMClient):
 # MAIN ORCHESTRATOR & INTERACTIVE DISCOVERY
 # ============================================================================
 
+# Common ports for self-hosted LLM serving stacks (T10: port scanning).
+COMMON_LLM_PORTS = [8000, 8080, 8085, 8888, 8885, 11434, 1234, 15000, 3000, 4000, 5000, 7860]
+
+
+def run_probe(endpoint, api_key="", model=None):
+    """Quick reachability + capability check (<5s). Returns (ok, info)."""
+    client = LLMClient(endpoint=endpoint, api_key=api_key)
+    info = {"endpoint": endpoint, "reachable": False, "models": [], "health": None, "context": None}
+    models = client.fetch_models()
+    info["models"] = models
+    if models:
+        info["reachable"] = True
+        info["context"] = detect_max_context(models[0])
+    info["health"] = client.fetch_health()
+    return info["reachable"], info
+
+
+def scan_llm_ports(host="127.0.0.1", ports=None, api_key=""):
+    """Scan common localhost ports for a reachable LLM endpoint (T10)."""
+    ports = ports or COMMON_LLM_PORTS
+    found = []
+    for port in ports:
+        url = f"http://{host}:{port}/v1"
+        try:
+            client = LLMClient(endpoint=url, api_key=api_key)
+            models = client.fetch_models()
+            if models:
+                found.append({
+                    "port": port,
+                    "endpoint": url,
+                    "models": [m.get("id") or m.get("name") for m in models],
+                    "context": detect_max_context(models[0]),
+                })
+        except Exception:
+            continue
+    return found
+
+
+def _run_probe_mode(args, cfg):
+    """T4/T10: quick reachability probe. With an endpoint, probe it; without one,
+    scan common localhost ports (T10) and probe the first reachable."""
+    api_key = args.api_key or cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or ""
+    endpoint = args.endpoint or cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")
+
+    # Explicit --scan-host forces port-scan mode (T10) even if a config endpoint exists.
+    if args.scan_host:
+        host = args.scan_host
+        log(f"Scanning common LLM ports on {host} ...", bold=True, color=CYAN)
+        found = scan_llm_ports(host, api_key=api_key)
+        if not found:
+            log(f"No reachable LLM endpoint found on {host} (tried ports: {', '.join(str(p) for p in COMMON_LLM_PORTS)}).", color=RED)
+            sys.exit(1)
+        log(f"Found {len(found)} reachable endpoint(s):", bold=True, color=GREEN)
+        for f in found:
+            log(f"  :{f['port']:<6} {f['endpoint']}  models={f['models']}  ctx={f['context']:,}")
+        sys.exit(0)
+
+    if endpoint:
+        log(f"Probing {endpoint} ...", bold=True, color=CYAN)
+        ok, info = run_probe(endpoint, api_key)
+        _print_probe_result(ok, info)
+        sys.exit(0 if ok else 1)
+
+    # No endpoint given and no explicit host: scan localhost (T10).
+    host = "127.0.0.1"
+    log(f"No endpoint given -- scanning common LLM ports on {host} ...", bold=True, color=CYAN)
+    found = scan_llm_ports(host, api_key=api_key)
+    if not found:
+        log(f"No reachable LLM endpoint found on {host} (tried ports: {', '.join(str(p) for p in COMMON_LLM_PORTS)}).", color=RED)
+        sys.exit(1)
+    log(f"Found {len(found)} reachable endpoint(s):", bold=True, color=GREEN)
+    for f in found:
+        log(f"  :{f['port']:<6} {f['endpoint']}  models={f['models']}  ctx={f['context']:,}")
+    sys.exit(0)
+
+
+def _print_probe_result(ok, info):
+    if not ok:
+        log(f"  UNREACHABLE: {info['endpoint']} (no models returned)", color=RED, bold=True)
+        return
+    log(f"  REACHABLE: {info['endpoint']}", color=GREEN, bold=True)
+    log(f"  Models      : {', '.join((m.get('id') or m.get('name') or '?') for m in info['models']) or '(none)'}")
+    if info["context"]:
+        log(f"  Context     : {info['context']:,} tokens")
+    if info["health"]:
+        log(f"  Health      : {info['health']}")
+
+
+def _load_result_reports(results_dir=None):
+    """Load all JSON benchmark reports from the results dir, recomputing summaries
+    so pre-existing reports also gain completion_rate / fingerprint / star_rating."""
+    results_dir = results_dir or DEFAULT_RESULTS_DIR
+    reports = []
+    if not os.path.isdir(results_dir):
+        return reports
+    for fn in sorted(os.listdir(results_dir)):
+        if not fn.endswith(".json"):
+            continue
+        fp = os.path.join(results_dir, fn)
+        try:
+            with open(fp) as f:
+                data = json.load(f)
+        except Exception:
+            continue
+        if not isinstance(data, dict) or "results" not in data:
+            continue
+        reports.append({"file": fn, "data": data, "summary": compute_executive_summary(data)})
+    return reports
+
+
+def _run_history_mode():
+    reports = _load_result_reports()
+    if not reports:
+        log("No benchmark reports found in results/.", color=YELLOW)
+        sys.exit(0)
+    reports.sort(key=lambda r: r["data"].get("timestamp", ""), reverse=True)
+    log(f"{'MODEL':<24} {'PASS':<10} {'COMPL':<8} {'EFF':<8} {'IDX':<7} {'WALL':<9} {'TIMESTAMP':<20} FILE", bold=True)
+    log("-" * 100)
+    for r in reports:
+        s = r["summary"]
+        model = (s.get("model") or "?")[:22]
+        passed = f"{s.get('passed', 0)}/{s.get('total_evaluated', 0)}"
+        compl = f"{s.get('completion_rate_pct', 0):.0f}%"
+        eff = f"{s.get('effectiveness_rate_pct', 0):.0f}%"
+        idx = f"{s.get('efficiency_index', 0):.0f}"
+        wall = f"{s.get('total_wall_time_s', 0):.0f}s"
+        ts = r["data"].get("timestamp", "")
+        log(f"{model:<24} {passed:<10} {compl:<8} {eff:<8} {idx:<7} {wall:<9} {ts:<20} {r['file']}")
+    sys.exit(0)
+
+
+def _run_leaderboard_mode():
+    reports = _load_result_reports()
+    if not reports:
+        log("No benchmark reports found in results/.", color=YELLOW)
+        sys.exit(0)
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for r in reports:
+        fp = r["summary"].get("config_fingerprint") or "unknown"
+        groups[fp].append(r)
+    rows = []
+    for fp, grp in groups.items():
+        best = max(grp, key=lambda r: r["summary"].get("efficiency_index", 0))
+        rows.append((fp, best, len(grp)))
+    rows.sort(key=lambda x: x[1]["summary"].get("efficiency_index", 0), reverse=True)
+    log(f"{'RANK':<6} {'MODEL':<24} {'EFF':<8} {'IDX':<7} {'STARS':<8} {'RUNS':<6} CONFIG_FINGERPRINT", bold=True)
+    log("-" * 100)
+    for rank, (fp, best, nruns) in enumerate(rows, 1):
+        s = best["summary"]
+        model = (s.get("model") or "?")[:22]
+        eff = f"{s.get('effectiveness_rate_pct', 0):.0f}%"
+        idx = f"{s.get('efficiency_index', 0):.0f}"
+        stars = "*" * s.get("star_rating", 0)
+        log(f"{rank:<6} {model:<24} {eff:<8} {idx:<7} {stars:<8} {nruns:<6} {fp}")
+    sys.exit(0)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Enterprise LLM Server Full Benchmark & Evaluation Suite")
     parser.add_argument("--endpoint", "-e", help="LLM server base endpoint (e.g. http://127.0.0.1:8888/v1)")
@@ -1564,6 +1722,14 @@ def main():
     parser.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
     parser.add_argument("--save-config", action="store_true", help="Automatically save resolved server configuration to config file without prompting")
     parser.add_argument("--no-save", action="store_true", help="Do not prompt to save configuration")
+    parser.add_argument("--probe", action="store_true",
+                        help="Quick reachability + capability check (<5s) and exit. With --endpoint, probes it; without one, scans common localhost ports.")
+    parser.add_argument("--scan-host", default=None,
+                        help="Host to scan for LLM endpoints when --probe is used without --endpoint (default: 127.0.0.1)")
+    parser.add_argument("--history", action="store_true",
+                        help="List recent benchmark runs from results/ (newest first) and exit")
+    parser.add_argument("--leaderboard", action="store_true",
+                        help="Rank benchmark runs by efficiency index, grouped by config fingerprint, and exit")
     args = parser.parse_args()
 
     if args.env_file:
@@ -1578,6 +1744,18 @@ def main():
 
     if args.compare:
         compare_benchmark_reports(args.compare, output_markdown=args.compare_out)
+        return
+
+    if args.probe:
+        _run_probe_mode(args, cfg)
+        return
+
+    if args.history:
+        _run_history_mode()
+        return
+
+    if args.leaderboard:
+        _run_leaderboard_mode()
         return
 
     ep1 = args.endpoint1 or cfg.get("endpoint1") or args.endpoint or cfg.get("endpoint") or os.getenv("ENDPOINT1") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")

@@ -49,5 +49,82 @@ llm-eval = "eval:main"
 llm-compare = "compare:main"
 llm-judge = "judge_eval:main"
 
+# Dev-only tooling. The runtime stays zero-dependency (stdlib only); these are
+# optional and never ship with the package.
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.12.0",
+    "mypy>=1.15.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "towncrier>=24.8.0",
+]
+
 [tool.setuptools]
 py-modules = ["eval", "compare", "judge_eval", "env_loader", "client", "reporting"]
+
+# ---------------------------------------------------------------------------
+# Lint / type / coverage config (dev-only; runtime is stdlib-only).
+# The codebase is legacy and largely untyped, so these are configured
+# permissively to catch new issues without blocking on pre-existing debt.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 120
+target-version = "py38"
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",   # line too long -- legacy layout, enforced gradually
+]
+
+[tool.mypy]
+python_version = "3.8"
+files = ["eval.py", "compare.py", "judge_eval.py", "env_loader.py", "client.py", "reporting.py", "benchmarks"]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "benchmarks/*"]
+
+[tool.coverage.report]
+show_missing = true
+
+# towncrier: CHANGELOG.md is generated from fragments in changelog.d/ so two
+# branches never edit the same changelog lines and never conflict.
+[tool.towncrier]
+package = "llm-eval-suite"
+directory = "changelog.d"
+filename = "CHANGELOG.md"
+start_string = "<!-- towncrier release notes start -->\n"
+title_format = "## [{version}] — {project_date}"
+wrap = false
+
+[[tool.towncrier.type]]
+directory = "added"
+name = "Added"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "changed"
+name = "Changed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "fixed"
+name = "Fixed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "removed"
+name = "Removed"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "security"
+name = "Security"
+showcontent = true

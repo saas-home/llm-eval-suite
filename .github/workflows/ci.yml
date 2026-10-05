@@ -29,3 +29,22 @@ jobs:
           python eval.py --help
           python compare.py --help
           python judge_eval.py --help
+
+  # Lint / type check. Non-blocking (continue-on-error) so pre-existing legacy
+  # debt doesn't break the build; it surfaces new issues for developers.
+  lint:
+    name: Lint & type-check (non-blocking)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev tooling
+        run: python -m pip install --upgrade pip "ruff>=0.12.0" "mypy>=1.15.0"
+      - name: Ruff (lint)
+        continue-on-error: true
+        run: ruff check .
+      - name: Mypy (type check)
+        continue-on-error: true
+        run: mypy

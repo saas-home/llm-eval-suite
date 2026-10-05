@@ -11,6 +11,7 @@ import sys
 import time
 import json
 import re
+import random
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse
@@ -46,6 +47,46 @@ def log(msg, bold=False, color=""):
     c = color or ""
     suffix = (bold or color) and RESET or ""
     print(f"{prefix}{c}{msg}{suffix}", flush=True)
+
+
+# --- Retry policy (backoff + rate-limit handling) --------------------------
+# Transient server errors (5xx) and connection/timeout errors get a short,
+# jittered exponential backoff. HTTP 429 (rate limit) gets a separate, more
+# patient budget and honors the server's Retry-After hint, because a per-minute
+# quota outlasts the generic backoff window.
+_RETRY_BASE_SECONDS = 0.5
+_RETRY_CAP_SECONDS = 8.0
+_RATE_LIMIT_BASE_SECONDS = 2.0
+_RATE_LIMIT_CAP_SECONDS = 60.0
+RATE_LIMIT_EXTRA_RETRIES = 4
+
+
+def _parse_retry_after(http_error):
+    """Parse a Retry-After header (seconds form) from an HTTPError, else None."""
+    try:
+        raw = http_error.headers.get("Retry-After")
+    except Exception:
+        raw = None
+    if not raw:
+        return None
+    try:
+        val = float(raw.strip())
+    except ValueError:
+        return None  # HTTP-date form; fall back to computed backoff
+    if 0 <= val <= _RATE_LIMIT_CAP_SECONDS:
+        return val
+    return None
+
+
+def _backoff_delay(attempt, status_code=None, retry_after=None):
+    """Exponential backoff with jitter; honors Retry-After for rate limits."""
+    if status_code == 429:
+        if retry_after is not None:
+            return retry_after
+        window = min(_RATE_LIMIT_BASE_SECONDS * (2 ** attempt), _RATE_LIMIT_CAP_SECONDS)
+        return window / 2 + random.uniform(0.0, window / 2)  # half jitter
+    window = min(_RETRY_BASE_SECONDS * (2 ** attempt), _RETRY_CAP_SECONDS)
+    return random.uniform(0.0, window)  # full jitter
 
 
 class LLMClient:
@@ -132,9 +173,9 @@ class LLMClient:
             payload["stream_options"] = {"include_usage": True}
 
         data = json.dumps(payload).encode("utf-8")
-        attempt = 0
+        retry_index = 0
+        rate_limit_retries = 0
         while True:
-            attempt += 1
             req = urllib.request.Request(self.completions_url, data=data, headers=self._get_headers())
             t0 = time.perf_counter()
             try:
@@ -259,13 +300,23 @@ class LLMClient:
                 except Exception:
                     pass
                 total_time = time.perf_counter() - t0
-                # Retry transient server errors (5xx); client errors (4xx) are final.
-                if 500 <= e.code < 600 and attempt <= retries:
-                    time.sleep(2)
-                    continue
+                # Rate limits (429) draw on a separate, more patient budget and
+                # honor Retry-After; other transient server errors (5xx) use the
+                # short jittered backoff. Client errors (4xx) are final.
+                if e.code == 429:
+                    if rate_limit_retries < retries + RATE_LIMIT_EXTRA_RETRIES:
+                        rate_limit_retries += 1
+                        time.sleep(_backoff_delay(rate_limit_retries - 1, 429, _parse_retry_after(e)))
+                        continue
+                elif 500 <= e.code < 600:
+                    if retry_index < retries:
+                        retry_index += 1
+                        time.sleep(_backoff_delay(retry_index - 1, e.code))
+                        continue
                 return {
                     "error": f"HTTPError {e.code}: {e.reason} - {err_body}".strip(),
                     "status_code": e.code,
+                    "failure_kind": "rate_limit" if e.code == 429 else ("infra" if 500 <= e.code < 600 else "client"),
                     "text": "",
                     "content": "",
                     "reasoning": "",
@@ -279,12 +330,14 @@ class LLMClient:
                 }
             except Exception as e:
                 total_time = time.perf_counter() - t0
-                # Retry transient connection/timeout errors.
-                if attempt <= retries:
-                    time.sleep(2)
+                # Transient connection/timeout errors use the short backoff.
+                if retry_index < retries:
+                    retry_index += 1
+                    time.sleep(_backoff_delay(retry_index - 1))
                     continue
                 return {
                     "error": str(e),
+                    "failure_kind": "infra",
                     "text": "",
                     "content": "",
                     "reasoning": "",

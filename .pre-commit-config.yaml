@@ -1,0 +1,10 @@
+# Local dev lint/type gates. Install with:
+#   python -m pip install pre-commit && pre-commit install
+# The runtime stays stdlib-only; these run against the dev tooling extra.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
