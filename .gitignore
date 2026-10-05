@@ -4,6 +4,19 @@ __pycache__/
 *$py.class
 *.so
 
+# Build / packaging artifacts
+build/
+dist/
+*.egg-info/
+
+# Test & linter caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.coverage
+htmlcov/
+
 # Environments & Configs
 .venv/
 env/
@@ -16,6 +29,8 @@ config.json
 !config.json.example
 !.env.example
 
+# Local logs
+*.log
 
 # Output Results (Keep template comparison reports, ignore ad-hoc evaluation dumps)
 results/*.json
@@ -24,7 +39,10 @@ results/*.md
 !results/samples/
 !results/samples/*.md
 
+# Tooling sandboxes (pi / agent runtime)
+.pi/
+sandbox/
+
 # OS artifacts
 .DS_Store
 Thumbs.db
-.pi/sandbox.json
