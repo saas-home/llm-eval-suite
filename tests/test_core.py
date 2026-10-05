@@ -20,6 +20,7 @@ if ROOT not in sys.path:
 import client
 import env_loader
 import reporting
+import compare
 
 
 class TestExtractPythonCode(unittest.TestCase):
@@ -158,6 +159,10 @@ class TestParseSelectedTests(unittest.TestCase):
     def test_unknown_ignored(self):
         self.assertEqual(reporting.parse_selected_tests("1,not_a_test"), {1})
 
+    def test_all_unknown_runs_nothing(self):
+        # A typo in --test must NOT silently run the full suite.
+        self.assertEqual(reporting.parse_selected_tests("foo,bar"), set())
+
 
 class TestNormalizeReport(unittest.TestCase):
     def test_list_results_converted(self):
@@ -247,6 +252,39 @@ class TestExtractTestMetrics(unittest.TestCase):
     def test_empty(self):
         m = reporting.extract_test_metrics("streaming", None)
         self.assertEqual(m["status"], "SKIPPED")
+
+
+class TestArenaEvaluatorTaskRouting(unittest.TestCase):
+    # Regression guard for the arena evaluator ID mismatch (P0):
+    # every content-checked BENCHMARK_TASKS id must hit a specific branch,
+    # not the output-length fallback.
+    CONTENT_TASKS = [
+        "task4_avl_tree", "task5_concurrency_debug", "task6_system_design",
+        "task7_long_context_constraints", "task8_agent_tool_calling", "task9_json_schema",
+        "task14_precision_math", "task15_code_execution", "task17_multihop_graph",
+        "task19_anti_constraints", "task20_counterfactual_algebra", "task21_cruxeval_execution",
+        "task22_swe_bench_bug_patch", "task23_aime_olympiad_math",
+    ]
+
+    def test_content_tasks_do_not_fall_to_length_fallback(self):
+        for tid in self.CONTENT_TASKS:
+            res = compare.evaluate_arena_task(tid, "")
+            self.assertNotEqual(
+                res["status"], "PASS",
+                f"{tid} fell to the output-length fallback (empty output should not PASS)",
+            )
+
+    def test_all_benchmark_task_ids_are_known_or_latency(self):
+        # Every BENCHMARK_TASKS id is either a content-checked branch or a
+        # latency/throughput task that legitimately uses the length baseline.
+        content = set(self.CONTENT_TASKS)
+        latency = {"task1_streaming", "task2_vision", "task3_concurrency",
+                   "task10_prefix_caching", "task11_client_abort", "task12_stop_sequences",
+                   "task13_high_entropy_recall", "task16_error_handling", "task18_novel_algorithm_fuzz"}
+        self.assertEqual(
+            {t["id"] for t in compare.BENCHMARK_TASKS},
+            content | latency,
+        )
 
 
 if __name__ == "__main__":

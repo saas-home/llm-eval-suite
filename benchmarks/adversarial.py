@@ -28,20 +28,11 @@ import argparse
 import urllib.request
 import urllib.error
 
-# ANSI Color formatting
-BOLD = "\033[1m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-CYAN = "\033[36m"
-MAGENTA = "\033[35m"
-RESET = "\033[0m"
-
-def log(msg, bold=False, color=""):
-    p = bold and BOLD or ""
-    c = color or ""
-    s = (bold or color) and RESET or ""
-    print(f"{p}{c}{msg}{s}", flush=True)
+# Shared terminal formatting from the parent package (respects NO_COLOR / non-TTY).
+_BENCH_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _BENCH_PARENT not in sys.path:
+    sys.path.insert(0, _BENCH_PARENT)
+from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET
 
 class BenchmarkClient:
     def __init__(self, endpoint: str, model: str, api_key: str = ""):

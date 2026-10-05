@@ -409,7 +409,7 @@ def discover_model(endpoint: str, api_key: str = "", specified_model: str = None
 def evaluate_arena_task(task_id: str, full_output: str) -> dict:
     """Evaluates task execution correctness, constraints, and syntax adherence."""
     details = {}
-    if task_id == "task1_avl_tree":
+    if task_id == "task4_avl_tree":
         has_avl = "class AVLTree" in full_output or "class AvlTree" in full_output
         has_rot = "rotate" in full_output.lower()
         has_t = "def test_avl" in full_output or "test_avl()" in full_output
@@ -425,7 +425,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task2_concurrency_debug":
+    elif task_id == "task5_concurrency_debug":
         spurious = "while" in full_output and ("wait" in full_output or "spurious" in full_output.lower())
         lock_ctx = "with self.lock" in full_output or "try:" in full_output or "acquire" in full_output
         mem_leak = "processed_items" in full_output
@@ -441,7 +441,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task3_system_design":
+    elif task_id == "task6_system_design":
         lower = full_output.lower()
         algo = any(x in lower for x in ["token bucket", "leaky bucket", "sliding window", "rate limit"])
         storage = any(x in lower for x in ["redis", "lua", "aerospike", "in-memory", "atomic"])
@@ -461,7 +461,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task4_long_context_constraints":
+    elif task_id == "task7_long_context_constraints":
         spec1 = "SEC_AUDIT_PROD_9981" in full_output
         spec2 = ("0.25 * (2 ** attempt)" in full_output or "0.25 *(2**attempt)" in full_output
                  or "random.uniform(-0.05, 0.05)" in full_output or ("2 ** attempt" in full_output and "0.25" in full_output))
@@ -478,7 +478,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task5_agent_tool_calling":
+    elif task_id == "task8_agent_tool_calling":
         has_query = "query_health" in full_output
         has_srv = "srv-prod-881" in full_output
         details = {"has_function_name": has_query, "has_arguments": has_srv}
@@ -489,7 +489,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task6_json_schema":
+    elif task_id == "task9_json_schema":
         try:
             # Clean json block if wrapped in ```json
             cleaned = full_output.strip()
@@ -510,7 +510,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
             details = {"valid_json": False, "error": str(e)}
             status, score = "FAIL", 0.0
 
-    elif task_id == "task7_precision_math":
+    elif task_id == "task14_precision_math":
         # Tx calculations: A = $8,799.25, B = $4,601.00, C = $1,349.50
         has_a = "8799" in full_output or "8,799" in full_output
         has_b = "4601" in full_output or "4,601" in full_output
@@ -523,7 +523,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task8_code_execution":
+    elif task_id == "task15_code_execution":
         has_cls = "class TTLRUCache" in full_output or "class TtlRucache" in full_output or "class LRUCache" in full_output
         has_get = "def get(" in full_output
         has_test = "def test_ttl_lru" in full_output or "test_" in full_output
@@ -535,7 +535,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task9_multihop_graph":
+    elif task_id == "task17_multihop_graph":
         # Shortest path: A -> C -> B -> D -> E -> F (weight 2+1+5+2+3 = 13)
         has_path = "C" in full_output and "D" in full_output and "E" in full_output and "F" in full_output
         has_weight = "13" in full_output
@@ -547,7 +547,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task10_anti_constraints":
+    elif task_id == "task19_anti_constraints":
         # Paragraph lipogram
         paras = [p.strip() for p in full_output.split("\n\n") if p.strip()]
         has_p = len(paras) >= 3
@@ -562,7 +562,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task11_counterfactual_algebra":
+    elif task_id == "task20_counterfactual_algebra":
         # 3 ⊕ 4 = 3*4 + 3 - 4 = 11. (11) ⊗ 5 = (11 ⊕ 5)*2 - 11 = (11*5 + 11 - 5)*2 - 11 = 61*2 - 11 = 111.
         has_111 = "111" in full_output
         has_11 = "11" in full_output
@@ -574,7 +574,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task12_cruxeval_execution":
+    elif task_id == "task21_cruxeval_execution":
         # f([5, 10, 15, 20]): i=0: 10, i=1: 15, i=2: 30, i=3: 25. res=[10, 15, 30, 25]. res[::-1] -> [25, 30, 15, 10]
         has_25_30_15_10 = "[25, 30, 15, 10]" in full_output or "25, 30, 15, 10" in full_output
         details = {"exact_match": has_25_30_15_10}
@@ -585,7 +585,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task13_swe_bench_bug_patch":
+    elif task_id == "task22_swe_bench_bug_patch":
         has_diff = "--- a/" in full_output and "+++ b/" in full_output
         has_lower = "lower()" in full_output or "strip()" in full_output or "bearer" in full_output.lower()
         details = {"valid_diff": has_diff, "has_fix": has_lower}
@@ -596,7 +596,7 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
         else:
             status, score = "FAIL", 0.0
 
-    elif task_id == "task14_aime_olympiad_math":
+    elif task_id == "task23_aime_olympiad_math":
         # (n+3)(n+4) div by 120. Answer: 33
         has_33 = "33" in full_output
         details = {"has_answer_33": has_33}
@@ -608,9 +608,6 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
             status, score = "FAIL", 0.0
     else:
         status, score = ("PASS", 1.0) if len(full_output) > 100 else ("FAIL", 0.0)
-
-    return {"status": status, "score": score, "details": details}
-
 
     return {"status": status, "score": score, "details": details}
 
@@ -1180,10 +1177,6 @@ def run_benchmark(base_url: str, output_file: str, model: str = None, api_key: s
     print(f"=== Starting Benchmark Suite against {base_url} (Model: {model}) ===")
     results = []
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
     # Check models endpoint
     try:
         client = LLMClient(endpoint=base_url, api_key=api_key)
@@ -1207,7 +1200,7 @@ def run_benchmark(base_url: str, output_file: str, model: str = None, api_key: s
             "completion_tokens": 0,
             "total_time_s": 0.0,
         }
-        _stream_worker(task, base_url, model, headers, state)
+        _stream_worker(base_url, model, api_key, task, state)
 
         if state["error"] and not state["chunks"]:
             print(f"  -> Error executing {task['id']}: {state['error']}")

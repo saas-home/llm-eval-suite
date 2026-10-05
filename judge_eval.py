@@ -204,7 +204,13 @@ def test_code_syntax(code_text: str) -> tuple:
 
 
 def parse_judge_score_10(json_str: str, key_prefix: str) -> tuple:
-    """Parses 10-point quality rating from LLM judge response."""
+    """Parses 10-point quality rating from LLM judge response.
+
+    Returns (None, reason) when the judge call failed or no score could be
+    extracted, so callers can surface an error instead of a fabricated baseline.
+    """
+    if not json_str or "[ERROR]" in json_str:
+        return None, "judge call failed"
     try:
         cleaned = json_str.strip()
         if "```json" in cleaned:
@@ -234,7 +240,7 @@ def parse_judge_score_10(json_str: str, key_prefix: str) -> tuple:
         score_10 = round(val / 5.0, 1) if val > 10.0 else round(val, 1)
         return min(10.0, max(0.0, score_10)), "Regex extracted score."
 
-    return 7.5, "Standard baseline rating."
+    return None, "no score found"
 
 
 def run_llm_judge_10_pair(judge_endpoint: str, judge_model: str, judge_key: str, task: dict, out1: str, out2: str, m1_name: str, m2_name: str) -> dict:
@@ -289,6 +295,14 @@ def run_llm_judge_10_pair(judge_endpoint: str, judge_model: str, judge_key: str,
 
     m2_score_r2, rat2 = parse_judge_score_10(res2, "model_a")
     m1_score_r2, _ = parse_judge_score_10(res2, "model_b")
+
+    if None in (m1_score_r1, m2_score_r1, m1_score_r2, m2_score_r2):
+        return {
+            "m1_score_10": None,
+            "m2_score_10": None,
+            "winner": "JUDGE ERROR",
+            "rationale": "Judge endpoint failed to return a parseable score; task not graded.",
+        }
 
     m1_final_10 = round((m1_score_r1 + m1_score_r2) / 2.0, 2)
     m2_final_10 = round((m2_score_r1 + m2_score_r2) / 2.0, 2)
@@ -360,21 +374,23 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
             judge_res = run_llm_judge_10_pair(ep1, m1, k1, task, out1, out2, m1[:12], m2[:12])
             s1_score = judge_res["m1_score_10"]
             s2_score = judge_res["m2_score_10"]
-
-            # Apply syntax validation adjustments if code has syntax errors
-            if not syn_ok1 and s1_score > 4.0:
-                s1_score = round(max(3.0, s1_score - 1.5), 1)
-            if not syn_ok2 and s2_score > 4.0:
-                s2_score = round(max(3.0, s2_score - 1.5), 1)
-
-            if s1_score > s2_score:
-                winner = f"Server 1 ({m1[:12]})"
-            elif s2_score > s1_score:
-                winner = f"Server 2 ({m2[:12]})"
-            else:
-                winner = "Tie"
-
             rat = judge_res["rationale"]
+
+            if s1_score is None or s2_score is None:
+                winner = "JUDGE ERROR"
+            else:
+                # Apply syntax validation adjustments if code has syntax errors
+                if not syn_ok1 and s1_score > 4.0:
+                    s1_score = round(max(3.0, s1_score - 1.5), 1)
+                if not syn_ok2 and s2_score > 4.0:
+                    s2_score = round(max(3.0, s2_score - 1.5), 1)
+
+                if s1_score > s2_score:
+                    winner = f"Server 1 ({m1[:12]})"
+                elif s2_score > s1_score:
+                    winner = f"Server 2 ({m2[:12]})"
+                else:
+                    winner = "Tie"
         else:
             rubric_single = "Score this LLM output out of 10.0 for correctness, reasoning, architecture, and prompt adherence. Output JSON: {\"score_10\": 8.5, \"rationale\": \"...\"}"
             j_txt, _, _, _ = send_chat_completion_robust(ep1, m1, k1, [
@@ -383,13 +399,15 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
             ], max_tokens=400, temp=0.0)
             s1_score, rat = parse_judge_score_10(j_txt, "score")
             s2_score = 0.0
-            winner = f"Server 1 ({m1[:12]})"
+            winner = "JUDGE ERROR" if s1_score is None else f"Server 1 ({m1[:12]})"
             syn_ok2, syn_msg2 = True, "N/A"
 
+        s1_disp = "ERR" if s1_score is None else f"{s1_score:.1f}"
+        s2_disp = "ERR" if s2_score is None else f"{s2_score:.1f}"
         print(f"  ┌{'─' * 80}┐")
-        print(f"  │ Server 1 (`{m1[:14]}`): Grade {s1_score:>4.1f} / 10.0 │ Syntax: {'PASS' if syn_ok1 else 'FAIL'} │ {spd1:>6.2f} tok/s │ Wall: {wall1:>5.2f}s │")
+        print(f"  │ Server 1 (`{m1[:14]}`): Grade {s1_disp:>5} / 10.0 │ Syntax: {'PASS' if syn_ok1 else 'FAIL'} │ {spd1:>6.2f} tok/s │ Wall: {wall1:>5.2f}s │")
         if is_dual:
-            print(f"  │ Server 2 (`{m2[:14]}`): Grade {s2_score:>4.1f} / 10.0 │ Syntax: {'PASS' if syn_ok2 else 'FAIL'} │ {spd2:>6.2f} tok/s │ Wall: {wall2:>5.2f}s │")
+            print(f"  │ Server 2 (`{m2[:14]}`): Grade {s2_disp:>5} / 10.0 │ Syntax: {'PASS' if syn_ok2 else 'FAIL'} │ {spd2:>6.2f} tok/s │ Wall: {wall2:>5.2f}s │")
             print(f"  ├{'─' * 80}┤")
             print(f"  │ Task Winner: {winner:<63} │")
         print(f"  └{'─' * 80}┘\n")
@@ -408,7 +426,8 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
     total_suite_wall = time.perf_counter() - t_start_suite
 
     # --- Leaderboard & Ranking Calculation ---
-    s1_avg_score = round(sum(r["server1"]["score_10"] for r in task_records) / len(task_records), 2)
+    s1_scores = [r["server1"]["score_10"] for r in task_records if r["server1"]["score_10"] is not None]
+    s1_avg_score = round(sum(s1_scores) / len(s1_scores), 2) if s1_scores else 0.0
     s1_avg_spd = round(sum(r["server1"]["tok_s"] for r in task_records) / len(task_records), 2)
     s1_tier = compute_model_tier(s1_avg_score)
 
@@ -417,7 +436,8 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
     ]
 
     if is_dual:
-        s2_avg_score = round(sum(r["server2"]["score_10"] for r in task_records) / len(task_records), 2)
+        s2_scores = [r["server2"]["score_10"] for r in task_records if r["server2"]["score_10"] is not None]
+        s2_avg_score = round(sum(s2_scores) / len(s2_scores), 2) if s2_scores else 0.0
         s2_avg_spd = round(sum(r["server2"]["tok_s"] for r in task_records) / len(task_records), 2)
         s2_tier = compute_model_tier(s2_avg_score)
 

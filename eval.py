@@ -52,8 +52,9 @@ from reporting import (
 )
 
 # SECURITY: gate for executing LLM-generated code (tests 12, 16, 21).
-# Disable with --no-execute or EVAL_SAFE=1 to perform syntax-only checks.
-EXECUTE_MODEL_CODE = not os.getenv("EVAL_SAFE")
+# Disable with --no-execute or EVAL_SAFE set to a truthy value (1/true/yes)
+# to perform syntax-only checks.
+EXECUTE_MODEL_CODE = os.getenv("EVAL_SAFE", "").strip().lower() not in ("1", "true", "yes")
 
 # ============================================================================
 # 22 ENTERPRISE EVALUATION TEST SUITES
@@ -664,7 +665,7 @@ print("UNIT_TESTS_PASSED")
     if EXECUTE_MODEL_CODE:
         try:
             sub = subprocess.run([sys.executable, "-c", full_code], capture_output=True, text=True, timeout=15)
-            passed = "UNIT_TESTS_PASSED" in sub.stdout
+            passed = sub.returncode == 0 and "UNIT_TESTS_PASSED" in sub.stdout
             err = sub.stderr.strip() if sub.stderr.strip() else sub.stdout.strip()
         except Exception as e:
             passed = False
@@ -1756,7 +1757,10 @@ def main():
     if health and isinstance(health, dict):
         detected_parallel = health.get("parallel") or health.get("max_slots")
 
-    if args.parallel:
+    if args.parallel is not None and args.parallel <= 0:
+        log("Error: --parallel must be a positive integer.", color=RED)
+        sys.exit(1)
+    if args.parallel is not None:
         parallel = args.parallel
     elif detected_parallel:
         log(f"Server /health reports {detected_parallel} active parallel slots.")

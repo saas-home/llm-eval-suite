@@ -900,7 +900,8 @@ def parse_selected_tests(test_arg: str, suite: str = "all"):
                     selected.update(range(1, 23))
                 else:
                     log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
-        return selected if selected else set(range(1, 23))
+        # If --test was given but nothing matched, run nothing (not the full suite).
+        return selected
 
     if suite == "flagship":
         return set(range(1, 15))

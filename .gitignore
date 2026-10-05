@@ -27,3 +27,4 @@ results/*.md
 # OS artifacts
 .DS_Store
 Thumbs.db
+.pi/sandbox.json
