@@ -1,0 +1,15 @@
+{
+  "_comment": "llm-eval-suite Config (Supports 1 server or 2 servers for Live Arena mode)",
+  "server1": {
+    "endpoint": "http://127.0.0.1:8000/v1",
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "api_key": "",
+    "max_context": 131072
+  },
+  "server2": {
+    "endpoint": "http://127.0.0.1:8001/v1",
+    "model": "qwen2.5-coder-32b-instruct",
+    "api_key": "",
+    "max_context": 131072
+  }
+}

@@ -18,7 +18,7 @@ import os
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
-def run_test(api_url, prompt_text, max_tokens=64, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def run_test(api_url, prompt_text, max_tokens=64, model="default", api_key=""):
     payload = {
         "model": model,
         "messages": [

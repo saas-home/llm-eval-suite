@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enterprise LLM Server Full Benchmark & Evaluation Suite (llm_server_full_test.py)
+Enterprise LLM Server Full Benchmark & Evaluation Suite (llm-eval-suite)
 
 Comprehensive, production-grade test and evaluation harness for any OpenAI-compatible
 LLM server endpoint. Designed to evaluate, stress-test, and qualify models and serving
@@ -15,10 +15,16 @@ Key Capabilities:
   - Client disconnection & socket abort resilience (verifies GPU slot release).
   - Multi-client continuous batching throughput & queueing behavior.
   - Full 22-stage evaluation with terminal summary scorecard and JSON export.
+
+SECURITY NOTE:
+  Tests 12, 16, and 21 execute LLM-generated Python code in a subprocess to verify
+  correctness. When testing untrusted endpoints, run with --no-execute (or
+  EVAL_SAFE=1) to downgrade these tests to syntax-only validation.
 """
 
 import sys
 import os
+import ast
 import time
 import json
 import re
@@ -28,323 +34,26 @@ import urllib.error
 import socket
 import argparse
 import subprocess
+import statistics
 import uuid
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import env_loader
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-def _resolve_image_path():
-    for rel in [os.path.join("assets", "invoice.png"), os.path.join("assets", "image.png"), "invoice.png", "image.png"]:
-        p = os.path.join(BASE_DIR, rel)
-        if os.path.exists(p):
-            return p
-    return os.path.join(BASE_DIR, "assets", "invoice.png")
+from client import (
+    log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET,
+    BASE_DIR, IMAGE_PATH, DEFAULT_RESULTS_DIR,
+    LLMClient, detect_max_context, build_context_milestones, extract_python_code,
+)
+from reporting import (
+    TOTAL_TESTS, TEST_CATALOG, parse_selected_tests,
+    extract_test_metrics, normalize_report, compute_relative_advantages,
+    compute_executive_summary, print_summary_table, compare_benchmark_reports,
+)
 
-IMAGE_PATH = _resolve_image_path()
-DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "results")
-os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
-
-# ANSI terminal colors (respect NO_COLOR env and non-TTY pipes)
-NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
-BOLD = "" if NO_COLOR else "\033[1m"
-GREEN = "" if NO_COLOR else "\033[32m"
-YELLOW = "" if NO_COLOR else "\033[33m"
-RED = "" if NO_COLOR else "\033[31m"
-CYAN = "" if NO_COLOR else "\033[36m"
-MAGENTA = "" if NO_COLOR else "\033[35m"
-RESET = "" if NO_COLOR else "\033[0m"
-
-def log(msg, bold=False, color=""):
-    prefix = bold and BOLD or ""
-    c = color or ""
-    suffix = (bold or color) and RESET or ""
-    print(f"{prefix}{c}{msg}{suffix}", flush=True)
-
-
-class LLMClient:
-    def __init__(self, endpoint: str, api_key: str = None, model: str = None):
-        endpoint = endpoint.rstrip("/")
-        if not endpoint.endswith("/v1") and not endpoint.endswith("/chat/completions"):
-            endpoint = f"{endpoint}/v1"
-        elif endpoint.endswith("/chat/completions"):
-            endpoint = endpoint[:-len("/chat/completions")]
-            
-        self.base_url = endpoint
-        self.completions_url = f"{self.base_url}/chat/completions"
-        self.models_url = f"{self.base_url}/models"
-        self.health_url = self.base_url.replace("/v1", "/health")
-        self.api_key = api_key
-        self.model = model
-
-    def _get_headers(self):
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        return headers
-
-    def fetch_models(self):
-        req = urllib.request.Request(self.models_url, headers=self._get_headers())
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                if isinstance(data, list):
-                    return data
-                models = data.get("data", [])
-                if not models and "models" in data:
-                    models = data.get("models", [])
-                return models if isinstance(models, list) else []
-        except Exception as e:
-            log(f"Warning: Could not fetch models from {self.models_url}: {e}", color=YELLOW)
-            return []
-
-    def fetch_health(self):
-        req = urllib.request.Request(self.health_url, headers=self._get_headers())
-        try:
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except Exception:
-            return None
-
-    def call(self, messages, max_tokens=1024, temperature=0.0, stream=False,
-             tools=None, tool_choice=None, response_format=None, stop=None,
-             seed=None, timeout=600, chat_template_kwargs=None, reasoning_effort=None):
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": stream
-        }
-        if chat_template_kwargs:
-            payload["chat_template_kwargs"] = chat_template_kwargs
-        if reasoning_effort:
-            payload["reasoning_effort"] = reasoning_effort
-        if tools:
-            payload["tools"] = tools
-        if tool_choice:
-            payload["tool_choice"] = tool_choice
-        if response_format:
-            payload["response_format"] = response_format
-        if stop:
-            payload["stop"] = stop
-        if seed is not None:
-            payload["seed"] = seed
-        if stream:
-            payload["stream_options"] = {"include_usage": True}
-
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(self.completions_url, data=data, headers=self._get_headers())
-
-        t0 = time.perf_counter()
-        try:
-            if not stream:
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    res_json = json.loads(resp.read().decode("utf-8"))
-                total_time = time.perf_counter() - t0
-                choices = res_json.get("choices") or [{}]
-                choice = choices[0] if choices else {}
-                msg = choice.get("message", {})
-                content = msg.get("content") or ""
-                reasoning = msg.get("reasoning_content") or ""
-                full_text = f"{reasoning}\n{content}".strip() if reasoning else (content or "")
-                tool_calls = msg.get("tool_calls")
-                usage = res_json.get("usage", {})
-                prompt_tokens = usage.get("prompt_tokens", 0)
-                completion_tokens = usage.get("completion_tokens", 0)
-                cached_tokens = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
-                speed = completion_tokens / total_time if total_time > 0 else 0.0
-                return {
-                    "content": content if content else full_text,
-                    "reasoning": reasoning,
-                    "text": full_text,
-                    "tool_calls": tool_calls,
-                    "total_time": total_time,
-                    "ttft": total_time,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "cached_tokens": cached_tokens,
-                    "decode_speed": speed,
-                    "raw": res_json
-                }
-            else:
-                t_first = None
-                t_last = None
-                chunks = []
-                reasoning_chunks = []
-                content_chunks = []
-                token_count = 0
-                prompt_tokens = 0
-                completion_tokens = 0
-                cached_tokens = 0
-                tool_calls = None
-                tool_calls_acc = {}  # Accumulate streamed tool call deltas by index
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    for line in resp:
-                        l = line.decode("utf-8", errors="replace").strip()
-                        if not l.startswith("data:"):
-                            continue
-                        d_str = l[5:].strip()
-                        if d_str == "[DONE]":
-                            break
-                        try:
-                            c = json.loads(d_str)
-                        except Exception:
-                            continue
-                        if "usage" in c and c["usage"]:
-                            prompt_tokens = c["usage"].get("prompt_tokens", prompt_tokens)
-                            completion_tokens = c["usage"].get("completion_tokens", completion_tokens)
-                            cached_tokens = (c["usage"].get("prompt_tokens_details") or {}).get("cached_tokens", 0)
-                        choices = c.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            if "tool_calls" in delta and delta["tool_calls"]:
-                                for tc_delta in delta["tool_calls"]:
-                                    tc_idx = tc_delta.get("index", 0)
-                                    if tc_idx not in tool_calls_acc:
-                                        tool_calls_acc[tc_idx] = {
-                                            "id": tc_delta.get("id", ""),
-                                            "type": tc_delta.get("type", "function"),
-                                            "function": {"name": "", "arguments": ""}
-                                        }
-                                    if tc_delta.get("id"):
-                                        tool_calls_acc[tc_idx]["id"] = tc_delta["id"]
-                                    fn_delta = tc_delta.get("function", {})
-                                    if fn_delta.get("name"):
-                                        tool_calls_acc[tc_idx]["function"]["name"] = fn_delta["name"]
-                                    if fn_delta.get("arguments"):
-                                        tool_calls_acc[tc_idx]["function"]["arguments"] += fn_delta["arguments"]
-                            reasoning_part = delta.get("reasoning_content") or ""
-                            content_part = delta.get("content") or ""
-                            chunk_text = reasoning_part + content_part
-                            if chunk_text:
-                                now = time.perf_counter()
-                                if t_first is None:
-                                    t_first = now
-                                t_last = now
-                                token_count += 1
-                                chunks.append(chunk_text)
-                                if reasoning_part:
-                                    reasoning_chunks.append(reasoning_part)
-                                if content_part:
-                                    content_chunks.append(content_part)
-                t_end = time.perf_counter()
-                total_time = t_end - t0
-                ttft = (t_first - t0) if t_first else total_time
-                gen_time = (t_end - t_first) if t_first else total_time
-                comp_tok = completion_tokens if completion_tokens > 0 else token_count
-                speed = ((comp_tok - 1) / gen_time) if gen_time > 0 and comp_tok > 1 else (comp_tok / gen_time if gen_time > 0 else 0.0)
-                content_str = "".join(content_chunks)
-                reasoning_str = "".join(reasoning_chunks)
-                full_text = "".join(chunks)
-                # Finalize accumulated streaming tool calls
-                if tool_calls_acc:
-                    tool_calls = [tool_calls_acc[i] for i in sorted(tool_calls_acc)]
-                return {
-                    "content": content_str if content_str else full_text,
-                    "reasoning": reasoning_str,
-                    "text": full_text,
-                    "tool_calls": tool_calls,
-                    "total_time": total_time,
-                    "ttft": ttft,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": comp_tok,
-                    "cached_tokens": cached_tokens,
-                    "decode_speed": speed
-                }
-        except urllib.error.HTTPError as e:
-            err_body = ""
-            try:
-                err_body = e.read().decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            total_time = time.perf_counter() - t0
-            return {
-                "error": f"HTTPError {e.code}: {e.reason} - {err_body}".strip(),
-                "status_code": e.code,
-                "text": "",
-                "content": "",
-                "reasoning": "",
-                "tool_calls": None,
-                "total_time": total_time,
-                "ttft": total_time,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cached_tokens": 0,
-                "decode_speed": 0.0
-            }
-        except Exception as e:
-            total_time = time.perf_counter() - t0
-            return {
-                "error": str(e),
-                "text": "",
-                "content": "",
-                "reasoning": "",
-                "tool_calls": None,
-                "total_time": total_time,
-                "ttft": total_time,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cached_tokens": 0,
-                "decode_speed": 0.0
-            }
-
-
-def detect_max_context(model_obj):
-    if not isinstance(model_obj, dict):
-        return 32768
-    candidates = [
-        model_obj.get("max_model_len"),
-        model_obj.get("context_length"),
-        model_obj.get("max_context_length"),
-        model_obj.get("context_window"),
-        model_obj.get("top_provider", {}).get("context_length") if isinstance(model_obj.get("top_provider"), dict) else None,
-        model_obj.get("max_position_embeddings"),
-        model_obj.get("max_tokens"),
-    ]
-    for c in candidates:
-        if isinstance(c, int) and c > 0:
-            return c
-    return 32768
-
-
-def build_context_milestones(max_context: int, max_ratio: float = 0.80):
-    standard_targets = [4000, 8000, 16000, 32000, 64000, 128000, 256000, 512000, 1000000]
-    effective_cap = int(max_context * max_ratio)
-    # Reserve a safety buffer for completion tokens (64) + prompt formatting/salt (~200)
-    headroom = min(1000, max(256, int(effective_cap * 0.005)))
-    safe_ceiling = max(1000, effective_cap - headroom)
-
-    milestones = [t for t in standard_targets if t <= safe_ceiling]
-    if not milestones:
-        milestones = [min(4000, safe_ceiling)]
-
-    # Include the upper ceiling up to max_ratio if not already present
-    if safe_ceiling > milestones[-1]:
-        rounded_ceiling = (safe_ceiling // 100) * 100
-        milestones.append(rounded_ceiling)
-    return sorted(list(set(milestones)))
-
-
-TOTAL_TESTS = 22
-
-
-def extract_python_code(raw_content: str, prefer_class: str = None) -> str:
-    """Robustly extracts python code from assistant responses, handling markdown fences and edge cases."""
-    blocks = re.findall(r"```(?:python)?\s*\n(.*?)```", raw_content, re.DOTALL | re.IGNORECASE)
-    code = ""
-    if blocks:
-        if prefer_class:
-            filtered = [b for b in blocks if prefer_class in b]
-            code = max(filtered, key=len).strip() if filtered else max(blocks, key=len).strip()
-        else:
-            code = max(blocks, key=len).strip()
-    else:
-        m = re.search(r"```(?:python)?\s*\n(.*)", raw_content, re.DOTALL | re.IGNORECASE)
-        code = m.group(1).strip() if m else raw_content.strip()
-        code = re.sub(r"```\s*$", "", code).strip()
-
-    return code
-
+# SECURITY: gate for executing LLM-generated code (tests 12, 16, 21).
+# Disable with --no-execute or EVAL_SAFE=1 to perform syntax-only checks.
+EXECUTE_MODEL_CODE = not os.getenv("EVAL_SAFE")
 
 # ============================================================================
 # 22 ENTERPRISE EVALUATION TEST SUITES
@@ -677,30 +386,38 @@ def run_test_prefix_caching(client: LLMClient):
         "Section 7: The maximum permissible p99 latency SLA for payment processing endpoints is 120 milliseconds.\n"
     ) * 40  # Generates ~3,500 tokens of shared prefix
 
-    # Run 1: Cold prefill
-    log("  Step 1: Sending cold request with ~3,500 token shared prefix...")
-    t0 = time.perf_counter()
+    # Interleave 3 cold/warm rounds and use medians: a single cold sample is
+    # noisy (allocator, first-request overhead), so repeated sampling gives a
+    # more reliable speedup estimate.
     msg1 = [
         {"role": "system", "content": shared_system_spec},
         {"role": "user", "content": "According to Section 4, what is the mandatory message broker protocol?"}
     ]
-    r1 = client.call(msg1, max_tokens=60, stream=False)
-    cold_ttft = r1["ttft"]
-    log(f"    -> Cold Request TTFT: {cold_ttft:.3f} s (Tokens: {r1['prompt_tokens']})")
-
-    # Run 2: Warm prefill (exact same prefix, different question)
-    log("  Step 2: Sending warm request with identical prefix to test KV cache hit...")
     msg2 = [
         {"role": "system", "content": shared_system_spec},
         {"role": "user", "content": "According to Section 7, what is the maximum permissible p99 latency SLA?"}
     ]
-    r2 = client.call(msg2, max_tokens=60, stream=False)
-    warm_ttft = r2["ttft"]
-    cached_tokens = r2.get("cached_tokens", 0)
-    speedup = (cold_ttft / warm_ttft) if warm_ttft > 0 else 1.0
-    
-    if r1.get("error") or r2.get("error"):
-        err = r1.get("error") or r2.get("error")
+    cold_ttfts, warm_ttfts, cached_tokens = [], [], 0
+    errors = []
+    for rnd in range(1, 4):
+        log(f"  Round {rnd}/3: cold request (shared ~3,500-token prefix)...")
+        r1 = client.call(msg1, max_tokens=60, stream=False)
+        if r1.get("error"):
+            errors.append(r1["error"])
+        else:
+            cold_ttfts.append(r1["ttft"])
+            log(f"    -> Cold TTFT: {r1['ttft']:.3f} s (Tokens: {r1['prompt_tokens']})")
+        log(f"  Round {rnd}/3: warm request (identical prefix, KV cache hit test)...")
+        r2 = client.call(msg2, max_tokens=60, stream=False)
+        if r2.get("error"):
+            errors.append(r2["error"])
+        else:
+            warm_ttfts.append(r2["ttft"])
+            cached_tokens = max(cached_tokens, r2.get("cached_tokens", 0))
+            log(f"    -> Warm TTFT: {r2['ttft']:.3f} s (Reported Cached Tokens: {r2.get('cached_tokens', 0)})")
+
+    if not cold_ttfts or not warm_ttfts:
+        err = errors[0] if errors else "all prefix cache probe requests failed"
         log(f"    -> Prefix cache test failed with error: {err}", color=RED)
         return {
             "status": "FAIL",
@@ -711,11 +428,15 @@ def run_test_prefix_caching(client: LLMClient):
             "error": err
         }
 
+    cold_ttft = statistics.median(cold_ttfts)
+    warm_ttft = statistics.median(warm_ttfts)
+    speedup = (cold_ttft / warm_ttft) if warm_ttft > 0 else 1.0
+
     caching_active = speedup >= 2.0 or cached_tokens > 0
     status = "PASS (ACTIVE)" if caching_active else "INACTIVE / COLD"
-    log(f"    -> Warm Request TTFT: {warm_ttft:.3f} s (Reported Cached Tokens: {cached_tokens})")
+    log(f"    -> Median Cold TTFT: {cold_ttft:.3f} s | Median Warm TTFT: {warm_ttft:.3f} s (Cached Tokens: {cached_tokens})")
     log(f"    -> Prefix Cache Acceleration: {speedup:.2f}x speedup -> {status}")
-    
+
     return {
         "status": status,
         "cold_ttft_s": round(cold_ttft, 3),
@@ -940,20 +661,36 @@ print("UNIT_TESTS_PASSED")
     full_code = import_preamble + code + "\n" + test_harness
     passed = False
     err = ""
-    try:
-        sub = subprocess.run([sys.executable, "-c", full_code], capture_output=True, text=True, timeout=15)
-        passed = "UNIT_TESTS_PASSED" in sub.stdout
-        err = sub.stderr.strip() if sub.stderr.strip() else sub.stdout.strip()
-    except Exception as e:
-        passed = False
-        err = str(e)
+    if EXECUTE_MODEL_CODE:
+        try:
+            sub = subprocess.run([sys.executable, "-c", full_code], capture_output=True, text=True, timeout=15)
+            passed = "UNIT_TESTS_PASSED" in sub.stdout
+            err = sub.stderr.strip() if sub.stderr.strip() else sub.stdout.strip()
+        except Exception as e:
+            passed = False
+            err = str(e)
+    else:
+        if res.get("error") or not code.strip():
+            passed = False
+            err = f"model call failed or no code extracted: {res.get('error', 'empty code')}"
+        else:
+            try:
+                ast.parse(full_code)
+                passed = True
+                err = "execution disabled (--no-execute / EVAL_SAFE=1); syntax check only"
+            except SyntaxError as e:
+                passed = False
+                err = f"SyntaxError: {e}"
 
     status = "PASS" if passed else "FAIL"
+    if not EXECUTE_MODEL_CODE and passed:
+        status = "PASS (SYNTAX-ONLY)"
     log(f"  -> Dynamic Execution Assertions: {status} {'(All tests passed)' if passed else f'Error: {err[:150]}'}")
     log(f"  -> Decode Speed: {res['decode_speed']:.2f} tok/s")
     return {
         "status": status,
         "dynamic_tests_passed": passed,
+        "execution_disabled": not EXECUTE_MODEL_CODE,
         "error": err if not passed else "",
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000, 1),
@@ -1293,22 +1030,37 @@ if __name__ == "__main__":
     full_script = code + "\n\n" + fuzz_harness
     fuzz_passed = False
     err_msg = ""
-    try:
-        proc = subprocess.run([sys.executable, "-c", full_script], capture_output=True, text=True, timeout=25)
-        fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
-        if not fuzz_passed:
-            err_msg = (proc.stderr or proc.stdout).strip()[:300]
-    except Exception as e:
-        err_msg = str(e)
+    if EXECUTE_MODEL_CODE:
+        try:
+            proc = subprocess.run([sys.executable, "-c", full_script], capture_output=True, text=True, timeout=25)
+            fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
+            if not fuzz_passed:
+                err_msg = (proc.stderr or proc.stdout).strip()[:300]
+        except Exception as e:
+            err_msg = str(e)
+    else:
+        if res.get("error") or not code.strip():
+            fuzz_passed = False
+            err_msg = f"model call failed or no code extracted: {res.get('error', 'empty code')}"
+        else:
+            try:
+                ast.parse(full_script)
+                fuzz_passed = True
+                err_msg = "execution disabled (--no-execute / EVAL_SAFE=1); syntax check only"
+            except SyntaxError as e:
+                err_msg = f"SyntaxError: {e}"
 
     log(f"  - Automated 5,000 Operations Fuzz Assertions: {'PASS' if fuzz_passed else 'FAIL'}")
+    if not EXECUTE_MODEL_CODE and fuzz_passed:
+        log("    [NOTE]: Syntax-only validation (code execution disabled).", color=YELLOW)
     if not fuzz_passed and err_msg:
         log(f"    [Error]: {err_msg}", color=RED)
     log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | Status: {'PASS' if fuzz_passed else 'FAIL'}")
 
     return {
         "status": "PASS" if fuzz_passed else "FAIL",
-        "fuzz_operations": 5000,
+        "fuzz_operations": 5000 if EXECUTE_MODEL_CODE else 0,
+        "execution_disabled": not EXECUTE_MODEL_CODE,
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
         "tok_s": round(res.get("decode_speed", 0), 2),
@@ -1676,21 +1428,35 @@ print("ALL_UNIT_TESTS_PASSED")
 
     unit_tests_passed = False
     err_msg = ""
-    try:
-        proc = subprocess.run(
-            [sys.executable, "-c", test_harness],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if proc.returncode == 0 and "ALL_UNIT_TESTS_PASSED" in proc.stdout:
-            unit_tests_passed = True
+    if EXECUTE_MODEL_CODE:
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", test_harness],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if proc.returncode == 0 and "ALL_UNIT_TESTS_PASSED" in proc.stdout:
+                unit_tests_passed = True
+            else:
+                err_msg = proc.stderr.strip() or proc.stdout.strip()
+        except Exception as e:
+            err_msg = str(e)
+    else:
+        if res.get("error") or not code.strip():
+            unit_tests_passed = False
+            err_msg = f"model call failed or no code extracted: {res.get('error', 'empty code')}"
         else:
-            err_msg = proc.stderr.strip() or proc.stdout.strip()
-    except Exception as e:
-        err_msg = str(e)
+            try:
+                ast.parse(test_harness)
+                unit_tests_passed = True
+                err_msg = "execution disabled (--no-execute / EVAL_SAFE=1); syntax check only"
+            except SyntaxError as e:
+                err_msg = f"SyntaxError: {e}"
 
     log(f"  - Regression Fix & Full Unit Test Suite: {'PASS' if unit_tests_passed else 'FAIL'}")
+    if not EXECUTE_MODEL_CODE and unit_tests_passed:
+        log("    [NOTE]: Syntax-only validation (code execution disabled).", color=YELLOW)
     if not unit_tests_passed and err_msg:
         log(f"  - Test Failure Detail: {err_msg[:120]}", color=RED)
     log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | TTFT: {res.get('ttft', 0)*1000:.1f} ms | Status: {'PASS' if unit_tests_passed else 'FAIL'}")
@@ -1698,6 +1464,7 @@ print("ALL_UNIT_TESTS_PASSED")
     return {
         "status": "PASS" if unit_tests_passed else "FAIL",
         "unit_tests_passed": unit_tests_passed,
+        "execution_disabled": not EXECUTE_MODEL_CODE,
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
         "tok_s": round(res.get("decode_speed", 0), 2),
@@ -1751,902 +1518,6 @@ def run_test_aime_olympiad_math(client: LLMClient):
 
 
 # ============================================================================
-# STANDARDIZED TEST CATALOG & METRIC EXTRACTORS
-# ============================================================================
-
-TEST_CATALOG = [
-    (1, "streaming", "Streaming & Latency"),
-    (2, "vision", "Multimodal Vision (Invoice)"),
-    (3, "concurrency", "Parallel Batching"),
-    (4, "capabilities_4tasks", "4-Task Architecture Suite"),
-    (5, "tool_calling", "Tool Calling & Agentic Recovery"),
-    (6, "json_schema", "JSON Schema Mode (response_format)"),
-    (7, "prefix_caching", "Prefix / KV Cache Reuse"),
-    (8, "client_abort", "Client Socket Abort Recovery"),
-    (9, "stop_sequences", "Stop Words & Greedy Sampling"),
-    (10, "high_entropy_recall", "High-Entropy Key-Value Recall"),
-    (11, "extreme_precision", "Precision Ledger Reconcile"),
-    (12, "code_execution", "Dynamic Code Unit Testing"),
-    (13, "error_handling", "API Error Protocol Compliance"),
-    (14, "context_scaling", "Dynamic Context Scaling"),
-    (15, "multihop_graph", "Adversarial Graph & Distractors"),
-    (16, "novel_algorithm_fuzz", "Novel Algorithm (5k Fuzz)"),
-    (17, "combinatorial_anti_constraints", "Anti-Constraints (IFEval Tier)"),
-    (18, "counterfactual_algebra", "Counterfactual Axiomatic Math"),
-    (19, "frontier_needle_depth", "Frontier Depth Multi-Needle"),
-    (20, "cruxeval", "CruxEval (Mental Code Exec)"),
-    (21, "swe_bench_bug_patch", "SWE-bench (Traceback Fix)"),
-    (22, "aime_olympiad", "AIME Olympiad (Math Reasoning)"),
-]
-
-
-def extract_test_metrics(test_key: str, data):
-    """Extracts standardized metrics (status, tokens, tok_s, ttft_ms, score, desc) from any test result."""
-    if not data or not isinstance(data, (dict, list)):
-        return {"status": "SKIPPED", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": "-"}
-
-    if isinstance(data, list):
-        if not data:
-            return {"status": "SKIPPED", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": "-"}
-        passed = sum(1 for s in data if s.get("status") == "PASS")
-        partial = sum(1 for s in data if s.get("status") == "PARTIAL")
-        st = "PASS" if passed == len(data) else ("PARTIAL" if (passed + partial) > 0 else "FAIL")
-        tot_tokens = sum(s.get("completion_tokens", 0) for s in data)
-        speeds = [s.get("decode_tok_s", 0) for s in data if s.get("decode_tok_s")]
-        avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
-        ttfts = [s.get("ttft_s", 0) * 1000.0 for s in data if s.get("ttft_s")]
-        avg_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
-        score = (passed + 0.5 * partial) / len(data)
-        desc = f"{passed}/{len(data)} Milestones OK"
-        return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
-
-    if test_key == "concurrency":
-        if not isinstance(data, dict):
-            return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
-        levels = [l for l in data.values() if isinstance(l, dict)]
-        if not levels:
-            st = data.get("status", "FAIL")
-            err = data.get("error", "-")
-            return {"status": st, "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": err}
-        all_passed = all("PASS" in str(l.get("status", "")) for l in levels)
-        st = "PASS" if all_passed else "FAIL"
-        tot_tokens = sum(l.get("total_tokens", 0) for l in levels)
-        max_agg = max((l.get("aggregate_tok_s", 0) for l in levels), default=0.0)
-        score = 1.0 if all_passed else 0.0
-        desc = f"Max Agg: {max_agg:.1f} tok/s"
-        return {"status": st, "tokens": tot_tokens, "tok_s": round(max_agg, 2), "ttft_ms": 0.0, "score": score, "desc": desc}
-
-    if test_key == "capabilities_4tasks":
-        if not isinstance(data, dict):
-            return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
-        tasks = [t for t in data.get("tasks", []) if isinstance(t, dict)]
-        tot_tokens = sum(t.get("tokens", 0) for t in tasks)
-        avg_speed = data.get("average_speed_tok_s", 0.0)
-        ttfts = [t.get("ttft_ms", 0) for t in tasks if t.get("ttft_ms")]
-        avg_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
-        st = data.get("status", "PASS" if tasks else "FAIL")
-        score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
-        desc = f"{len(tasks)}/4 Tasks OK" if tasks else data.get("error", "Failed")
-        return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
-
-    st = data.get("status", "N/A")
-    tokens = data.get("completion_tokens", 0) or data.get("tokens", 0)
-    tok_s = data.get("tok_s", 0.0) or data.get("decode_speed", 0.0)
-    ttft_ms = data.get("ttft_ms", 0.0) or ((data.get("ttft") or 0.0) * 1000.0)
-    score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
-
-    desc = "-"
-    if test_key == "prefix_caching":
-        ratio = data.get("speedup_ratio", 1.0)
-        desc = f"{ratio:.1f}x Cache Speedup"
-    elif test_key == "tool_calling":
-        desc = "Agent Error Recovered" if data.get("turn2_recovered") else ("Turn 1 Valid" if data.get("turn1_valid") else "Failed")
-    elif test_key == "json_schema":
-        desc = "Strict Schema Conformed" if data.get("valid_schema") else "Schema Invalid"
-    elif test_key == "combinatorial_anti_constraints":
-        cp = data.get("constraints_passed", 0)
-        desc = f"{cp}/6 Constraints"
-        score = cp / 6.0
-    elif test_key == "counterfactual_algebra":
-        desc = "Roots [8, 17] Solved" if st == "PASS" else "Roots Missed"
-    elif test_key == "cruxeval":
-        desc = "State Traversed OK" if st == "PASS" else "State Diverged"
-    elif test_key == "swe_bench_bug_patch":
-        desc = "Regression Tests OK" if st == "PASS" else "Unit Tests Failed"
-    elif test_key == "aime_olympiad":
-        desc = "Exact Modular Root" if st == "PASS" else "Arithmetic Missed"
-    elif test_key == "novel_algorithm_fuzz":
-        desc = "5,000 Ops Fuzzed OK" if st == "PASS" else "Fuzz Error"
-    elif test_key == "extreme_precision":
-        desc = "Exact Matched" if data.get("matched") else "Balance Diverged"
-    elif test_key == "high_entropy_recall":
-        desc = "Keys Recalled" if st == "PASS" else "Key Missed"
-    elif test_key == "client_abort":
-        desc = f"Rec: {data.get('recovery_latency_ms', 0):.0f}ms"
-    elif test_key == "stop_sequences":
-        desc = "Deterministic (temp=0)" if data.get("deterministic_greedy_reproducible") else "Stops Active"
-    elif test_key == "code_execution":
-        desc = "Dynamic Assertions OK" if data.get("dynamic_tests_passed") else "Assertions Failed"
-    elif test_key == "error_handling":
-        desc = "HTTP 400/422 Standard" if data.get("bad_schema_rejected") else "Handled"
-
-    return {
-        "status": st,
-        "tokens": int(tokens),
-        "tok_s": round(tok_s, 2),
-        "ttft_ms": round(ttft_ms, 1),
-        "score": score,
-        "desc": desc
-    }
-
-
-def normalize_report(report: dict) -> dict:
-    """Normalizes report structures from eval.py or compare.py to guarantee consistent results dict."""
-    if not isinstance(report, dict):
-        return {"model": "unknown", "endpoint": "unknown", "results": {}}
-
-    rep = dict(report)
-    if "model" not in rep:
-        rep["model"] = rep.get("model1") or rep.get("target_model") or "unknown"
-    if "endpoint" not in rep:
-        rep["endpoint"] = rep.get("base_url") or rep.get("endpoint1") or rep.get("url") or "unknown"
-
-    res = rep.get("results")
-    if isinstance(res, list):
-        res_dict = {}
-        for item in res:
-            if isinstance(item, dict):
-                tid = item.get("task_id") or item.get("id") or item.get("name")
-                if tid:
-                    res_dict[tid] = item
-        all_passed = all("PASS" in str(item.get("status", "")) for item in res if isinstance(item, dict))
-        any_passed = any("PASS" in str(item.get("status", "")) or "PARTIAL" in str(item.get("status", "")) for item in res if isinstance(item, dict))
-        st = "PASS" if all_passed else ("PARTIAL" if any_passed else "FAIL")
-        speeds = [item.get("tok_per_sec", 0.0) for item in res if isinstance(item, dict) and item.get("tok_per_sec")]
-        avg_spd = sum(speeds) / len(speeds) if speeds else 0.0
-        res_dict["capabilities_4tasks"] = {
-            "status": st,
-            "average_speed_tok_s": round(avg_spd, 2),
-            "tasks": res
-        }
-        rep["results"] = res_dict
-    elif not isinstance(res, dict):
-        rep["results"] = {}
-
-    return rep
-
-
-def compute_relative_advantages(m1: dict, m2: dict) -> dict:
-    """Computes relative advantages and executive verdict between two evaluated models."""
-    name1 = m1.get("model", "Model A")
-    name2 = m2.get("model", "Model B")
-
-    # 1. Effectiveness
-    eff_a = m1.get("effectiveness_rate_pct", 0.0)
-    eff_b = m2.get("effectiveness_rate_pct", 0.0)
-    diff_eff = eff_a - eff_b
-    if diff_eff > 0:
-        adv_eff = f"Model A (+{diff_eff:.1f}%)"
-    elif diff_eff < 0:
-        adv_eff = f"Model B (+{-diff_eff:.1f}%)"
-    else:
-        adv_eff = "Equal"
-
-    # 2. Token Economy
-    te_a = m1.get("token_economy_tokens_per_passed_task", 0.0)
-    te_b = m2.get("token_economy_tokens_per_passed_task", 0.0)
-    if te_a > 0 and te_b > 0:
-        if te_a < te_b:
-            ratio = te_b / te_a
-            pct = ((te_b - te_a) / te_b) * 100
-            adv_te = f"Model A ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        elif te_b < te_a:
-            ratio = te_a / te_b
-            pct = ((te_a - te_b) / te_a) * 100
-            adv_te = f"Model B ({pct:.1f}% fewer toks, {ratio:.2f}x conciseness)"
-        else:
-            adv_te = "Equal"
-    else:
-        adv_te = "-"
-
-    # 3. Total Tokens Emitted
-    tot_a = m1.get("total_tokens_emitted", 0)
-    tot_b = m2.get("total_tokens_emitted", 0)
-    if tot_a < tot_b:
-        adv_tot = f"Model A ({tot_b - tot_a:,} fewer tokens)"
-    elif tot_b < tot_a:
-        adv_tot = f"Model B ({tot_a - tot_b:,} fewer tokens)"
-    else:
-        adv_tot = "Equal"
-
-    # 4. Generation Speed
-    spd_a = m1.get("avg_decode_tok_s", 0.0)
-    spd_b = m2.get("avg_decode_tok_s", 0.0)
-    if spd_a > 0 and spd_b > 0:
-        if spd_a > spd_b:
-            diff_spd = ((spd_a - spd_b) / spd_b) * 100
-            adv_spd = f"Model A (+{diff_spd:.1f}% faster)"
-        elif spd_b > spd_a:
-            diff_spd = ((spd_b - spd_a) / spd_a) * 100
-            adv_spd = f"Model B (+{diff_spd:.1f}% faster)"
-        else:
-            adv_spd = "Equal"
-    else:
-        adv_spd = "-"
-
-    # 5. First Token Latency (TTFT)
-    ttft_a = m1.get("avg_ttft_ms", 0.0)
-    ttft_b = m2.get("avg_ttft_ms", 0.0)
-    if ttft_a > 0 and ttft_b > 0:
-        if ttft_a < ttft_b:
-            adv_ttft = f"Model A ({ttft_b / ttft_a:.2f}x lower latency)"
-        elif ttft_b < ttft_a:
-            adv_ttft = f"Model B ({ttft_a / ttft_b:.2f}x lower latency)"
-        else:
-            adv_ttft = "Equal"
-    else:
-        adv_ttft = "-"
-
-    # 6. Total Wall Clock Time
-    wall_a = m1.get("total_wall_time_s", 0.0)
-    wall_b = m2.get("total_wall_time_s", 0.0)
-    if wall_a < wall_b:
-        adv_wall = f"Model A ({wall_b - wall_a:.1f}s faster)"
-    elif wall_b < wall_a:
-        adv_wall = f"Model B ({wall_a - wall_b:.1f}s faster)"
-    else:
-        adv_wall = "Equal"
-
-    # 7. Composite Efficiency Index
-    ei_a = m1.get("efficiency_index", 0.0)
-    ei_b = m2.get("efficiency_index", 0.0)
-    if ei_a > ei_b:
-        adv_ei = f"Model A (+{ei_a - ei_b:.1f} pts)"
-    elif ei_b > ei_a:
-        adv_ei = f"Model B (+{ei_b - ei_a:.1f} pts)"
-    else:
-        adv_ei = "Equal"
-
-    # Executive Verdict
-    if eff_a > eff_b and te_a <= te_b:
-        verdict = f"MODEL A ({name1}) DOMINATES: Delivers superior effectiveness (+{diff_eff:.1f}%) while maintaining higher token economy ({te_a:.1f} vs {te_b:.1f} tokens/task)."
-    elif eff_b > eff_a and te_b <= te_a:
-        verdict = f"MODEL B ({name2}) DOMINATES: Delivers superior effectiveness (+{-diff_eff:.1f}%) while maintaining higher token economy ({te_b:.1f} vs {te_a:.1f} tokens/task)."
-    elif eff_a > eff_b:
-        verdict = f"MODEL A ({name1}) is MORE EFFECTIVE (+{diff_eff:.1f}% accuracy), while Model B had token economy of {te_b:.1f} tokens/task."
-    elif eff_b > eff_a:
-        verdict = f"MODEL B ({name2}) is MORE EFFECTIVE (+{-diff_eff:.1f}% accuracy), while Model A had token economy of {te_a:.1f} tokens/task."
-    elif spd_a > spd_b * 1.15:
-        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL A ({name1}) LEADS ON THROUGHPUT (+{((spd_a - spd_b)/spd_b)*100:.1f}% faster decode speed)."
-    elif spd_b > spd_a * 1.15:
-        verdict = f"Both models achieved identical effectiveness ({eff_a:.1f}%), but MODEL B ({name2}) LEADS ON THROUGHPUT (+{((spd_b - spd_a)/spd_a)*100:.1f}% faster decode speed)."
-    else:
-        verdict = f"Both models achieved IDENTICAL effectiveness ({eff_a:.1f}%). Model A speed: {spd_a:.1f} tok/s vs Model B speed: {spd_b:.1f} tok/s."
-
-    return {
-        "adv_eff": adv_eff,
-        "adv_te": adv_te,
-        "adv_tot": adv_tot,
-        "adv_spd": adv_spd,
-        "adv_ttft": adv_ttft,
-        "adv_wall": adv_wall,
-        "adv_ei": adv_ei,
-        "verdict": verdict,
-        "diff_eff": diff_eff,
-    }
-
-
-def compute_executive_summary(report: dict) -> dict:
-    report = normalize_report(report)
-    results = report.get("results", {})
-    evaluated = 0
-    passed = 0
-    partial = 0
-    failed = 0
-    total_tokens = 0
-    passed_tokens = 0
-    speeds = []
-    ttfts = []
-
-    for _, test_key, _ in TEST_CATALOG:
-        if test_key not in results:
-            continue
-        data = results[test_key]
-        m = extract_test_metrics(test_key, data)
-        if m["status"] == "SKIPPED":
-            continue
-        evaluated += 1
-        if "PASS" in m["status"]:
-            passed += 1
-            passed_tokens += m["tokens"]
-        elif "PARTIAL" in m["status"]:
-            partial += 1
-            passed_tokens += int(m["tokens"] * 0.5)
-        else:
-            failed += 1
-
-        total_tokens += m["tokens"]
-        if m["tok_s"] > 0:
-            speeds.append(m["tok_s"])
-        if m["ttft_ms"] > 0:
-            ttfts.append(m["ttft_ms"])
-
-    pass_rate_pct = ((passed + 0.5 * partial) / evaluated * 100.0) if evaluated > 0 else 0.0
-    avg_tokens_per_test = (total_tokens / evaluated) if evaluated > 0 else 0.0
-    avg_tokens_per_passed = (passed_tokens / (passed + 0.5 * partial)) if (passed + partial) > 0 else 0.0
-    avg_speed = (sum(speeds) / len(speeds)) if speeds else 0.0
-    avg_ttft = (sum(ttfts) / len(ttfts)) if ttfts else 0.0
-    wall_time = report.get("total_suite_wall_time_s", 0.0)
-
-    token_conciseness_factor = min(2.0, max(0.2, 1000.0 / (avg_tokens_per_passed if avg_tokens_per_passed > 0 else 1000.0)))
-    efficiency_index = round((pass_rate_pct * 0.6) + (min(100.0, avg_speed * 1.5) * 0.25) + (token_conciseness_factor * 15.0), 1)
-
-    return {
-        "model": report.get("model", "unknown"),
-        "endpoint": report.get("endpoint", "unknown"),
-        "total_evaluated": evaluated,
-        "passed": passed,
-        "partial": partial,
-        "failed": failed,
-        "effectiveness_rate_pct": round(pass_rate_pct, 1),
-        "total_tokens_emitted": total_tokens,
-        "token_economy_tokens_per_passed_task": round(avg_tokens_per_passed, 1),
-        "avg_tokens_per_test": round(avg_tokens_per_test, 1),
-        "avg_decode_tok_s": round(avg_speed, 2),
-        "avg_ttft_ms": round(avg_ttft, 1),
-        "total_wall_time_s": round(wall_time, 2),
-        "efficiency_index": efficiency_index
-    }
-
-
-# ============================================================================
-# FORMATTED CLI SUMMARY SCORECARD
-# ============================================================================
-
-def print_summary_table(report):
-    res = report.get("results", {})
-    log("\n" + "="*88, bold=True)
-    log("              ENTERPRISE LLM SERVER EVALUATION SCORECARD                                ", bold=True, color=CYAN)
-    log("="*88, bold=True)
-    log(f"  Target Endpoint : {report.get('endpoint')}")
-    log(f"  Model Under Test: {report.get('model')}")
-    log(f"  Max Context Cap : {report.get('max_context_tokens', 0):,} tokens")
-    log(f"  Parallel Setting: {report.get('parallel_streams', 1)} concurrent clients")
-    log(f"  Total Wall Time : {report.get('total_suite_wall_time_s', 0):.2f} s")
-    log("="*88)
-
-    header = f"{'Evaluation Domain':<38} | {'Status':<10} | {'Key Metric / Latency':<20} | {'Throughput'}"
-    log(header, bold=True)
-    log("-" * 88)
-
-    def fmt_status(st):
-        if "PASS" in str(st):
-            return f"{GREEN}{st}{RESET}"
-        elif "FAIL" in str(st):
-            return f"{RED}{st}{RESET}"
-        elif "SKIPPED" in str(st):
-            return f"{YELLOW}{st}{RESET}"
-        return f"{YELLOW}{st}{RESET}"
-
-    # 1. Streaming
-    if "streaming" in res:
-        s = res.get("streaming", {})
-        log(f"{'1. Streaming & Latency':<38} | {fmt_status(s.get('status', 'N/A')):<19} | TTFT: {s.get('ttft_ms', 0):.1f} ms{'':<6} | {s.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'1. Streaming & Latency':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 2. Vision
-    if "vision" in res:
-        v = res.get("vision", {})
-        v_ttft = f"TTFT: {v.get('ttft_ms', 0):.1f} ms" if 'ttft_ms' in v else "N/A"
-        v_speed = f"{v.get('tok_s', 0):.2f} tok/s" if 'tok_s' in v else "N/A"
-        log(f"{'2. Multimodal Vision (Invoice)':<38} | {fmt_status(v.get('status', 'N/A')):<19} | {v_ttft:<20} | {v_speed}")
-    else:
-        log(f"{'2. Multimodal Vision (Invoice)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 3. Parallel Batching
-    if "concurrency" in res:
-        c = res.get("concurrency", {})
-        for ckey, cval in c.items():
-            c_label = f"3. Parallel Batching ({ckey.upper()})"
-            c_speed = f"{cval.get('aggregate_tok_s', 0):.2f} tok/s (agg)"
-            c_wall = f"{cval.get('wall_time_s', 0):.2f} s wall"
-            log(f"{c_label:<38} | {fmt_status(cval.get('status', 'N/A')):<19} | {c_wall:<20} | {c_speed}")
-    else:
-        log(f"{'3. Parallel Batching':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 4. Capabilities
-    if "capabilities_4tasks" in res:
-        cap = res.get("capabilities_4tasks", {})
-        cap_speed = f"{cap.get('average_speed_tok_s', 0):.2f} tok/s (avg)"
-        log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status(cap.get('status', 'N/A')):<19} | 4/4 tasks passed{'':<5} | {cap_speed}")
-    else:
-        log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 5. Tool Calling
-    if "tool_calling" in res:
-        tc = res.get("tool_calling", {})
-        tc_desc = "Agent Error Recovered" if tc.get("turn2_recovered") else ("Turn 1 Valid" if tc.get("turn1_valid") else "Args Invalid")
-        log(f"{'5. Tool Calling & Agentic Recovery':<38} | {fmt_status(tc.get('status', 'N/A')):<19} | {tc_desc:<20} | TTFT: {tc.get('ttft_ms', 0):.1f} ms")
-    else:
-        log(f"{'5. Tool Calling & Agentic Recovery':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 6. JSON Schema
-    if "json_schema" in res:
-        js = res.get("json_schema", {})
-        js_desc = "Strict Schema Conformed" if js.get("valid_schema") else "Schema Invalid"
-        log(f"{'6. JSON Schema Mode (response_format)':<38} | {fmt_status(js.get('status', 'N/A')):<19} | {js_desc:<20} | {js.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'6. JSON Schema Mode (response_format)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 7. Prefix Caching
-    if "prefix_caching" in res:
-        pc = res.get("prefix_caching", {})
-        pc_desc = f"{pc.get('speedup_ratio', 1.0):.1f}x speedup" if pc.get("speedup_ratio") else "N/A"
-        log(f"{'7. Prefix / KV Cache Reuse':<38} | {fmt_status(pc.get('status', 'N/A')):<19} | {pc_desc:<20} | Warm: {pc.get('warm_ttft_s', 0):.3f}s")
-    else:
-        log(f"{'7. Prefix / KV Cache Reuse':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 8. Client Abort
-    if "client_abort" in res:
-        ca = res.get("client_abort", {})
-        ca_desc = f"Rec: {ca.get('recovery_latency_ms', 0):.1f} ms"
-        log(f"{'8. Client Socket Abort Recovery':<38} | {fmt_status(ca.get('status', 'N/A')):<19} | {ca_desc:<20} | Slots Released")
-    else:
-        log(f"{'8. Client Socket Abort Recovery':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 9. Stop Sequences
-    if "stop_sequences" in res:
-        ss = res.get("stop_sequences", {})
-        ss_desc = "Deterministic (temp=0)" if ss.get("deterministic_greedy_reproducible") else "Non-deterministic"
-        log(f"{'9. Stop Words & Greedy Sampling':<38} | {fmt_status(ss.get('status', 'N/A')):<19} | {ss_desc:<20} | Tokens Suppressed")
-    else:
-        log(f"{'9. Stop Words & Greedy Sampling':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 10. High Entropy
-    if "high_entropy_recall" in res:
-        he = res.get("high_entropy_recall", {})
-        he_speed = f"{he.get('tok_s', 0):.2f} tok/s"
-        log(f"{'10. High-Entropy Key-Value Recall':<38} | {fmt_status(he.get('status', 'N/A')):<19} | TTFT: {he.get('ttft_ms', 0):.1f} ms{'':<4} | {he_speed}")
-    else:
-        log(f"{'10. High-Entropy Key-Value Recall':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 11. Extreme Precision
-    if "extreme_precision" in res:
-        ep = res.get("extreme_precision", {})
-        ep_desc = "Exact Matched" if ep.get("matched") else "Balance Diverged"
-        log(f"{'11. Precision Ledger Reconcile':<38} | {fmt_status(ep.get('status', 'N/A')):<19} | {ep_desc:<20} | {ep.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'11. Precision Ledger Reconcile':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 12. Code Execution
-    if "code_execution" in res:
-        ce = res.get("code_execution", {})
-        ce_desc = "Dynamic Assertions OK" if ce.get("dynamic_tests_passed") else "Assertion Failure"
-        log(f"{'12. Dynamic Code Unit Testing':<38} | {fmt_status(ce.get('status', 'N/A')):<19} | {ce_desc:<20} | {ce.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'12. Dynamic Code Unit Testing':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 13. Error Handling
-    if "error_handling" in res:
-        eh = res.get("error_handling", {})
-        eh_desc = "HTTP 400/422 Standard" if eh.get("bad_schema_rejected") else "Non-standard error"
-        log(f"{'13. API Error Protocol Compliance':<38} | {fmt_status(eh.get('status', 'N/A')):<19} | {eh_desc:<20} | Protocol OK")
-    else:
-        log(f"{'13. API Error Protocol Compliance':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 14. Context Scaling Summary
-    if "context_scaling" in res:
-        cs = res.get("context_scaling", [])
-        if cs:
-            log("-" * 88)
-            log("  [14. Context Scaling Milestone Performance & Accuracy Breakdown]", bold=True)
-            cs_hdr = f"  {'Context Target':<18} | {'Cached':<8} | {'Prefill TTFT':<14} | {'Cold Speed':<14} | {'Effective':<14} | {'Decode':<12} | {'Accuracy':<10}"
-            log(cs_hdr)
-            log("  " + "-" * (len(cs_hdr) - 2))
-            for step in cs:
-                if step.get("status") in ("PASS", "PARTIAL"):
-                    m_label = f"~{step.get('target_tokens', 0)//1000}k ({step.get('actual_prompt_tokens', 0):,} toks)"
-                    cached_str = f"{step.get('cached_tokens', 0):,}"
-                    ttft_str = f"{step.get('ttft_s', 0):.2f} s"
-                    cold_str = f"{step.get('cold_prefill_tok_s', 0):.1f} tok/s"
-                    eff_str = f"{step.get('effective_prefill_tok_s', 0):.1f} tok/s"
-                    decode_str = f"{step.get('decode_tok_s', 0):.2f} tok/s"
-                    acc_str = "RECALLED" if step.get("needle_matched") else "MISSED"
-                    log(f"  {m_label:<18} | {cached_str:<8} | {ttft_str:<14} | {cold_str:<14} | {eff_str:<14} | {decode_str:<12} | {acc_str:<10}")
-                else:
-                    m_label = f"{step.get('target_tokens', 0):,} toks"
-                    log(f"  {m_label:<18} | {'-':<8} | {'FAILED':<14} | {str(step.get('error', 'Error'))[:28]}")
-    else:
-        if 14 in report.get("selected_tests", range(1, TOTAL_TESTS + 1)):
-            log(f"{'14. Dynamic Context Scaling':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 15. Multihop Graph Traversal
-    if "multihop_graph" in res:
-        mh = res.get("multihop_graph", {})
-        mh_desc = f"{mh.get('completion_tokens', 0)} tokens"
-        log(f"{'15. Adversarial Graph & Distractors':<38} | {fmt_status(mh.get('status', 'N/A')):<19} | {mh_desc:<20} | {mh.get('tok_s', 0):.2f} tok/s")
-    elif 15 in report.get("selected_tests", set()):
-        log(f"{'15. Adversarial Graph & Distractors':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 16. Novel Algorithmic Fuzz
-    if "novel_algorithm_fuzz" in res:
-        fz = res.get("novel_algorithm_fuzz", {})
-        fz_desc = "5,000 Ops Fuzzed OK" if fz.get("status") == "PASS" else "Fuzz Assertion Failed"
-        log(f"{'16. Novel Algorithm (5k Fuzz)':<38} | {fmt_status(fz.get('status', 'N/A')):<19} | {fz_desc:<20} | {fz.get('tok_s', 0):.2f} tok/s")
-    elif 16 in report.get("selected_tests", set()):
-        log(f"{'16. Novel Algorithm (5k Fuzz)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 17. Combinatorial Anti-Constraints
-    if "combinatorial_anti_constraints" in res:
-        ac = res.get("combinatorial_anti_constraints", {})
-        ac_desc = f"{ac.get('constraints_passed', 0)}/6 Constraints Met"
-        log(f"{'17. Anti-Constraints (IFEval Tier)':<38} | {fmt_status(ac.get('status', 'N/A')):<19} | {ac_desc:<20} | {ac.get('tok_s', 0):.2f} tok/s")
-    elif 17 in report.get("selected_tests", set()):
-        log(f"{'17. Anti-Constraints (IFEval Tier)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 18. Counterfactual Algebra
-    if "counterfactual_algebra" in res:
-        ca = res.get("counterfactual_algebra", {})
-        ca_desc = "Both Roots Solved" if ca.get("status") == "PASS" else ("1 Root Solved" if ca.get("status") == "PARTIAL" else "Roots Missed")
-        log(f"{'18. Counterfactual Axiomatic Math':<38} | {fmt_status(ca.get('status', 'N/A')):<19} | {ca_desc:<20} | {ca.get('tok_s', 0):.2f} tok/s")
-    elif 18 in report.get("selected_tests", set()):
-        log(f"{'18. Counterfactual Axiomatic Math':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 19. Frontier Needle Depth
-    if "frontier_needle_depth" in res:
-        fn = res.get("frontier_needle_depth", {})
-        fn_desc = "Composite Checksum OK" if fn.get("status") == "PASS" else "Checksum Missed"
-        log(f"{'19. Frontier Depth Multi-Needle':<38} | {fmt_status(fn.get('status', 'N/A')):<19} | {fn_desc:<20} | {fn.get('tok_s', 0):.2f} tok/s")
-    elif 19 in report.get("selected_tests", set()):
-        log(f"{'19. Frontier Depth Multi-Needle':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 20. CruxEval
-    if "cruxeval" in res:
-        cx = res.get("cruxeval", {})
-        cx_desc = "State Traversed OK" if cx.get("status") == "PASS" else "State Diverged"
-        log(f"{'20. CruxEval (Mental Code Exec)':<38} | {fmt_status(cx.get('status', 'N/A')):<19} | {cx_desc:<20} | {cx.get('tok_s', 0):.2f} tok/s")
-    elif 20 in report.get("selected_tests", set()):
-        log(f"{'20. CruxEval (Mental Code Exec)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 21. SWE-bench Bug Patching
-    if "swe_bench_bug_patch" in res:
-        sw = res.get("swe_bench_bug_patch", {})
-        sw_desc = "Regression Tests OK" if sw.get("status") == "PASS" else "Unit Tests Failed"
-        log(f"{'21. SWE-bench (Traceback Fix)':<38} | {fmt_status(sw.get('status', 'N/A')):<19} | {sw_desc:<20} | {sw.get('tok_s', 0):.2f} tok/s")
-    elif 21 in report.get("selected_tests", set()):
-        log(f"{'21. SWE-bench (Traceback Fix)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 22. AIME Olympiad Math
-    if "aime_olympiad" in res:
-        am = res.get("aime_olympiad", {})
-        am_desc = "Exact Modular Root" if am.get("status") == "PASS" else "Arithmetic Missed"
-        log(f"{'22. AIME Olympiad (Math Reasoning)':<38} | {fmt_status(am.get('status', 'N/A')):<19} | {am_desc:<20} | {am.get('tok_s', 0):.2f} tok/s")
-    elif 22 in report.get("selected_tests", set()):
-        log(f"{'22. AIME Olympiad (Math Reasoning)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    log("="*88 + "\n")
-
-    # Executive Efficiency & Effectiveness Scorecard
-    summary = compute_executive_summary(report)
-    report["summary"] = summary
-
-    log("="*88, bold=True)
-    log("             EXECUTIVE EFFICIENCY & EFFECTIVENESS SCORECARD                             ", bold=True, color=CYAN)
-    log("="*88, bold=True)
-    log(f"  Model Under Test        : {summary['model']}")
-    log(f"  Effectiveness (Pass@1)  : {summary['passed']}/{summary['total_evaluated']} Passed ({summary['effectiveness_rate_pct']}%)")
-    log(f"  Total Solution Tokens   : {summary['total_tokens_emitted']:,} tokens consumed")
-    log(f"  Token Economy           : {summary['token_economy_tokens_per_passed_task']:.1f} tokens/passed victory (Solution conciseness)")
-    log(f"  Mean Decode Throughput  : {summary['avg_decode_tok_s']:.2f} tok/s")
-    log(f"  Mean Prefill TTFT       : {summary['avg_ttft_ms']:.1f} ms")
-    log(f"  Total Benchmark Time    : {summary['total_wall_time_s']:.2f} s")
-    log(f"  Composite Efficiency Idx: {summary['efficiency_index']:.1f} / 100.0")
-    log("="*88 + "\n", bold=True)
-
-
-def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
-    """Compares two or more JSON benchmark reports head-to-head for efficiency and effectiveness."""
-    if len(file_paths) < 2:
-        log("Error: --compare requires at least two JSON benchmark report paths.", color=RED)
-        sys.exit(1)
-
-    reports = []
-    summaries = []
-    for fp in file_paths:
-        if not os.path.exists(fp):
-            log(f"Error: Report file not found: {fp}", color=RED)
-            sys.exit(1)
-        try:
-            with open(fp, "r") as f:
-                data = json.load(f)
-                norm_data = normalize_report(data)
-                reports.append(norm_data)
-                summaries.append(compute_executive_summary(norm_data))
-        except Exception as e:
-            log(f"Error reading {fp}: {e}", color=RED)
-            sys.exit(1)
-
-    log("\n" + "="*100, bold=True)
-    log("          CROSS-MODEL HEAD-TO-HEAD EFFICIENCY & EFFECTIVENESS BENCHMARK REPORT          ", bold=True, color=CYAN)
-    log("="*100, bold=True)
-
-    m1, m2 = summaries[0], summaries[1]
-    name1 = f"{m1['model']} ({m1['endpoint']})"
-    name2 = f"{m2['model']} ({m2['endpoint']})"
-
-    log(f"  Model A : {name1}", bold=True)
-    log(f"  Model B : {name2}\n", bold=True)
-
-    exec_hdr = f"{'Core Performance Metric':<35} | {'Model A (' + str(m1['model'])[:16] + ')':<26} | {'Model B (' + str(m2['model'])[:16] + ')':<26} | {'Advantage'}"
-    log(exec_hdr, bold=True)
-    log("-" * 100)
-
-    adv = compute_relative_advantages(m1, m2)
-
-    # 1. Effectiveness
-    eff_a = m1['effectiveness_rate_pct']
-    eff_b = m2['effectiveness_rate_pct']
-    pass_a_str = f"{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)"
-    pass_b_str = f"{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)"
-    log(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv['adv_eff']}")
-
-    # 2. Token Economy
-    te_a = m1['token_economy_tokens_per_passed_task']
-    te_b = m2['token_economy_tokens_per_passed_task']
-    te_a_str = f"{te_a:.1f} tokens/task"
-    te_b_str = f"{te_b:.1f} tokens/task"
-    log(f"{'Token Economy (Tokens/Victory)':<35} | {te_a_str:<26} | {te_b_str:<26} | {adv['adv_te']}")
-
-    # 3. Total Tokens Emitted
-    tot_a = m1['total_tokens_emitted']
-    tot_b = m2['total_tokens_emitted']
-    tot_a_str = f"{tot_a:,} tokens"
-    tot_b_str = f"{tot_b:,} tokens"
-    log(f"{'Total Solution Tokens Consumed':<35} | {tot_a_str:<26} | {tot_b_str:<26} | {adv['adv_tot']}")
-
-    # 4. Generation Speed
-    spd_a = m1['avg_decode_tok_s']
-    spd_b = m2['avg_decode_tok_s']
-    spd_a_str = f"{spd_a:.2f} tok/s"
-    spd_b_str = f"{spd_b:.2f} tok/s"
-    log(f"{'Mean Decode Speed (Throughput)':<35} | {spd_a_str:<26} | {spd_b_str:<26} | {adv['adv_spd']}")
-
-    # 5. First Token Latency (TTFT)
-    ttft_a = m1['avg_ttft_ms']
-    ttft_b = m2['avg_ttft_ms']
-    ttft_a_str = f"{ttft_a:.1f} ms"
-    ttft_b_str = f"{ttft_b:.1f} ms"
-    log(f"{'Mean Time-To-First-Token (TTFT)':<35} | {ttft_a_str:<26} | {ttft_b_str:<26} | {adv['adv_ttft']}")
-
-    # 6. Total Wall Clock Time
-    wall_a = m1['total_wall_time_s']
-    wall_b = m2['total_wall_time_s']
-    wall_a_str = f"{wall_a:.2f} s"
-    wall_b_str = f"{wall_b:.2f} s"
-    log(f"{'Total Benchmark Suite Time':<35} | {wall_a_str:<26} | {wall_b_str:<26} | {adv['adv_wall']}")
-
-    # 7. Composite Efficiency Index
-    ei_a = m1['efficiency_index']
-    ei_b = m2['efficiency_index']
-    ei_a_str = f"{ei_a:.1f} / 100"
-    ei_b_str = f"{ei_b:.1f} / 100"
-    log(f"{'Composite Efficiency Index':<35} | {ei_a_str:<26} | {ei_b_str:<26} | {adv['adv_ei']}")
-    log("="*100)
-
-    # Detailed Domain Matrix
-    log("\n" + "="*100, bold=True)
-    log("                          DOMAIN-BY-DOMAIN HEAD-TO-HEAD MATRIX                                ", bold=True, color=CYAN)
-    log("="*100, bold=True)
-    dom_hdr = f"{'Domain':<32} | {'Model A (' + str(m1['model'])[:12] + ')':<26} | {'Model B (' + str(m2['model'])[:12] + ')':<26} | {'Outcome / Advantage'}"
-    log(dom_hdr, bold=True)
-    log("-" * 100)
-
-    res_a = reports[0].get("results") or {}
-    res_b = reports[1].get("results") or {}
-    table_rows = []
-
-    for num, key, name in TEST_CATALOG:
-        da = extract_test_metrics(key, res_a.get(key))
-        db = extract_test_metrics(key, res_b.get(key))
-
-        if da["status"] == "SKIPPED" and db["status"] == "SKIPPED":
-            continue
-
-        label = f"{num}. {name[:28]}"
-        sa_str = f"{da['status']} ({da['tokens']}t | {da['tok_s']}t/s)" if da["status"] != "SKIPPED" else "SKIPPED"
-        sb_str = f"{db['status']} ({db['tokens']}t | {db['tok_s']}t/s)" if db["status"] != "SKIPPED" else "SKIPPED"
-
-        adv_domain = "-"
-        if "PASS" in da["status"] and "PASS" not in db["status"]:
-            adv_domain = "Model A Victory"
-        elif "PASS" in db["status"] and "PASS" not in da["status"]:
-            adv_domain = "Model B Victory"
-        elif "PASS" in da["status"] and "PASS" in db["status"]:
-            if da["tokens"] > 0 and db["tokens"] > 0:
-                if da["tokens"] < db["tokens"]:
-                    ratio = db["tokens"] / da["tokens"]
-                    adv_domain = f"Model A ({ratio:.1f}x fewer tokens)"
-                elif db["tokens"] < da["tokens"]:
-                    ratio = da["tokens"] / db["tokens"]
-                    adv_domain = f"Model B ({ratio:.1f}x fewer tokens)"
-                else:
-                    adv_domain = "Tied"
-            else:
-                adv_domain = "Both Passed"
-        elif "FAIL" in da["status"] and "FAIL" in db["status"]:
-            adv_domain = "Both Failed"
-
-        log(f"{label:<32} | {sa_str:<26} | {sb_str:<26} | {adv_domain}")
-        table_rows.append((num, name, da, db, adv_domain))
-
-    log("="*100)
-
-    # Executive Verdict
-    log("\n" + "="*100, bold=True)
-    log("                                  EXECUTIVE VERDICT                                     ", bold=True, color=GREEN)
-    log("="*100, bold=True)
-    verdict = adv["verdict"]
-    log(f"  {verdict}\n", bold=True)
-    log("="*100 + "\n")
-
-    # Generate Markdown Report
-    safe_a = re.sub(r"[^\w\-]", "_", str(m1["model"]))
-    safe_b = re.sub(r"[^\w\-]", "_", str(m2["model"]))
-    md_file = output_markdown or os.path.join(DEFAULT_RESULTS_DIR, f"comparison_{safe_a}_vs_{safe_b}_{time.strftime('%Y%m%d_%H%M%S')}.md")
-    md_dir = os.path.dirname(md_file)
-    if md_dir:
-        os.makedirs(md_dir, exist_ok=True)
-
-    md_lines = [
-        "# Cross-Model Head-to-Head Efficiency & Effectiveness Benchmark Report",
-        "",
-        f"- **Date Generated**: {time.strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **Model A**: `{name1}`",
-        f"- **Model B**: `{name2}`",
-        "",
-        "## Executive Summary & Efficiency Index",
-        "",
-        "| Metric / Dimension | Model A (`" + str(m1['model']) + "`) | Model B (`" + str(m2['model']) + "`) | Relative Advantage |",
-        "|:---|:---|:---|:---|",
-        f"| **Effectiveness (Accuracy)** | `{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)` | `{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)` | **{adv['adv_eff']}** |",
-        f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv['adv_te']}** |",
-        f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv['adv_tot']}** |",
-        f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv['adv_spd']}** |",
-        f"| **Mean Time-to-First-Token (TTFT)** | `{ttft_a:.1f} ms` | `{ttft_b:.1f} ms` | **{adv['adv_ttft']}** |",
-        f"| **Total Benchmark Wall Time** | `{wall_a:.2f} s` | `{wall_b:.2f} s` | **{adv['adv_wall']}** |",
-        f"| **Composite Efficiency Index** | `{ei_a:.1f} / 100` | `{ei_b:.1f} / 100` | **{adv['adv_ei']}** |",
-        "",
-        "## Domain-by-Domain Comparison Matrix",
-        "",
-        "| Stage | Evaluation Domain | Model A (`" + str(m1['model']) + "`) | Model B (`" + str(m2['model']) + "`) | Outcome / Advantage |",
-        "|:---|:---|:---|:---|:---|",
-    ]
-
-    for num, name, da, db, adv_row in table_rows:
-        sa_str = f"{da['status']} ({da['tokens']}t, {da['tok_s']}t/s)" if da["status"] != "SKIPPED" else "SKIPPED"
-        sb_str = f"{db['status']} ({db['tokens']}t, {db['tok_s']}t/s)" if db["status"] != "SKIPPED" else "SKIPPED"
-        md_lines.append(f"| {num} | {name} | {sa_str} | {sb_str} | **{adv_row}** |")
-
-    md_lines.extend([
-        "",
-        "## Strategic Verdict & Deployment Recommendation",
-        "",
-        f"> **Executive Verdict**: {verdict}",
-        ""
-    ])
-
-    with open(md_file, "w") as f:
-        f.write("\n".join(md_lines))
-
-    log(f"  Markdown Benchmark Comparison Saved: {md_file}\n", color=GREEN, bold=True)
-
-
-NAME_TO_TEST_NUM = {
-    "streaming": 1,
-    "vision": 2,
-    "concurrency": 3,
-    "parallel": 3,
-    "batching": 3,
-    "capabilities": 4,
-    "capabilities_4tasks": 4,
-    "tasks": 4,
-    "tool_calling": 5,
-    "tools": 5,
-    "json_schema": 6,
-    "schema": 6,
-    "prefix_caching": 7,
-    "caching": 7,
-    "client_abort": 8,
-    "abort": 8,
-    "stop_sequences": 9,
-    "stop": 9,
-    "high_entropy": 10,
-    "high_entropy_recall": 10,
-    "recall": 10,
-    "extreme_precision": 11,
-    "precision": 11,
-    "code_execution": 12,
-    "code": 12,
-    "error_handling": 13,
-    "error": 13,
-    "context_scaling": 14,
-    "context": 14,
-    "scale": 14,
-    "multihop_graph": 15,
-    "multihop": 15,
-    "graph": 15,
-    "distractors": 15,
-    "novel_algorithm_fuzz": 16,
-    "novel_algorithm": 16,
-    "fuzz": 16,
-    "ring_buffer": 16,
-    "combinatorial_anti_constraints": 17,
-    "anti_constraints": 17,
-    "ifeval": 17,
-    "lipogram": 17,
-    "counterfactual_algebra": 18,
-    "algebra": 18,
-    "symbolic": 18,
-    "math": 18,
-    "frontier_needle_depth": 19,
-    "frontier_needle": 19,
-    "frontier": 19,
-    "cruxeval": 20,
-    "code_exec_simulation": 20,
-    "swe_bench": 21,
-    "bug_patch": 21,
-    "patching": 21,
-    "rate_limiter": 21,
-    "aime": 22,
-    "olympiad": 22,
-    "math_olympiad": 22,
-}
-
-def parse_selected_tests(test_arg: str, suite: str = "all"):
-    if test_arg:
-        selected = set()
-        parts = [p.strip() for p in test_arg.replace(" ", ",").split(",") if p.strip()]
-        for part in parts:
-            if "-" in part and not part.startswith("-"):
-                subparts = part.split("-", 1)
-                if subparts[0].isdigit() and subparts[1].isdigit():
-                    start_n, end_n = int(subparts[0]), int(subparts[1])
-                    for n in range(start_n, end_n + 1):
-                        if 1 <= n <= 22:
-                            selected.add(n)
-                    continue
-            if part.isdigit():
-                n = int(part)
-                if 1 <= n <= 22:
-                    selected.add(n)
-            else:
-                lower = part.lower().replace("-", "_")
-                if lower in NAME_TO_TEST_NUM:
-                    selected.add(NAME_TO_TEST_NUM[lower])
-                elif lower == "flagship":
-                    selected.update(range(1, 15))
-                elif lower in ("adversarial", "hardened"):
-                    selected.update(range(15, 20))
-                elif lower in ("frontier", "sota"):
-                    selected.update(range(20, 23))
-                elif lower == "all":
-                    selected.update(range(1, 23))
-                else:
-                    log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
-        return selected if selected else set(range(1, 23))
-
-    if suite == "flagship":
-        return set(range(1, 15))
-    elif suite == "adversarial":
-        return set(range(15, 20))
-    elif suite == "frontier":
-        return set(range(20, 23))
-    else:  # "all"
-        return set(range(1, 23))
-
-
-# ============================================================================
 # MAIN ORCHESTRATOR & INTERACTIVE DISCOVERY
 # ============================================================================
 
@@ -2663,6 +1534,9 @@ def main():
                         help="Benchmark suite category: 'all' (tests 1-22), 'flagship' (tests 1-14), 'adversarial' (tests 15-19), or 'frontier' (tests 20-22)")
     parser.add_argument("--quick", "-q", action="store_true",
                         help="Fast smoke qualification mode (compact context horizons, skips heavy prefill)")
+    parser.add_argument("--no-execute", action="store_true",
+                        help="SECURITY: Do NOT execute LLM-generated code (tests 12/16/21 fall back to syntax-only checks). "
+                             "Also enabled by setting EVAL_SAFE=1.")
     parser.add_argument("--adversarial-depth", type=int, default=32000,
                         help="Target context depth for adversarial frontier tests (default: 32000)")
     parser.add_argument("--context-ratio", type=float, default=0.80,
@@ -2675,49 +1549,101 @@ def main():
     parser.add_argument("--compare-out", default=None,
                         help="Optional markdown path to export the cross-model comparison report")
     parser.add_argument("--live", "--live-compare", action="store_true",
-                        help="Native Arena Mode: Live concurrent benchmark comparing two endpoints side-by-side in real time")
+                        help="Native Arena Mode: Live concurrent benchmark comparing two endpoints side-by-side in real time "
+                             "(explicitly required; a two-server config.json alone will NOT trigger arena mode)")
     parser.add_argument("--endpoint1", "--url1", default=None,
                         help="First LLM server base endpoint for live arena comparison (e.g. http://127.0.0.1:8888/v1)")
     parser.add_argument("--model1", default=None, help="First model name or ID for live arena comparison")
     parser.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
     parser.add_argument("--endpoint2", "--url2", default=None,
-                        help="Second LLM server base endpoint for live arena comparison (e.g. http://172.16.16.29:8000/v1)")
+                        help="Second LLM server base endpoint for live arena comparison (e.g. http://10.0.0.2:8000/v1)")
     parser.add_argument("--model2", default=None, help="Second model name or ID for live arena comparison")
     parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
+    parser.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
+    parser.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
+    parser.add_argument("--save-config", action="store_true", help="Automatically save resolved server configuration to config file without prompting")
+    parser.add_argument("--no-save", action="store_true", help="Do not prompt to save configuration")
     args = parser.parse_args()
+
+    if args.env_file:
+        env_loader.load_env_file(args.env_file, override=True)
+
+    # Load configuration from config.json or .env if present
+    cfg, config_path, loaded_from_file = env_loader.load_config(args.config)
+
+    global EXECUTE_MODEL_CODE
+    if args.no_execute:
+        EXECUTE_MODEL_CODE = False
 
     if args.compare:
         compare_benchmark_reports(args.compare, output_markdown=args.compare_out)
         return
 
-    if args.live or (args.endpoint1 and args.endpoint2):
+    ep1 = args.endpoint1 or cfg.get("endpoint1") or args.endpoint or cfg.get("endpoint") or os.getenv("ENDPOINT1") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")
+    ep2 = args.endpoint2 or cfg.get("endpoint2") or os.getenv("ENDPOINT2")
+    m1 = args.model1 or cfg.get("model1") or args.model or cfg.get("model") or os.getenv("MODEL1") or os.getenv("OPENAI_MODEL")
+    m2 = args.model2 or cfg.get("model2") or os.getenv("MODEL2")
+    k1 = args.api_key1 or cfg.get("api_key1") or args.api_key or cfg.get("api_key") or os.getenv("API_KEY1") or os.getenv("OPENAI_API_KEY") or ""
+    k2 = args.api_key2 or cfg.get("api_key2") or os.getenv("API_KEY2") or ""
+
+    if args.live:
         from compare import run_live_arena
-        ep1 = args.endpoint1 or args.endpoint or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT")
-        ep2 = args.endpoint2
-        m1 = args.model1 or args.model
-        m2 = args.model2
         out_path = args.compare_out or args.out or None
         if not ep1 or not ep2:
-            log("Error: Arena Mode (--live / --live-compare) requires both --endpoint1 and --endpoint2.", color=RED)
+            log("Error: Arena Mode (--live / --live-compare) requires both endpoint1 and endpoint2.", color=RED)
             sys.exit(1)
+        log("LIVE ARENA MODE: comparing two endpoints concurrently in real time.", bold=True, color=MAGENTA)
+
+        arena_config_changed = (
+            ep1 != cfg.get("endpoint1") or
+            ep2 != cfg.get("endpoint2") or
+            m1 != cfg.get("model1") or
+            m2 != cfg.get("model2")
+        )
+
+        if arena_config_changed or not loaded_from_file:
+            if args.save_config:
+                saved_p = env_loader.save_config(
+                    endpoint=ep1, model=m1, api_key=k1,
+                    endpoint2=ep2, model2=m2, api_key2=k2,
+                    config_file=config_path
+                )
+                if saved_p:
+                    log(f"Saved Arena configuration to {saved_p}", color=GREEN, bold=True)
+            elif sys.stdin.isatty() and not args.auto and not args.no_save:
+                ans = input(f"\nSave Arena server configuration (Server 1 & Server 2) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
+                if ans in ("y", "yes"):
+                    saved_p = env_loader.save_config(
+                        endpoint=ep1, model=m1, api_key=k1,
+                        endpoint2=ep2, model2=m2, api_key2=k2,
+                        config_file=config_path
+                    )
+                    if saved_p:
+                        log(f"Arena configuration saved to {saved_p}!", color=GREEN, bold=True)
+
         run_live_arena(
             endpoint1=ep1,
             model1=m1,
             endpoint2=ep2,
             model2=m2,
-            api_key1=args.api_key1,
-            api_key2=args.api_key2,
+            api_key1=k1,
+            api_key2=k2,
             output_file=out_path
         )
         return
+
 
     log("\n" + "="*88, bold=True)
     log(" ENTERPRISE LLM SERVER FULL BENCHMARK & EVALUATION SUITE ", bold=True, color=GREEN)
     log("="*88)
 
+    if loaded_from_file and cfg.get("endpoint"):
+        log(f"Config Loaded ({os.path.basename(config_path)}): Endpoint={cfg['endpoint']}, Model={cfg.get('model') or 'Auto'}, Max Context={cfg.get('max_context') or 'Auto'}", color=CYAN)
+
     # 1. Endpoint resolution
     endpoint = (
         args.endpoint
+        or cfg.get("endpoint")
         or os.getenv("OPENAI_BASE_URL")
         or os.getenv("LLM_ENDPOINT")
         or os.getenv("OPENAI_API_BASE")
@@ -2731,11 +1657,11 @@ def main():
             endpoint = default_ep
     log(f"Target Server: {endpoint}")
 
-    api_key = args.api_key or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or None
+    api_key = args.api_key or cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or ""
     client = LLMClient(endpoint=endpoint, api_key=api_key)
 
     # 2. Discover Models
-    target_model_name = args.model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL")
+    target_model_name = args.model or cfg.get("model") or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL")
     log("\nQuerying available models from endpoint...")
     models = client.fetch_models()
     selected_model_obj = None
@@ -2775,13 +1701,37 @@ def main():
     log(f"\nActive Model Selected: {BOLD}{model_name}{RESET}")
 
     # 3. Detect Context Ceiling
-    detected_ctx = detect_max_context(selected_model_obj)
+    detected_ctx = detect_max_context(selected_model_obj, warn=True)
     if args.max_context:
         max_context = args.max_context
         log(f"Max Context Window (Overridden by flag): {max_context:,} tokens")
+    elif cfg.get("max_context"):
+        max_context = cfg.get("max_context")
+        log(f"Max Context Window (Loaded from config): {max_context:,} tokens")
     else:
         max_context = detected_ctx
         log(f"Detected Max Context Window: {max_context:,} tokens")
+
+    # Offer interactive / auto option to save endpoint, model, api_key, max_context to config.json
+    config_changed = (
+        endpoint != cfg.get("endpoint") or
+        model_name != cfg.get("model") or
+        api_key != (cfg.get("api_key") or "") or
+        max_context != cfg.get("max_context")
+    )
+
+    if config_changed or not loaded_from_file:
+        if args.save_config:
+            saved_p = env_loader.save_config(endpoint, model_name, api_key, max_context, config_path)
+            if saved_p:
+                log(f"Saved configuration to {saved_p}", color=GREEN, bold=True)
+        elif sys.stdin.isatty() and not args.auto and not args.no_save:
+            ans = input(f"\nSave server configuration (endpoint, model, api_key, max_context) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
+            if ans in ("y", "yes"):
+                saved_p = env_loader.save_config(endpoint, model_name, api_key, max_context, config_path)
+                if saved_p:
+                    log(f"Configuration saved to {saved_p}!", color=GREEN, bold=True)
+
 
     if args.quick:
         if args.milestones:

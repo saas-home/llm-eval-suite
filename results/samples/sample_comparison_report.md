@@ -2,7 +2,7 @@
 
 - **Date Generated**: 2026-10-04 19:53:58
 - **Model A**: `qwen3.8-27b (http://127.0.0.1:8888/v1)`
-- **Model B**: `qwen3.8-flash-next (http://172.16.16.29:8000/v1)`
+- **Model B**: `qwen3.8-flash-next (http://10.0.0.2:8000/v1)`
 
 ## Executive Summary & Efficiency Index
 

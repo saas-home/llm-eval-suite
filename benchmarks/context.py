@@ -34,7 +34,7 @@ def build_prompt(target_tokens, salt=True):
     text = (BASE_TEXT * repeat_count)
     return prefix + text + "\n\nSummarize the key aspects mentioned above in detail."
 
-def run_benchmark_run(api_url, prompt_text, max_tokens=64, model="qwen3.8-27b-exl3-3.0bpw", target_tokens=0, api_key=""):
+def run_benchmark_run(api_url, prompt_text, max_tokens=64, model="default", target_tokens=0, api_key=""):
     payload = {
         "model": model,
         "messages": [
@@ -152,19 +152,26 @@ def main():
     parser.add_argument("--tokens", type=int, nargs="+", default=[200000], help="Context token target(s)")
     parser.add_argument("--gen-tokens", type=int, default=64, help="Max generation tokens")
     parser.add_argument("--no-salt", action="store_true", help="Disable unique salt prepending (allows warm prefix caching)")
-    parser.add_argument("--out", default=os.path.join(ROOT_DIR, "results", "context_benchmark_results.json"), help="Optional output JSON path")
     args = parser.parse_args()
+    url = args.url.rstrip("/")
+
+    if not url.endswith("/chat/completions"):
+        if url.endswith("/v1"):
+            url = f"{url}/chat/completions"
+        else:
+            url = f"{url}/v1/chat/completions"
 
     print("=" * 96)
     print("Prefill & Decode Speed Benchmark Across Context Levels")
-    print(f"Target URL: {args.url}")
+    print(f"Target URL: {url}")
     print(f"Model ID  : {args.model}")
     print(f"Prefix Isolation: {'Disabled (warm caching allowed)' if args.no_salt else 'Enabled (cold prefill isolated)'}")
     print("=" * 96)
     
     # Warmup
     print("Warming up GPU...", end="", flush=True)
-    w = run_benchmark_run(args.url, "Warmup: reply with 5 words.", max_tokens=10, model=args.model, target_tokens=10, api_key=args.api_key)
+    w = run_benchmark_run(url, "Warmup: reply with 5 words.", max_tokens=10, model=args.model, target_tokens=10, api_key=args.api_key)
+
     print(f" Ready. (Warmup prompt: {w.get('prompt_tokens', 0)} toks, decode: {w.get('decode_tok_s', 0):.1f} t/s)\n")
     
     header = f"{'Target Ctx':>12} | {'Actual Prompt':>14} | {'Cached':>8} | {'TTFT (s)':>10} | {'Cold (t/s)':>12} | {'Effective':>12} | {'Decode (t/s)':>12} | {'Gen Toks':>9}"
@@ -175,7 +182,8 @@ def main():
     for target in args.tokens:
         print(f">> Testing ~{target//1024}k context...", end="", flush=True)
         prompt = build_prompt(target, salt=not args.no_salt)
-        res = run_benchmark_run(args.url, prompt, max_tokens=args.gen_tokens, model=args.model, target_tokens=target, api_key=args.api_key)
+        res = run_benchmark_run(url, prompt, max_tokens=args.gen_tokens, model=args.model, target_tokens=target, api_key=args.api_key)
+
         print("\r" + " " * 40 + "\r", end="")
         
         if "error" in res and res["error"]:

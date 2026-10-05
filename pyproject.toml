@@ -47,3 +47,7 @@ classifiers = [
 [project.scripts]
 llm-eval = "eval:main"
 llm-compare = "compare:main"
+llm-judge = "judge_eval:main"
+
+[tool.setuptools]
+py-modules = ["eval", "compare", "judge_eval", "env_loader", "client", "reporting"]

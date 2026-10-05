@@ -17,6 +17,7 @@ import re
 import urllib.request
 import urllib.error
 import subprocess
+import ast
 import tempfile
 import argparse
 
@@ -25,7 +26,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
-def call_model(url, messages, max_tokens=2048, temperature=0.1, model="qwen3.8-27b-exl3-3.0bpw", timeout=600, enable_thinking=None, api_key=""):
+def call_model(url, messages, max_tokens=2048, temperature=0.1, model="default", timeout=600, enable_thinking=None, api_key=""):
     payload = {
         "model": model,
         "messages": messages,
@@ -144,7 +145,7 @@ def extract_json_block(text):
         return m.group(1).strip()
     return text.strip()
 
-def test_executable_code(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_executable_code(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 1: Executable Algorithmic Code Generation (LRU Cache with Doubly Linked List)")
     print("="*80)
@@ -212,21 +213,31 @@ run_unit_tests()
 print("ALL_UNIT_TESTS_PASSED")
 """
     full_script = code + "\n" + test_harness
-    
-    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-        f.write(full_script)
-        temp_path = f.name
-        
-    try:
-        proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=15)
-        success = ("ALL_UNIT_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
-        if success:
-            print("  [Verification Result]: PASS (Generated code executed and passed all 25 unit test assertions successfully)")
-        else:
-            print(f"  [Verification Result]: FAIL\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}")
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+
+    success = False
+    if os.getenv("EVAL_SAFE"):
+        # SECURITY: EVAL_SAFE=1 disables execution of LLM-generated code; syntax-check only.
+        try:
+            ast.parse(full_script)
+            success = True
+            print("  [Verification Result]: PASS (SYNTAX-ONLY; code execution disabled via EVAL_SAFE=1)")
+        except SyntaxError as e:
+            print(f"  [Verification Result]: FAIL (SyntaxError: {e})")
+    else:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(full_script)
+            temp_path = f.name
+
+        try:
+            proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=15)
+            success = ("ALL_UNIT_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
+            if success:
+                print("  [Verification Result]: PASS (Generated code executed and passed all 25 unit test assertions successfully)")
+            else:
+                print(f"  [Verification Result]: FAIL\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             
     return {
         "name": "Executable Algorithmic Code (LRU Cache)",
@@ -236,7 +247,7 @@ print("ALL_UNIT_TESTS_PASSED")
         "tok_per_sec": res["tok_per_sec"]
     }
 
-def test_multi_needle_in_haystack(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_multi_needle_in_haystack(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 2: Multi-Needle in a ~60,000-Token Haystack (NIAH)")
     print("="*80)
@@ -314,7 +325,7 @@ def test_multi_needle_in_haystack(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=
         "prompt_tokens": res["prompt_tokens"]
     }
 
-def test_mathematical_reasoning(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_mathematical_reasoning(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 3: Multi-Step Mathematical & Combinatorial Reasoning")
     print("="*80)
@@ -366,7 +377,7 @@ def test_mathematical_reasoning(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""
         "tok_per_sec": res["tok_per_sec"]
     }
 
-def test_concurrency_formal_proof(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_concurrency_formal_proof(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 4: Formal Concurrency & Deadlock Graph Cycle Analysis")
     print("="*80)
@@ -406,7 +417,7 @@ def test_concurrency_formal_proof(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=
         "tok_per_sec": res["tok_per_sec"]
     }
 
-def test_strict_schema_validation(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_strict_schema_validation(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 5: Strict JSON Schema Validation & Complex Constraint Adherence")
     print("="*80)

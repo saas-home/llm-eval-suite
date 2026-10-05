@@ -4,16 +4,25 @@ __pycache__/
 *$py.class
 *.so
 
-# Environments
+# Environments & Configs
 .venv/
 env/
 venv/
 ENV/
+.env
+.env.local
+*.env
+config.json
+!config.json.example
+!.env.example
+
 
 # Output Results (Keep template comparison reports, ignore ad-hoc evaluation dumps)
 results/*.json
+results/*.md
 !results/.gitkeep
 !results/samples/
+!results/samples/*.md
 
 # OS artifacts
 .DS_Store

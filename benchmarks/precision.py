@@ -22,7 +22,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
-def call_model(url, messages, max_tokens=3500, temperature=0.0, enable_thinking=True, timeout=600, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def call_model(url, messages, max_tokens=3500, temperature=0.0, enable_thinking=True, timeout=600, model="default", api_key=""):
     payload = {
         "model": model,
         "messages": messages,
@@ -93,7 +93,7 @@ FILLER_BLOCK = (
     "utilize non-blocking asynchronous state machines to overlap network serializations with NVMe barrier flushes. "
 ) # ~75 tokens
 
-def test_14_stage_dependency(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_14_stage_dependency(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 1: 14-Stage Sequential ALU Dependency Chain (60k Tokens Context)")
     print("="*80)
@@ -163,7 +163,7 @@ def test_14_stage_dependency(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
     print(f"  [Result]: {'PASS' if passed else 'FAIL'}")
     return {"name": "14-Stage Dependency Chain", "passed": passed, "expected": expected_final}
 
-def test_financial_ledger_reconciliation(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_financial_ledger_reconciliation(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("TEST 2: 25-Transaction Floating-Point Ledger Reconciliation (60k Tokens Context)")
     print("="*80)

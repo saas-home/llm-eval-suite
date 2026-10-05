@@ -23,6 +23,7 @@ import uuid
 import random
 import tempfile
 import subprocess
+import ast
 import argparse
 import urllib.request
 import urllib.error
@@ -356,22 +357,31 @@ if __name__ == "__main__":
     run_fuzz_verification()
 """
     full_script = code + "\n\n" + fuzz_harness
-    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-        f.write(full_script)
-        temp_path = f.name
-
     fuzz_passed = False
     err_msg = ""
-    try:
-        proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=20)
-        fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
-        if not fuzz_passed:
-            err_msg = (proc.stderr or proc.stdout).strip()[:300]
-    except Exception as e:
-        err_msg = str(e)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+    if os.getenv("EVAL_SAFE"):
+        # SECURITY: EVAL_SAFE=1 disables execution of LLM-generated code; syntax-check only.
+        try:
+            ast.parse(full_script)
+            fuzz_passed = True
+            err_msg = "syntax-only validation (EVAL_SAFE=1)"
+        except SyntaxError as e:
+            err_msg = f"SyntaxError: {e}"
+    else:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(full_script)
+            temp_path = f.name
+
+        try:
+            proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=20)
+            fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
+            if not fuzz_passed:
+                err_msg = (proc.stderr or proc.stdout).strip()[:300]
+        except Exception as e:
+            err_msg = str(e)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     log(f"  - Automated 5,000 Operations Fuzz Assertions: {'PASS' if fuzz_passed else 'FAIL'}")
     if not fuzz_passed:

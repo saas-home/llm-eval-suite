@@ -25,6 +25,10 @@ import urllib.error
 import argparse
 import threading
 import re
+import env_loader
+
+from client import LLMClient
+
 
 # ANSI Color & Formatting Constants
 NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
@@ -40,7 +44,34 @@ RESET = "" if NO_COLOR else "\033[0m"
 
 BENCHMARK_TASKS = [
     {
-        "id": "task1_avl_tree",
+        "id": "task1_streaming",
+        "category": "Streaming & Latency",
+        "name": "Streaming Latency & Incremental Chunk Delivery",
+        "system": "You are a helpful AI assistant.",
+        "prompt": "Count slowly from 1 to 15, putting each number on a new line.",
+        "max_tokens": 150,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task2_vision",
+        "category": "Multimodal Vision",
+        "name": "Invoice Document Parsing & Field Extraction",
+        "system": "You extract structured data from business invoice documents.",
+        "prompt": "Extract the Total Amount, Invoice Number, and Vendor Name from the invoice. Output JSON.",
+        "max_tokens": 400,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task3_concurrency",
+        "category": "Batching & Queueing",
+        "name": "Continuous Batching & Parallel Slot Stress Test",
+        "system": "You are a software benchmark generator.",
+        "prompt": "Write a 300-word essay explaining the principles of database indexing.",
+        "max_tokens": 500,
+        "temperature": 0.2,
+    },
+    {
+        "id": "task4_avl_tree",
         "category": "Coding & Algorithms",
         "name": "AVL Tree with Rotations & In-Order Iterator",
         "system": "You are an expert systems software engineer. Write clean, production-grade, bug-free Python code.",
@@ -56,7 +87,7 @@ BENCHMARK_TASKS = [
         "temperature": 0.2,
     },
     {
-        "id": "task2_concurrency_debug",
+        "id": "task5_concurrency_debug",
         "category": "Code Debugging & Reasoning",
         "name": "Concurrent Bounded Buffer Bug Diagnosis",
         "system": "You are a senior concurrency and distributed systems engineer. Be precise, identify exact root causes, and provide corrected code.",
@@ -95,7 +126,7 @@ BENCHMARK_TASKS = [
         "temperature": 0.2,
     },
     {
-        "id": "task3_system_design",
+        "id": "task6_system_design",
         "category": "System Architecture & Design",
         "name": "High-Throughput Distributed Rate Limiter",
         "system": "You are a Principal Infrastructure Architect at a global scale technology company.",
@@ -116,7 +147,7 @@ BENCHMARK_TASKS = [
         "temperature": 0.5,
     },
     {
-        "id": "task4_long_context_constraints",
+        "id": "task7_long_context_constraints",
         "category": "Long Context & Retrieval",
         "name": "Hidden Architectural Constraints Adherence",
         "system": "You are a senior backend engineer implementing client libraries strictly according to specifications.",
@@ -142,32 +173,234 @@ BENCHMARK_TASKS = [
         ),
         "max_tokens": 1200,
         "temperature": 0.2,
+    },
+    {
+        "id": "task8_agent_tool_calling",
+        "category": "Agent & Tool Calling",
+        "name": "Autonomous Agent Loop & Tool Recovery",
+        "system": "You are an autonomous AI agent capable of invoking tools to inspect infrastructure.",
+        "prompt": (
+            "You are querying a server health API. Construct a valid JSON tool call object to invoke function `query_health` "
+            "with arguments `{'service_id': 'srv-prod-881', 'check_level': 'deep'}`. Return ONLY valid JSON format with `name` and `arguments`."
+        ),
+        "max_tokens": 400,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task9_json_schema",
+        "category": "Structured Output",
+        "name": "Strict JSON Schema Structured Output",
+        "system": "You output strictly valid JSON conforming to specified schemas. No markdown, no prose.",
+        "prompt": (
+            "Generate a JSON object representing a microservice deployment config. Requirements:\n"
+            "Must have exact top-level keys: `service_name` (string), `replicas` (integer), `resources` (object with `cpu` and `memory`), "
+            "`env_vars` (array of objects with `name` and `value`). Output ONLY valid raw JSON."
+        ),
+        "max_tokens": 600,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task10_prefix_caching",
+        "category": "RadixAttention KV Reuse",
+        "name": "Prefix Caching Cold vs Warm Speedup",
+        "system": "You are a code refactoring assistant.",
+        "prompt": "Analyze the prefix prompt caching efficiency and summarize the performance speedup.",
+        "max_tokens": 400,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task11_client_abort",
+        "category": "Resilience & Abort",
+        "name": "Client Socket Abort & GPU Release",
+        "system": "You generate long text for network abort testing.",
+        "prompt": "Write a 1000-word explanation of operating system virtual memory management.",
+        "max_tokens": 1000,
+        "temperature": 0.5,
+    },
+    {
+        "id": "task12_stop_sequences",
+        "category": "Sampling Control",
+        "name": "Multi-Token Stop Word Truncation",
+        "system": "You follow exact stop sequences.",
+        "prompt": "List the days of the week starting from Monday. Stop immediately when reaching Thursday.",
+        "max_tokens": 200,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task13_high_entropy_recall",
+        "category": "Needle Retrieval",
+        "name": "High-Entropy KV Needle Retrieval",
+        "system": "You extract hidden keys from dense information.",
+        "prompt": (
+            "Deep in this document is a secret configuration key:\n"
+            + ("Distractor data block line text...\n" * 150)
+            + "\nSECRET_CONFIG_KEY = 'KV_RECALL_SUCCESS_88912'\n"
+            + ("Distractor data block line text...\n" * 150)
+            + "\nWhat is the exact value of SECRET_CONFIG_KEY?"
+        ),
+        "max_tokens": 150,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task14_precision_math",
+        "category": "Precision Ledger Math",
+        "name": "Multi-Entity Financial Ledger Reconciliation",
+        "system": "You are a quantitative financial auditor. Calculate exact transaction balances with decimal precision.",
+        "prompt": (
+            "Reconcile the following corporate account ledger and compute final net balances for Accounts A, B, and C:\n"
+            "- Opening Balances: Account A = $10,500.00, Account B = $4,250.75, Account C = $0.00\n"
+            "- Tx 1: A transfers $2,150.25 to B\n"
+            "- Tx 2: B transfers $1,800.00 to C\n"
+            "- Tx 3: C transfers $450.50 to A\n"
+            "- Tx 4: A pays fee of $12.75 to platform\n"
+            "Output the exact final balances for A, B, and C with step-by-step arithmetic verification."
+        ),
+        "max_tokens": 800,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task15_code_execution",
+        "category": "Dynamic Code Execution",
+        "name": "LRU Cache with TTL & Self-Executing Unit Tests",
+        "system": "You are a principal software engineer writing verifiable Python code.",
+        "prompt": (
+            "Write a complete Python implementation of `TTLRUCache(capacity: int, default_ttl_s: float)`.\n"
+            "Requirements:\n"
+            "1. Implement `get(key)` and `put(key, value, ttl_s=None)` with O(1) time complexity.\n"
+            "2. Expire entries automatically when TTL has elapsed.\n"
+            "3. Include a runnable unit test function `test_ttl_lru()` asserting get, put, eviction, and TTL expiration behavior."
+        ),
+        "max_tokens": 1200,
+        "temperature": 0.2,
+    },
+    {
+        "id": "task16_error_handling",
+        "category": "HTTP Compliance",
+        "name": "API Protocol HTTP Error Compliance",
+        "system": "You are an API error inspector.",
+        "prompt": "Explain standard HTTP 400 Bad Request vs 422 Unprocessable Entity error payloads.",
+        "max_tokens": 300,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task17_multihop_graph",
+        "category": "Adversarial Search",
+        "name": "Adversarial Multi-Hop Graph Shortest Path",
+        "system": "You are an algorithmic graph theorist.",
+        "prompt": (
+            "Given a directed weighted graph with nodes {Node_A, Node_B, Node_C, Node_D, Node_E, Node_F}:\n"
+            "- Edge A -> B (weight 4)\n"
+            "- Edge A -> C (weight 2)\n"
+            "- Edge C -> B (weight 1)\n"
+            "- Edge B -> D (weight 5)\n"
+            "- Edge C -> D (weight 8)\n"
+            "- Edge C -> E (weight 10)\n"
+            "- Edge D -> E (weight 2)\n"
+            "- Edge E -> F (weight 3)\n"
+            "Find the exact shortest path from Node_A to Node_F, list all intermediate nodes in order, and calculate total path weight."
+        ),
+        "max_tokens": 600,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task18_novel_algorithm_fuzz",
+        "category": "Property Fuzzing",
+        "name": "Novel Algorithmic Fuzzing & Invariance",
+        "system": "You design verifiable algorithms.",
+        "prompt": "Implement a custom prefix-compressed trie in Python with `insert(word)` and `search(word)`.",
+        "max_tokens": 800,
+        "temperature": 0.2,
+    },
+    {
+        "id": "task19_anti_constraints",
+        "category": "IFEval Constraints",
+        "name": "Combinatorial Anti-Constraints & Lipograms",
+        "system": "You strictly follow negative anti-constraints and formatting rules.",
+        "prompt": (
+            "Write a technical summary of cloud computing. Strict Anti-Constraints:\n"
+            "1. Do NOT use the letter 'e' anywhere in paragraph 2 (lipogram in paragraph 2).\n"
+            "2. Paragraph 3 MUST contain exactly 35 words.\n"
+            "3. Every paragraph MUST start with the word 'Cloud'."
+        ),
+        "max_tokens": 800,
+        "temperature": 0.2,
+    },
+    {
+        "id": "task20_counterfactual_algebra",
+        "category": "Axiomatic Reasoning",
+        "name": "Counterfactual Axiomatic Operator Deduction",
+        "system": "You are a symbolic logic researcher. Follow counterfactual math definitions strictly.",
+        "prompt": (
+            "In a counterfactual mathematical system, the operator ⊕ is defined as: `x ⊕ y = x * y + x - y`.\n"
+            "The operator ⊗ is defined as: `x ⊗ y = (x ⊕ y) * 2 - x`.\n"
+            "Evaluate step-by-step: `(3 ⊕ 4) ⊗ 5`. Show all steps and state the final integer result."
+        ),
+        "max_tokens": 600,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task21_cruxeval_execution",
+        "category": "CruxEval Execution",
+        "name": "Python Mental Program Simulation (CruxEval)",
+        "system": "You are a Python interpreter trace analyzer.",
+        "prompt": (
+            "Trace the execution of the following Python snippet and determine exact final return value:\n"
+            "```python\n"
+            "def f(nums):\n"
+            "    res = []\n"
+            "    for i, x in enumerate(nums):\n"
+            "        if i % 2 == 0:\n"
+            "            res.append(x * 2)\n"
+            "        else:\n"
+            "            res.append(x + 5)\n"
+            "    return res[::-1]\n"
+            "print(f([5, 10, 15, 20]))\n"
+            "```\n"
+            "State the step-by-step state of `res` and output the exact final printed array."
+        ),
+        "max_tokens": 600,
+        "temperature": 0.0,
+    },
+    {
+        "id": "task22_swe_bench_bug_patch",
+        "category": "SWE-bench Patching",
+        "name": "Unified Git Diff Production Bug Patch Synthesis",
+        "system": "You are a core open-source maintainer synthesizing git patches.",
+        "prompt": (
+            "A bug in `auth_middleware.py` fails to handle HTTP `Authorization` headers with extra whitespace or mixed casing.\n"
+            "Write a standard Unified Git Diff patch (`--- a/auth_middleware.py`, `+++ b/auth_middleware.py`) fixing the bug by stripping whitespace and doing case-insensitive Bearer prefix check."
+        ),
+        "max_tokens": 800,
+        "temperature": 0.2,
+    },
+    {
+        "id": "task23_aime_olympiad_math",
+        "category": "Frontier Math",
+        "name": "AIME Olympiad Discrete Mathematics Problem",
+        "system": "You are an AIME / IMO Olympiad mathematician.",
+        "prompt": (
+            "Find the number of positive integers $n \\le 1000$ such that $n^2 + 7n + 12$ is divisible by 120.\n"
+            "Provide step-by-step modular arithmetic derivation and state the final answer clearly in the format `Final Answer: N`."
+        ),
+        "max_tokens": 1000,
+        "temperature": 0.0,
     }
 ]
+
 
 
 def discover_model(endpoint: str, api_key: str = "", specified_model: str = None) -> str:
     """Discovers available model ID from endpoint /models, or falls back to specified or default."""
     if specified_model and specified_model != "default":
         return specified_model
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    base = endpoint.rstrip("/")
-    if base.endswith("/v1"):
-        models_url = f"{base}/models"
-    else:
-        models_url = f"{base}/v1/models" if "/v1" not in base else f"{base}/models"
     try:
-        req = urllib.request.Request(models_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            models = data if isinstance(data, list) else (data.get("data") or data.get("models") or [])
-            if models and isinstance(models, list):
-                m0 = models[0]
-                m_id = m0.get("id") or m0.get("name")
-                if m_id:
-                    return m_id
+        client = LLMClient(endpoint=endpoint, api_key=api_key)
+        models = client.fetch_models()
+        if models:
+            m0 = models[0]
+            m_id = m0.get("id") or m0.get("name")
+            if m_id:
+                return m_id
     except Exception:
         pass
     return specified_model or "default"
@@ -244,8 +477,140 @@ def evaluate_arena_task(task_id: str, full_output: str) -> dict:
             status, score = "PARTIAL", 0.5
         else:
             status, score = "FAIL", 0.0
+
+    elif task_id == "task5_agent_tool_calling":
+        has_query = "query_health" in full_output
+        has_srv = "srv-prod-881" in full_output
+        details = {"has_function_name": has_query, "has_arguments": has_srv}
+        if has_query and has_srv:
+            status, score = "PASS", 1.0
+        elif has_query or has_srv:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task6_json_schema":
+        try:
+            # Clean json block if wrapped in ```json
+            cleaned = full_output.strip()
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+            elif "```" in cleaned:
+                cleaned = cleaned.split("```")[1].split("```")[0].strip()
+            parsed = json.loads(cleaned)
+            has_name = "service_name" in parsed
+            has_rep = "replicas" in parsed
+            has_res = "resources" in parsed
+            details = {"valid_json": True, "has_keys": has_name and has_rep and has_res}
+            if has_name and has_rep and has_res:
+                status, score = "PASS", 1.0
+            else:
+                status, score = "PARTIAL", 0.5
+        except Exception as e:
+            details = {"valid_json": False, "error": str(e)}
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task7_precision_math":
+        # Tx calculations: A = $8,799.25, B = $4,601.00, C = $1,349.50
+        has_a = "8799" in full_output or "8,799" in full_output
+        has_b = "4601" in full_output or "4,601" in full_output
+        has_c = "1349" in full_output or "1,349" in full_output
+        details = {"bal_a": has_a, "bal_b": has_b, "bal_c": has_c}
+        if has_a and has_b and has_c:
+            status, score = "PASS", 1.0
+        elif sum([has_a, has_b, has_c]) >= 1:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task8_code_execution":
+        has_cls = "class TTLRUCache" in full_output or "class TtlRucache" in full_output or "class LRUCache" in full_output
+        has_get = "def get(" in full_output
+        has_test = "def test_ttl_lru" in full_output or "test_" in full_output
+        details = {"has_class": has_cls, "has_get": has_get, "has_test": has_test}
+        if has_cls and has_get and has_test:
+            status, score = "PASS", 1.0
+        elif has_cls or has_get:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task9_multihop_graph":
+        # Shortest path: A -> C -> B -> D -> E -> F (weight 2+1+5+2+3 = 13)
+        has_path = "C" in full_output and "D" in full_output and "E" in full_output and "F" in full_output
+        has_weight = "13" in full_output
+        details = {"has_path": has_path, "has_weight": has_weight}
+        if has_path and has_weight:
+            status, score = "PASS", 1.0
+        elif has_path or has_weight:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task10_anti_constraints":
+        # Paragraph lipogram
+        paras = [p.strip() for p in full_output.split("\n\n") if p.strip()]
+        has_p = len(paras) >= 3
+        no_e_p2 = True
+        if len(paras) >= 2:
+            no_e_p2 = "e" not in paras[1].lower() and "E" not in paras[1]
+        details = {"paragraph_count": len(paras), "no_e_paragraph2": no_e_p2}
+        if has_p and no_e_p2:
+            status, score = "PASS", 1.0
+        elif has_p:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task11_counterfactual_algebra":
+        # 3 ⊕ 4 = 3*4 + 3 - 4 = 11. (11) ⊗ 5 = (11 ⊕ 5)*2 - 11 = (11*5 + 11 - 5)*2 - 11 = 61*2 - 11 = 111.
+        has_111 = "111" in full_output
+        has_11 = "11" in full_output
+        details = {"final_val_111": has_111, "intermediate_11": has_11}
+        if has_111:
+            status, score = "PASS", 1.0
+        elif has_11:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task12_cruxeval_execution":
+        # f([5, 10, 15, 20]): i=0: 10, i=1: 15, i=2: 30, i=3: 25. res=[10, 15, 30, 25]. res[::-1] -> [25, 30, 15, 10]
+        has_25_30_15_10 = "[25, 30, 15, 10]" in full_output or "25, 30, 15, 10" in full_output
+        details = {"exact_match": has_25_30_15_10}
+        if has_25_30_15_10:
+            status, score = "PASS", 1.0
+        elif "25" in full_output and "30" in full_output:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task13_swe_bench_bug_patch":
+        has_diff = "--- a/" in full_output and "+++ b/" in full_output
+        has_lower = "lower()" in full_output or "strip()" in full_output or "bearer" in full_output.lower()
+        details = {"valid_diff": has_diff, "has_fix": has_lower}
+        if has_diff and has_lower:
+            status, score = "PASS", 1.0
+        elif has_diff or has_lower:
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
+
+    elif task_id == "task14_aime_olympiad_math":
+        # (n+3)(n+4) div by 120. Answer: 33
+        has_33 = "33" in full_output
+        details = {"has_answer_33": has_33}
+        if has_33:
+            status, score = "PASS", 1.0
+        elif "mod" in full_output.lower() or "divisible" in full_output.lower():
+            status, score = "PARTIAL", 0.5
+        else:
+            status, score = "FAIL", 0.0
     else:
         status, score = ("PASS", 1.0) if len(full_output) > 100 else ("FAIL", 0.0)
+
+    return {"status": status, "score": score, "details": details}
+
 
     return {"status": status, "score": score, "details": details}
 
@@ -808,8 +1173,10 @@ def run_live_arena(
     return json_summary
 
 
-def run_benchmark(base_url: str, output_file: str, model: str = "qwen3.8-27b-exl3-3.0bpw", api_key: str = ""):
+def run_benchmark(base_url: str, output_file: str, model: str = None, api_key: str = ""):
     """Legacy single-endpoint benchmark runner."""
+    if not model:
+        model = discover_model(base_url, api_key, "default")
     print(f"=== Starting Benchmark Suite against {base_url} (Model: {model}) ===")
     results = []
 
@@ -819,10 +1186,9 @@ def run_benchmark(base_url: str, output_file: str, model: str = "qwen3.8-27b-exl
 
     # Check models endpoint
     try:
-        req = urllib.request.Request(f"{base_url}/models", headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            models_data = json.loads(resp.read().decode())
-            print(f"Connected to endpoint. Models: {json.dumps(models_data)}")
+        client = LLMClient(endpoint=base_url, api_key=api_key)
+        models_data = client.fetch_models()
+        print(f"Connected to endpoint. Models: {json.dumps(models_data)}")
     except Exception as e:
         print(f"Warning: Could not fetch models endpoint: {e}")
 
@@ -909,7 +1275,7 @@ def main():
     parser.add_argument("--model1", default=None, help="First model name or ID")
     parser.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
     parser.add_argument("--endpoint2", "--url2", default=None,
-                        help="Second LLM server base endpoint (e.g. http://172.16.16.29:8000/v1)")
+                        help="Second LLM server base endpoint (e.g. http://10.0.0.2:8000/v1)")
     parser.add_argument("--model2", default=None, help="Second model name or ID")
     parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
 
@@ -918,12 +1284,22 @@ def main():
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help="Model name or ID")
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help="API key for single-endpoint benchmark")
 
+    # Configuration Flags
+    parser.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
+    parser.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
+
     # Output & Reports
     parser.add_argument("--out", "-o", default=None, help="Output path for Markdown comparison (.md) or JSON (.json)")
     parser.add_argument("--reports", nargs="+", help="Compare two or more JSON reports offline head-to-head")
     parser.add_argument("report_paths", nargs="*", help="JSON reports to compare offline head-to-head")
 
     args = parser.parse_args()
+
+    if args.env_file:
+        env_loader.load_env_file(args.env_file, override=True)
+
+    cfg, config_path, loaded_from_file = env_loader.load_config(args.config)
+
     reports = args.reports or args.report_paths
 
     # Route 1: Offline Report Comparison
@@ -933,25 +1309,63 @@ def main():
 
     # Route 2: Native Arena Mode (Live Concurrent Comparison)
     elif args.live or (args.endpoint1 and args.endpoint2):
-        ep1 = args.endpoint1 or args.url
-        ep2 = args.endpoint2
+        ep1 = args.endpoint1 or cfg.get("endpoint1") or cfg.get("endpoint") or os.getenv("ENDPOINT1") or args.url
+        ep2 = args.endpoint2 or cfg.get("endpoint2") or os.getenv("ENDPOINT2")
+        m1 = args.model1 or cfg.get("model1") or cfg.get("model") or os.getenv("MODEL1") or args.model
+        m2 = args.model2 or cfg.get("model2") or os.getenv("MODEL2")
+        k1 = args.api_key1 or cfg.get("api_key1") or cfg.get("api_key") or os.getenv("API_KEY1") or args.api_key or ""
+        k2 = args.api_key2 or cfg.get("api_key2") or os.getenv("API_KEY2") or ""
+
         if not ep1 or not ep2:
-            print(f"{RED}Error: Arena Mode requires both --endpoint1 and --endpoint2.{RESET}")
+            print(f"{RED}Error: Arena Mode requires both endpoint1 and endpoint2.{RESET}")
             sys.exit(1)
+
+        config_changed = (
+            ep1 != cfg.get("endpoint1") or
+            ep2 != cfg.get("endpoint2") or
+            m1 != cfg.get("model1") or
+            m2 != cfg.get("model2")
+        )
+
+        if config_changed or not loaded_from_file:
+            if sys.stdin.isatty():
+                ans = input(f"\nSave Arena server configuration (Server 1 & Server 2) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
+                if ans in ("y", "yes"):
+                    saved_p = env_loader.save_config(
+                        endpoint=ep1, model=m1, api_key=k1,
+                        endpoint2=ep2, model2=m2, api_key2=k2,
+                        config_file=config_path
+                    )
+                    if saved_p:
+                        print(f"{GREEN}Arena configuration saved to {saved_p}!{RESET}")
+
         run_live_arena(
             endpoint1=ep1,
-            model1=args.model1,
+            model1=m1,
             endpoint2=ep2,
-            model2=args.model2,
-            api_key1=args.api_key1,
-            api_key2=args.api_key2,
+            model2=m2,
+            api_key1=k1,
+            api_key2=k2,
             output_file=args.out,
         )
 
     # Route 3: Single-Endpoint Benchmark
     else:
+        if cfg.get("endpoint1") and cfg.get("endpoint2"):
+            print(f"{YELLOW}Note: config defines two servers but Arena Mode was not requested. "
+                  f"Use --live (with --endpoint1/--endpoint2) for side-by-side comparison.{RESET}")
         out_file = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "compare_benchmark.json")
-        run_benchmark(args.url, out_file, model=args.model, api_key=args.api_key)
+        target_url = args.url if args.url != default_url else (cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or default_url)
+        target_model = args.model if args.model != "default" else (cfg.get("model") or os.getenv("OPENAI_MODEL") or "default")
+        target_key = args.api_key if args.api_key != "" else (cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or "")
+        if target_model == "default":
+            target_model = discover_model(target_url, target_key, None)
+            if target_model == "default":
+                print(f"{RED}Error: Could not discover a model from {target_url}. Specify --model explicitly.{RESET}")
+                sys.exit(1)
+        run_benchmark(target_url, out_file, model=target_model, api_key=target_key)
+
+
 
 
 if __name__ == "__main__":

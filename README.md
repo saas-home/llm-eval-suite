@@ -30,6 +30,10 @@ Point it at any endpoint—**vLLM**, **SGLang**, **Ollama**, **llama.cpp**, **Ex
 llm-eval-suite/
 ├── eval.py                   # Flagship 22-stage evaluation harness & comparison CLI
 ├── compare.py                # Cross-model head-to-head comparison CLI (offline, zero-GPU)
+├── judge_eval.py             # 10-point LLM quality judge & model ranking leaderboard
+├── client.py                 # Shared OpenAI-compatible HTTP client (retries, streaming, usage)
+├── reporting.py              # Metric extraction, scorecards & cross-model comparison engine
+├── env_loader.py             # .env / config.json configuration management
 ├── benchmarks/               # Individual standalone test probes & stress tests
 │   ├── context.py            # Long-context scaling (8k to 200k+ tokens)
 │   ├── concurrency.py        # Multi-client continuous batching stress test
@@ -43,11 +47,30 @@ llm-eval-suite/
 ├── assets/
 │   └── invoice.png           # High-resolution invoice document for vision evaluation
 ├── results/                  # Evaluated benchmark JSON reports and Markdown comparisons
+│   └── samples/              # Sanitized sample reports (committed)
+├── tests/                    # Unit tests for the harness core (stdlib unittest)
 ├── pyproject.toml            # Optional packaging metadata
 ├── requirements.txt          # Notes zero dependencies (100% Python stdlib)
 ├── LICENSE                   # Apache 2.0 License
 └── README.md                 # Full documentation
 ```
+
+---
+
+## ⚠️ Security Notice
+
+**This suite executes LLM-generated code.** Tests 12 (dynamic unit tests), 16 (5,000-op property fuzzing), and 21 (SWE-bench patch verification) run model-generated Python in a local subprocess to verify correctness. The same applies to the standalone probes `benchmarks/code_synthesis.py` and `benchmarks/adversarial.py`.
+
+When benchmarking **untrusted endpoints or third-party models**, disable code execution so these tests fall back to syntax-only validation:
+
+```bash
+python3 eval.py --no-execute     # or: EVAL_SAFE=1 python3 eval.py
+```
+
+Additionally:
+- `config.json` may store API keys and internal endpoints. It is git-ignored and written with `0600` permissions, but never commit it.
+- Result reports may embed endpoint URLs. Files under `results/` are git-ignored except `results/samples/` (sanitized samples only).
+
 
 ---
 
@@ -74,14 +97,51 @@ export OPENAI_API_KEY="sk-..."
 python3 eval.py --auto
 ```
 
-### 2. Fast Smoke Qualification Mode
+### 2. Configuration File & Interactive Parameter Saving (`config.json`)
+
+The benchmark tool manages single-model server configuration via `config.json` containing:
+- `endpoint` (e.g. `http://127.0.0.1:8000/v1`)
+- `model` (e.g. `meta-llama/Llama-3.1-8B-Instruct`)
+- `api_key` (optional string)
+- `max_context` (e.g. `131072`)
+
+#### **Interactive Auto-Prompt to Save Config**
+When you run `python3 eval.py` with parameters (or interactively select a server/model):
+1. The tool resolves the server endpoint, model, API key, and context window.
+2. If `config.json` does not exist or settings changed, it prompts you:
+   ```text
+   Save server configuration (endpoint, model, api_key, max_context) to config.json for future runs? [y/N]:
+   ```
+3. Type `y` to save. On future runs, `python3 eval.py` automatically loads these saved server parameters!
+
+#### **Using or Updating `config.json` Manually**
+Create or edit [`config.json.example`](config.json.example):
+```json
+{
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "model": "meta-llama/Llama-3.1-8B-Instruct",
+  "api_key": "",
+  "max_context": 131072
+}
+```
+Run using saved config or specify custom path:
+```bash
+python3 eval.py
+python3 eval.py --config production_config.json
+```
+Use `--save-config` to auto-save without prompting, or `--no-save` to skip prompting.
+
+
+
+### 3. Fast Smoke Qualification Mode
 
 Skip heavy context prefill to quickly test basic capabilities:
 ```bash
 python3 eval.py --quick
 ```
 
-### 3. Run Specific Test Suites or Tests
+### 5. Run Specific Test Suites or Tests
+
 
 ```bash
 # Run only Frontier Reasoning tests (Tests 20-22: CruxEval, SWE-bench, AIME)
@@ -95,7 +155,7 @@ python3 eval.py --test 14,20,22
 python3 eval.py --test context_scaling,aime
 ```
 
-### 4. Run Standalone Specialized Probes
+### 6. Run Standalone Specialized Probes
 
 Each benchmark probe in `benchmarks/` can also be executed independently:
 
@@ -123,16 +183,16 @@ python3 benchmarks/reasoning.py
 
 ## Native Arena Mode (Live Concurrent Evaluation)
 
-Run real-time, side-by-side head-to-head evaluations between two active inference backends simultaneously:
+Run real-time, side-by-side head-to-head evaluations between two active inference backends simultaneously. Arena Mode is **explicit opt-in** (`--live`); a two-server `config.json` alone will not trigger it:
 
 ```bash
 python3 compare.py \
   --live \
   --endpoint1 http://127.0.0.1:8888/v1 --model1 qwen3.8-27b \
-  --endpoint2 http://172.16.16.29:8000/v1 --model2 qwen3.8-flash \
+  --endpoint2 http://10.0.0.2:8000/v1 --model2 qwen3.8-flash \
   --out results/live_comparison.md
 ```
-*(Also accessible directly via `eval.py`: `python3 eval.py --live-compare --endpoint1 ... --endpoint2 ...`)*
+*(Also accessible directly via `eval.py`: `python3 eval.py --live --endpoint1 ... --endpoint2 ...`)*
 
 ### How Native Arena Mode Works:
 
@@ -173,6 +233,20 @@ python3 compare.py results/eval_modelA.json results/eval_modelB.json --out resul
 
 - **Token Economy (`tokens_per_passed_task`)**: Measures the average number of generated tokens spent to successfully solve a task. In production, a model that produces correct code in 400 tokens is vastly cheaper, faster, and more context-efficient than one that requires 2,500 tokens of rambling derivation for the same outcome.
 - **Composite Efficiency Index (`0-100`)**: A weighted index balancing task accuracy (60%), token conciseness (20%), generation throughput (10%), and TTFT responsiveness (10%).
+
+---
+
+## 10-Point Quality Judge & Model Ranking (`judge_eval.py`)
+
+Grades hard, realistic engineering tasks out of 10.0 using AST syntax verification plus a double-blind, position-swapped LLM quality judge, and exports a tiered leaderboard:
+
+```bash
+# Two-server head-to-head ranking (servers from config.json or ENDPOINT1/ENDPOINT2 env vars)
+python3 judge_eval.py --out results/ranking.md
+
+# Single-server grading
+python3 judge_eval.py --single
+```
 
 ---
 

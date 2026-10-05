@@ -23,7 +23,7 @@ ROOT_DIR = os.path.dirname(BASE_DIR)
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
-def call_model(url, messages, max_tokens=1500, temperature=0.0, enable_thinking=False, timeout=600, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def call_model(url, messages, max_tokens=1500, temperature=0.0, enable_thinking=False, timeout=600, model="default", api_key=""):
     payload = {
         "model": model,
         "messages": messages,
@@ -94,7 +94,7 @@ FILLER_BLOCK = (
     "Memory cgroups enforce hierarchical resource isolation, throttling writeback bandwidth when limits are exceeded. "
 ) # ~100 tokens
 
-def test_high_entropy_kv_recall(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_high_entropy_kv_recall(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("STRESS TEST 1: High-Entropy Associative Key-Value Recall (10 Targets in 50k Tokens)")
     print("="*80)
@@ -177,7 +177,7 @@ def test_high_entropy_kv_recall(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""
     print(f"  [Result]: {passed_keys}/{len(targets)} exact high-entropy matches. {'PASS' if success else 'FAIL'}")
     return {"name": "High-Entropy KV Recall (8/8)", "passed": success, "score": f"{passed_keys}/{len(targets)}"}
 
-def test_multi_hop_variable_tracking(url, model="qwen3.8-27b-exl3-3.0bpw", api_key=""):
+def test_multi_hop_variable_tracking(url, model="default", api_key=""):
     print("\n" + "="*80)
     print("STRESS TEST 2: Multi-Hop Variable Tracking across 8 Dependency Stages in 50k Tokens")
     print("="*80)
