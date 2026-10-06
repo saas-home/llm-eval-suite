@@ -19,7 +19,11 @@ Point it at any endpoint—**vLLM**, **SGLang**, **Ollama**, **llama.cpp**, **Ex
   - **Flagship Core**: Streaming latency, multimodal invoice parsing, continuous batching concurrency, code synthesis, agent tool recovery, strict JSON schema validation, prefix caching speedup, socket abort resilience, greedy reproducibility, high-entropy key-value recall, financial ledger math, dynamic code execution, HTTP error compliance, and dynamic context scaling (up to 200k+ tokens).
   - **Adversarial Hardening**: Multi-hop graph distractor retrieval, novel algorithmic fuzzing, combinatorial anti-constraints (IFEval tier), counterfactual axiomatic algebra, and frontier multi-needle depth precision.
   - **Frontier Reasoning**: CruxEval execution simulation, SWE-bench bug patch synthesis, and AIME Olympiad mathematics.
-- **Head-to-Head Comparison Engine (`compare.py` / `--compare`)**: Compare two or more saved benchmark reports offline with zero GPU overhead. Directly measures **Effectiveness (Accuracy)** vs. **Token Economy (Solution Conciseness)**.
+- **Head-to-Head Comparison Engine (`compare.py` / `--compare`)**: Compare two or more saved benchmark reports offline with zero GPU overhead. Directly measures **Effectiveness (Accuracy)** vs. **Token Economy (Solution Conciseness)**, and warns when two runs aren't directly comparable (different model/context/parallel/milestones).
+- **Honest Scoring (Completion Rate)**: Infrastructure failures (network / timeout / 5xx / 429) are separated from model-quality failures. A flaky server no longer makes a good model look bad — effectiveness is scored only over tests that actually completed, and a **completion rate** reports how many the serving environment supported.
+- **At-a-Glance Quality Rating**: Each run gets a 1–5 star rating (capped at 3 stars when the serving environment was too flaky to trust the score).
+- **Robust Retry**: Exponential backoff with jitter, a separate more-patient budget for HTTP 429 rate limits, and `Retry-After` header parsing — transient gateway errors ride out instead of poisoning a run.
+- **`--probe` / `--history` / `--leaderboard`**: Quick <5s reachability checks (with common-port scanning), a list of recent runs, and a config-grouped leaderboard for tracking models/servers over time.
 - **Environment Variable Auto-Discovery**: Automatically recognizes `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 
 ---
@@ -49,8 +53,12 @@ llm-eval-suite/
 ├── results/                  # Evaluated benchmark JSON reports and Markdown comparisons
 │   └── samples/              # Sanitized sample reports (committed)
 ├── tests/                    # Unit tests for the harness core (stdlib unittest)
-├── pyproject.toml            # Optional packaging metadata
+├── pyproject.toml            # Packaging metadata + ruff/mypy/coverage/towncrier config
 ├── requirements.txt          # Notes zero dependencies (100% Python stdlib)
+├── AGENTS.md                 # Conventions for AI agents & contributors
+├── CHANGELOG.md              # Generated from changelog.d/ fragments (towncrier)
+├── changelog.d/              # Unreleased changelog fragments
+├── .pre-commit-config.yaml   # Local dev lint hooks (ruff)
 ├── LICENSE                   # Apache 2.0 License
 └── README.md                 # Full documentation
 ```
@@ -138,6 +146,21 @@ Use `--save-config` to auto-save without prompting, or `--no-save` to skip promp
 Skip heavy context prefill to quickly test basic capabilities:
 ```bash
 python3 eval.py --quick
+```
+
+### 4. Probe, History & Leaderboard
+
+**Probe** a server in <5s before committing to a full ~20-min run. With an endpoint it checks reachability, models, context, and health; without one (or with `--scan-host`) it scans common localhost LLM ports:
+```bash
+python3 eval.py --probe -e http://127.0.0.1:8000/v1        # probe a specific endpoint
+python3 eval.py --probe                                      # scan localhost for live LLM servers
+python3 eval.py --probe --scan-host 10.0.0.5                 # scan a specific host
+```
+
+**History** lists recent runs from `results/` (newest first); **Leaderboard** ranks them by efficiency index, grouped by config fingerprint so only comparable runs are ranked together:
+```bash
+python3 eval.py --history
+python3 eval.py --leaderboard
 ```
 
 ### 5. Run Specific Test Suites or Tests
@@ -233,6 +256,34 @@ python3 compare.py results/eval_modelA.json results/eval_modelB.json --out resul
 
 - **Token Economy (`tokens_per_passed_task`)**: Measures the average number of generated tokens spent to successfully solve a task. In production, a model that produces correct code in 400 tokens is vastly cheaper, faster, and more context-efficient than one that requires 2,500 tokens of rambling derivation for the same outcome.
 - **Composite Efficiency Index (`0-100`)**: A weighted index balancing task accuracy (60%), token conciseness (20%), generation throughput (10%), and TTFT responsiveness (10%).
+
+---
+
+## Scoring & Interpretation
+
+### Completion Rate vs. Effectiveness
+
+A test can fail for two very different reasons, and this suite keeps them separate:
+
+- **Model failure** — the request completed but the model's output didn't meet the test's criteria (wrong answer, missed constraint, failed assertion). This *is* a model-quality signal and counts against effectiveness.
+- **Infrastructure failure** — the request itself failed (network error, timeout, HTTP 5xx, or 429 rate limit). This measures the *serving environment*, not the model, so it is **excluded from effectiveness** and surfaced via the **completion rate** instead.
+
+The scorecard reports both:
+
+```text
+  Quality Rating  : ****.  (4/5)
+  Completion Rate : 100.0%  (22/22 tests scored)
+```
+
+If a run shows e.g. `Completion Rate: 90.9% (20/22 tests scored)` with an `Infra Excluded` note, two tests failed on the infrastructure side and the 90.9% effectiveness is computed only over the 20 that completed. A run graded on fewer tests is not comparable to one graded on all of them.
+
+### Quality Rating (Stars)
+
+Each run gets a 1–5 star rating for at-a-glance reading, based on effectiveness. It is **capped at 3 stars** when the completion rate drops below 80% — a flaky serving environment makes the score untrustworthy, so the rating reflects that.
+
+### Config Fingerprint & Comparability
+
+Every report stores a short hash of its comparable config (model, context cap, parallel level, milestones, suite). When you run `--compare`, the tool **warns if the two reports have different fingerprints**, so a context-cap or parallel-level difference isn't mistaken for a model difference. The `--leaderboard` groups runs by this fingerprint so only comparable runs are ranked together.
 
 ---
 
