@@ -1093,7 +1093,7 @@ def run_test_combinatorial_anti_constraints(client: LLMClient):
     )
 
     log("  Dispatching multi-constraint prompt with lipogram, word counts, and forbidden anti-tokens...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=5000, temperature=0.4, stream=True)
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=10000, temperature=0.4, stream=True)
     text = res.get("content", "") or res.get("text", "")
 
     s1 = "### Section I: Foundation" in text

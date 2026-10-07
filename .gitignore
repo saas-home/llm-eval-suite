@@ -32,6 +32,11 @@ config.json
 # Local logs
 *.log
 
+# Ad-hoc analysis / review / deployment reports (not shipped docs)
+SERVER*-REPORT.md
+CROSS-REPO-REVIEW-*.md
+REVIEW-*.md
+
 # Output Results (Keep template comparison reports, ignore ad-hoc evaluation dumps)
 results/*.json
 results/*.md
