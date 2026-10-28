@@ -32,7 +32,7 @@ import urllib.error
 _BENCH_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BENCH_PARENT not in sys.path:
     sys.path.insert(0, _BENCH_PARENT)
-from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET
+from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, extract_python_code, assemble_python_script
 
 class BenchmarkClient:
     def __init__(self, endpoint: str, model: str, api_key: str = ""):
@@ -74,7 +74,12 @@ class BenchmarkClient:
             choice = res_json.get("choices", [{}])[0]
             msg = choice.get("message", {})
             content = msg.get("content") or ""
-            reasoning = msg.get("reasoning_content") or ""
+            reasoning = (
+                msg.get("reasoning_content")
+                or msg.get("reasoning")
+                or msg.get("thought")
+                or ""
+            )
             tool_calls = msg.get("tool_calls")
             usage = res_json.get("usage", {})
             comp_toks = usage.get("completion_tokens", 0)
@@ -121,7 +126,12 @@ class BenchmarkClient:
                     if "tool_calls" in delta and delta["tool_calls"]:
                         tool_calls = delta["tool_calls"]
                     c_text = delta.get("content") or ""
-                    r_text = delta.get("reasoning_content") or ""
+                    r_text = (
+                        delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                        or ""
+                    )
                     if c_text or r_text:
                         now = time.perf_counter()
                         if t_first is None:
@@ -269,8 +279,7 @@ def test_novel_algorithmic_fuzz(client: BenchmarkClient):
     raw = res["content"] if res["content"].strip() else res["text"]
 
     # Extract code
-    code_match = re.findall(r"```(?:python)?\s*\n(.*?)```", raw, re.DOTALL | re.IGNORECASE)
-    code = max(code_match, key=len).strip() if code_match else raw.strip()
+    code = extract_python_code(raw, prefer_class="class ConcurrentMonotonicRingBuffer")
 
     # Property-based fuzz verification harness
     fuzz_harness = """
@@ -347,7 +356,8 @@ def run_fuzz_verification():
 if __name__ == "__main__":
     run_fuzz_verification()
 """
-    full_script = code + "\n\n" + fuzz_harness
+    import_preamble = "import threading\nfrom collections import deque, OrderedDict\nimport sys\nimport random\nimport time"
+    full_script = assemble_python_script(code, preamble=import_preamble, harness=fuzz_harness)
     fuzz_passed = False
     err_msg = ""
     if os.getenv("EVAL_SAFE"):

@@ -1,360 +1,148 @@
-# `llm-eval-suite`: Universal LLM Server Benchmark & Efficiency Evaluation Harness
+# LLM Eval Suite
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen.svg)](https://python.org)
-[![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(Stdlib)-success.svg)](requirements.txt)
-[![Cross-Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-blueviolet.svg)](#)
-
-A zero-dependency, enterprise-grade evaluation suite and cross-model comparison engine for **any OpenAI-compatible LLM inference server**.
-
-Point it at any endpoint—**vLLM**, **SGLang**, **Ollama**, **llama.cpp**, **ExLlamaV3**, **TGI**, **LM Studio**, or commercial APIs (**OpenAI**, **DeepSeek**, **Groq**, **Mistral**)—to stress-test architectural capabilities, probe latency/throughput limits, measure token economy, and run head-to-head model comparisons.
+A zero-dependency, enterprise-grade evaluation suite and cross-model comparison engine for **any OpenAI-compatible LLM inference server** (vLLM, SGLang, Ollama, llama.cpp, TGI, commercial APIs).
 
 ---
 
-## Key Highlights
+## Purpose
 
-- **Zero External Dependencies**: Implemented 100% using Python's standard library (`urllib`, `json`, `concurrent.futures`, `socket`, `subprocess`). No `pip install` required.
-- **Universal Backend Compatibility**: Automatically queries `/v1/models` to discover model IDs, context limits, and capabilities, with seamless fallbacks for minimal or proxy gateways.
-- **22 Enterprise Evaluation Stages**:
-  - **Flagship Core**: Streaming latency, multimodal invoice parsing, continuous batching concurrency, code synthesis, agent tool recovery, strict JSON schema validation, prefix caching speedup, socket abort resilience, greedy reproducibility, high-entropy key-value recall, financial ledger math, dynamic code execution, HTTP error compliance, and dynamic context scaling (up to 200k+ tokens).
-  - **Adversarial Hardening**: Multi-hop graph distractor retrieval, novel algorithmic fuzzing, combinatorial anti-constraints (IFEval tier), counterfactual axiomatic algebra, and frontier multi-needle depth precision.
-  - **Frontier Reasoning**: CruxEval execution simulation, SWE-bench bug patch synthesis, and AIME Olympiad mathematics.
-- **Head-to-Head Comparison Engine (`compare.py` / `--compare`)**: Compare two or more saved benchmark reports offline with zero GPU overhead. Directly measures **Effectiveness (Accuracy)** vs. **Token Economy (Solution Conciseness)**, and warns when two runs aren't directly comparable (different model/context/parallel/milestones).
-- **Honest Scoring (Completion Rate)**: Infrastructure failures (network / timeout / 5xx / 429) are separated from model-quality failures. A flaky server no longer makes a good model look bad — effectiveness is scored only over tests that actually completed, and a **completion rate** reports how many the serving environment supported.
-- **At-a-Glance Quality Rating**: Each run gets a 1–5 star rating (capped at 3 stars when the serving environment was too flaky to trust the score).
-- **Robust Retry**: Exponential backoff with jitter, a separate more-patient budget for HTTP 429 rate limits, and `Retry-After` header parsing — transient gateway errors ride out instead of poisoning a run.
-- **`--probe` / `--history` / `--leaderboard`**: Quick <5s reachability checks (with common-port scanning), a list of recent runs, and a config-grouped leaderboard for tracking models/servers over time.
-- **Environment Variable Auto-Discovery**: Automatically recognizes `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
+This suite is built to benchmark, qualify, and select models for daily software engineering and reasoning workloads. It evaluates both **serving runtime performance** (latency, throughput, concurrency, prefix caching) and **frontier model intelligence** (long-context scaling, automated fuzz testing, bug patching, math competition logic, and graduate-level scientific deduction).
+
+### Core Principles
+- **Zero External Dependencies**: 100% Python 3.8+ standard library (`urllib`, `json`, `concurrent.futures`, `threading`, `subprocess`). No `pip install` required.
+- **Honest Scoring**: Distinguishes infrastructure failures (timeouts, 5xx, 429 rate limits) from model-quality failures. If a server flakes, it is reported under **Completion Rate** rather than dragging down the model's accuracy score.
+- **Token Economy**: Tracks solution conciseness (tokens spent per victory). In production, a concise model is faster, cheaper, and consumes less context.
 
 ---
 
-## Repository Layout
+## 19-Stage Evaluation Catalog
 
-```
-llm-eval-suite/
-├── eval.py                   # Flagship 22-stage evaluation harness & comparison CLI
-├── compare.py                # Cross-model head-to-head comparison CLI (offline, zero-GPU)
-├── judge_eval.py             # 10-point LLM quality judge & model ranking leaderboard
-├── client.py                 # Shared OpenAI-compatible HTTP client (retries, streaming, usage)
-├── reporting.py              # Metric extraction, scorecards & cross-model comparison engine
-├── env_loader.py             # .env / config.json configuration management
-├── benchmarks/               # Individual standalone test probes & stress tests
-│   ├── context.py            # Long-context scaling (8k to 200k+ tokens)
-│   ├── concurrency.py        # Multi-client continuous batching stress test
-│   ├── streaming.py          # TTFT and streaming latency evaluation
-│   ├── vision.py             # Multimodal document extraction benchmark
-│   ├── adversarial.py        # Multi-turn adversarial agent & recovery protocol
-│   ├── reasoning.py          # Deep parallel tree reasoning & logic search
-│   ├── precision.py          # High-entropy ledger reconciliation
-│   ├── code_synthesis.py     # Dynamic execution & fuzz testing on generated code
-│   └── needle_recall.py      # High-entropy key-value needle retrieval
-├── assets/
-│   └── invoice.png           # High-resolution invoice document for vision evaluation
-├── results/                  # Evaluated benchmark JSON reports and Markdown comparisons
-│   └── samples/              # Sanitized sample reports (committed)
-├── tests/                    # Unit tests for the harness core (stdlib unittest)
-├── pyproject.toml            # Packaging metadata + ruff/mypy/coverage/towncrier config
-├── requirements.txt          # Notes zero dependencies (100% Python stdlib)
-├── AGENTS.md                 # Conventions for AI agents & contributors
-├── CHANGELOG.md              # Generated from changelog.d/ fragments (towncrier)
-├── changelog.d/              # Unreleased changelog fragments
-├── .pre-commit-config.yaml   # Local dev lint hooks (ruff)
-├── LICENSE                   # Apache 2.0 License
-└── README.md                 # Full documentation
-```
+| # | Test Name | Key Capabilities Tested | Category |
+|:---:|:---|:---|:---|
+| **1** | **Streaming & TTFT** | Time-To-First-Token latency, chunk delivery, and decode throughput. | Flagship (1–12) |
+| **2** | **Multimodal Vision** | Invoice document layout and key financial field extraction (`assets/invoice.png`). | Flagship |
+| **3** | **Concurrency & Batching** | Continuous batching throughput under simultaneous client load (`threading.Barrier`). | Flagship |
+| **4** | **4-Task Architecture Suite** | AVL Trees, concurrency bug isolation, distributed rate limiting, and hidden constraints. | Flagship |
+| **5** | **Agent Tool Calling** | Multi-turn function calling with simulated live quota error and autonomous recovery. | Flagship |
+| **6** | **JSON Schema Mode** | Strict constrained JSON decoding via `response_format={"type": "json_object"}`. | Flagship |
+| **7** | **Prefix Caching Reuse** | RadixAttention / KV cache reuse: measures cold vs. warm prompt prefill speedup. | Flagship |
+| **8** | **Client Socket Abort** | Aborts TCP socket mid-generation to verify server GPU slot deallocation. | Flagship |
+| **9** | **Stop Sequences & Sampling** | Enforces exact multi-token stop word suppression and greedy determinism (`temp=0.0`). | Flagship |
+| **10** | **Extreme Precision Arithmetic** | Multi-stage accounting ledger reconciliation with exact decimal precision. | Flagship |
+| **11** | **API Error Compliance** | Validates HTTP 400/422 handling on missing payloads and graceful handling of invalid model IDs. | Flagship |
+| **12** | **Dynamic Context Scaling** | Stepwise context prefill scaling up to model limits, with 85% depth needle retrieval. | Flagship |
+| **13** | **Adversarial Graph Search** | Multi-hop routing through 32k context with deprecated and revoked temporal distractors. | Adversarial (13–15) |
+| **14** | **Novel Algorithm (5k Fuzz)** | Synthesizes custom data structures; dynamically executes 5,000-op property fuzz tests. | Adversarial |
+| **15** | **Frontier Needle Depth** | Composite arithmetic across needles buried at 0.5%, 50.0%, and 99.5% context depth. | Adversarial |
+| **16** | **CruxEval Code Simulation** | Mental execution tracing of intricate Python code to predict exact state transitions. | Frontier (16–19) |
+| **17** | **SWE-bench Bug Patching** | Synthesizes production regression bug fixes verified against dynamic unit test suites. | Frontier |
+| **18** | **AIME Olympiad Math** | Solves high-tier competition discrete mathematics ($17^{2026} + 13^{2026} \pmod{1000} = 978$). | Frontier |
+| **19** | **GPQA Diamond Science** | Graduate-level PhD scientific deduction across Quantum Mechanics, Spectroscopy, and Enzyme Kinetics. | Frontier |
 
 ---
 
-## ⚠️ Security Notice
+## How to Run
 
-**This suite executes LLM-generated code.** Tests 12 (dynamic unit tests), 16 (5,000-op property fuzzing), and 21 (SWE-bench patch verification) run model-generated Python in a local subprocess to verify correctness. The same applies to the standalone probes `benchmarks/code_synthesis.py` and `benchmarks/adversarial.py`.
-
-When benchmarking **untrusted endpoints or third-party models**, disable code execution so these tests fall back to syntax-only validation:
-
-```bash
-python3 eval.py --no-execute     # or: EVAL_SAFE=1 python3 eval.py
-```
-
-Additionally:
-- `config.json` may store API keys and internal endpoints. It is git-ignored and written with `0600` permissions, but never commit it.
-- Result reports may embed endpoint URLs. Files under `results/` are git-ignored except `results/samples/` (sanitized samples only).
-
-
----
-
-## Quickstart
-
-### 1. Run the Full 22-Stage Benchmark
-
-Run against a local server (defaults to `http://127.0.0.1:8000/v1` or prompts interactively):
+### 1. Interactive Run (Default)
 ```bash
 python3 eval.py
 ```
+Discovers local endpoints (`http://127.0.0.1:8000/v1` or `config.json`), queries available models, detects context ceiling and parallel slots, and runs the benchmark.
 
-Run against a specific endpoint and model:
+### 2. Direct CLI Run
 ```bash
+# Run full suite against a specific endpoint
 python3 eval.py --endpoint http://127.0.0.1:8000/v1 --model meta-llama/Llama-3.1-70B-Instruct
-```
 
-Run non-interactively with environment variables:
-```bash
-export OPENAI_BASE_URL="http://10.0.0.5:8000/v1"
-export OPENAI_MODEL="qwen2.5-coder-32b-instruct"
-export OPENAI_API_KEY="sk-..."
-
+# Non-interactive mode (ideal for scripts and CI)
 python3 eval.py --auto
 ```
 
-### 2. Configuration File & Interactive Parameter Saving (`config.json`)
-
-The benchmark tool manages single-model server configuration via `config.json` containing:
-- `endpoint` (e.g. `http://127.0.0.1:8000/v1`)
-- `model` (e.g. `meta-llama/Llama-3.1-8B-Instruct`)
-- `api_key` (optional string)
-- `max_context` (e.g. `131072`)
-
-#### **Interactive Auto-Prompt to Save Config**
-When you run `python3 eval.py` with parameters (or interactively select a server/model):
-1. The tool resolves the server endpoint, model, API key, and context window.
-2. If `config.json` does not exist or settings changed, it prompts you:
-   ```text
-   Save server configuration (endpoint, model, api_key, max_context) to config.json for future runs? [y/N]:
-   ```
-3. Type `y` to save. On future runs, `python3 eval.py` automatically loads these saved server parameters!
-
-#### **Using or Updating `config.json` Manually**
-Create or edit [`config.json.example`](config.json.example):
-```json
-{
-  "endpoint": "http://127.0.0.1:8000/v1",
-  "model": "meta-llama/Llama-3.1-8B-Instruct",
-  "api_key": "",
-  "max_context": 131072
-}
-```
-Run using saved config or specify custom path:
+### 3. Selective Runs, Suites & Exclusions
 ```bash
-python3 eval.py
-python3 eval.py --config production_config.json
+# Run only Frontier Reasoning tests (16-19: CruxEval, SWE-bench, AIME, GPQA)
+python3 eval.py --suite frontier
+
+# Run specific tests by number or alias
+python3 eval.py --test 3,12,19
+python3 eval.py --test context_scaling,gpqa
+
+# Exclude specific tests or ranges (alias: --skip)
+python3 eval.py --exclude 14,17
+python3 eval.py --skip 2-5
+python3 eval.py --suite flagship --exclude vision
 ```
-Use `--save-config` to auto-save without prompting, or `--no-save` to skip prompting.
 
-
-
-### 3. Fast Smoke Qualification Mode
-
-Skip heavy context prefill to quickly test basic capabilities:
+### 4. Fast Smoke Qualification
 ```bash
+# Fast mode: compact context milestones, skips heavy prefill
 python3 eval.py --quick
 ```
 
-### 4. Probe, History & Leaderboard
-
-**Probe** a server in <5s before committing to a full ~20-min run. With an endpoint it checks reachability, models, context, and health; without one (or with `--scan-host`) it scans common localhost LLM ports:
+### 5. Probe & Diagnostics
 ```bash
-python3 eval.py --probe -e http://127.0.0.1:8000/v1        # probe a specific endpoint
-python3 eval.py --probe                                      # scan localhost for live LLM servers
-python3 eval.py --probe --scan-host 10.0.0.5                 # scan a specific host
-```
+# Quick <5s reachability and capability check
+python3 eval.py --probe --endpoint http://127.0.0.1:8000/v1
 
-**History** lists recent runs from `results/` (newest first); **Leaderboard** ranks them by efficiency index, grouped by config fingerprint so only comparable runs are ranked together:
-```bash
+# View history of past runs and leaderboard
 python3 eval.py --history
 python3 eval.py --leaderboard
 ```
 
-### 5. Run Specific Test Suites or Tests
-
-
+### 6. Head-to-Head Comparison
 ```bash
-# Run only Frontier Reasoning tests (Tests 20-22: CruxEval, SWE-bench, AIME)
-python3 eval.py --suite frontier
-
-# Run only Adversarial Hardening tests (Tests 15-19)
-python3 eval.py --suite adversarial
-
-# Run specific tests by number or alias
-python3 eval.py --test 14,20,22
-python3 eval.py --test context_scaling,aime
-```
-
-### 6. Run Standalone Specialized Probes
-
-Each benchmark probe in `benchmarks/` can also be executed independently:
-
-```bash
-# Long context prefill & decode scaling (8k up to 200k+)
-python3 benchmarks/context.py --tokens 8000 32000 64000 128000 200000
-
-# Continuous batching and concurrency stress test
-python3 benchmarks/concurrency.py --parallel 8 --tokens 256
-
-# Streaming TTFT & decode throughput
-python3 benchmarks/streaming.py
-
-# Multimodal document extraction
-python3 benchmarks/vision.py
-
-# Multi-turn adversarial agent & error recovery
-python3 benchmarks/adversarial.py
-
-# Deep parallel tree reasoning & logic search
-python3 benchmarks/reasoning.py
-```
-
----
-
-## Native Arena Mode (Live Concurrent Evaluation)
-
-Run real-time, side-by-side head-to-head evaluations between two active inference backends simultaneously. Arena Mode is **explicit opt-in** (`--live`); a two-server `config.json` alone will not trigger it:
-
-```bash
-python3 compare.py \
-  --live \
-  --endpoint1 http://127.0.0.1:8888/v1 --model1 qwen3.8-27b \
-  --endpoint2 http://10.0.0.2:8000/v1 --model2 qwen3.8-flash \
-  --out results/live_comparison.md
-```
-*(Also accessible directly via `eval.py`: `python3 eval.py --live --endpoint1 ... --endpoint2 ...`)*
-
-### How Native Arena Mode Works:
-
-1. **Parallel Threading**: Concurrently connects to both endpoints in parallel worker threads.
-2. **Simultaneous Dispatch**: Sends each test prompt to both servers at the exact same moment.
-3. **Live Streaming Dashboard**: Displays real-time token speeds (`tok/s`), accumulated tokens, and Time-To-First-Token (`TTFT`) side-by-side on terminal.
-4. **Automated Advantage & Report Generation**: Evaluates correctness/constraints on outputs, computes relative advantages (throughput speedup %, latency reduction, token conciseness), and exports both Markdown and JSON reports.
-
----
-
-## Offline Cross-Model Comparison Engine
-
-Evaluate how efficiently Model A solves problems compared to Model B using saved JSON reports:
-
-```bash
+# Compare two evaluated runs offline (zero GPU overhead)
 python3 compare.py results/eval_modelA.json results/eval_modelB.json --out results/comparison.md
-```
-*(Or via `python3 eval.py --compare results/eval_modelA.json results/eval_modelB.json`)*
 
-### Sample Comparison Matrix
+# Live Arena Mode: evaluate two servers side-by-side in real time
+python3 compare.py --live --endpoint1 http://127.0.0.1:8080/v1 --model1 modelA \
+                          --endpoint2 http://127.0.0.1:8000/v1 --model2 modelB
+```
+
+---
+
+## Understanding the Results
+
+At the end of a benchmark run, an **Executive Scorecard** is printed to the terminal and exported to `results/*.json`:
 
 ```text
-====================================================================================================
-                        CROSS-MODEL EFFICIENCY & EFFECTIVENESS COMPARISON
-====================================================================================================
-  Dimension / Metric            | Model A: qwen3.8-27b        | Model B: llama-3.1-70b        | Relative Advantage
-----------------------------------------------------------------------------------------------------
-  Effectiveness (Pass Rate)     | 21/22 (95.5%)               | 18/22 (81.8%)                 | Model A (+13.6%)
-  Token Economy (Tokens/Victory)| 1,148.2 tokens/task         | 2,055.6 tokens/task           | Model A (1.8x more concise)
-  Total Solution Tokens         | 24,113 tokens               | 36,990 tokens                 | Model A (12,877 fewer tokens)
-  Mean Decode Speed             | 44.12 tok/s                 | 28.40 tok/s                   | Model A (+15.72 tok/s)
-  Mean Time-to-First-Token      | 48.2 ms                     | 62.4 ms                       | Model A (-14.2 ms)
-  Composite Efficiency Index    | 88.4 / 100                  | 74.6 / 100                    | Model A (+13.8 pts)
-====================================================================================================
+========================================================================================
+             EXECUTIVE EFFICIENCY & EFFECTIVENESS SCORECARD                             
+========================================================================================
+  Model Under Test        : Qwen3.8-Flash-Next-FP4
+  Overall Quality Rating  : ★★★★☆ (4/5)
+  Completion Rate         : 100.0% (19/19 tests completed)
+  Effectiveness Rate      : 94.7% (18/19 tasks passed)
+  Token Economy           : 720.4 tokens/passed task
+  Total Solution Tokens   : 12,968 tokens
+  Mean Decode Throughput  : 84.15 tok/s
+  Mean TTFT               : 32.1 ms
+  Composite Efficiency    : 91.2 / 100
+========================================================================================
 ```
 
-### Understanding the Efficiency Metrics
-
-- **Token Economy (`tokens_per_passed_task`)**: Measures the average number of generated tokens spent to successfully solve a task. In production, a model that produces correct code in 400 tokens is vastly cheaper, faster, and more context-efficient than one that requires 2,500 tokens of rambling derivation for the same outcome.
-- **Composite Efficiency Index (`0-100`)**: A weighted index balancing task accuracy (60%), token conciseness (20%), generation throughput (10%), and TTFT responsiveness (10%).
+### Metric Definitions
+- **Quality Rating (1–5 Stars)**: Fast visual indicator of model reliability. Capped at 3 stars if Completion Rate is under 80% (an unstable server prevents trustworthy scoring).
+- **Completion Rate (%)**: Fraction of tests that completed without infrastructure failures (network drops, HTTP 5xx, or 429 rate limits).
+- **Effectiveness Rate (%)**: Percentage of successfully passed tasks scored **only over completed tests**.
+- **Token Economy (`tokens/passed task`)**: Total tokens emitted divided by passed tests. Measures verbosity vs. conciseness. Lower is better.
+- **Mean Decode Throughput (`tok/s`)**: Average generation speed across all evaluated tasks.
+- **Mean TTFT (`ms`)**: Time-To-First-Token responsiveness across single-turn, tool-calling, and streaming prompts.
+- **Composite Efficiency Index (`0–100`)**: A balanced metric combining **Accuracy (60%)**, **Token Conciseness (20%)**, **Throughput (10%)**, and **TTFT (10%)**.
 
 ---
 
-## Scoring & Interpretation
+## Security Note
 
-### Completion Rate vs. Effectiveness
+Tests **14** (5,000-op property fuzzing) and **17** (SWE-bench patch validation) execute model-generated Python code in a local subprocess to verify correctness.
 
-A test can fail for two very different reasons, and this suite keeps them separate:
-
-- **Model failure** — the request completed but the model's output didn't meet the test's criteria (wrong answer, missed constraint, failed assertion). This *is* a model-quality signal and counts against effectiveness.
-- **Infrastructure failure** — the request itself failed (network error, timeout, HTTP 5xx, or 429 rate limit). This measures the *serving environment*, not the model, so it is **excluded from effectiveness** and surfaced via the **completion rate** instead.
-
-The scorecard reports both:
-
-```text
-  Quality Rating  : ****.  (4/5)
-  Completion Rate : 100.0%  (22/22 tests scored)
-```
-
-If a run shows e.g. `Completion Rate: 90.9% (20/22 tests scored)` with an `Infra Excluded` note, two tests failed on the infrastructure side and the 90.9% effectiveness is computed only over the 20 that completed. A run graded on fewer tests is not comparable to one graded on all of them.
-
-### Quality Rating (Stars)
-
-Each run gets a 1–5 star rating for at-a-glance reading, based on effectiveness. It is **capped at 3 stars** when the completion rate drops below 80% — a flaky serving environment makes the score untrustworthy, so the rating reflects that.
-
-### Config Fingerprint & Comparability
-
-Every report stores a short hash of its comparable config (model, context cap, parallel level, milestones, suite). When you run `--compare`, the tool **warns if the two reports have different fingerprints**, so a context-cap or parallel-level difference isn't mistaken for a model difference. The `--leaderboard` groups runs by this fingerprint so only comparable runs are ranked together.
-
----
-
-## 10-Point Quality Judge & Model Ranking (`judge_eval.py`)
-
-Grades hard, realistic engineering tasks out of 10.0 using AST syntax verification plus a double-blind, position-swapped LLM quality judge, and exports a tiered leaderboard:
-
+When testing untrusted models or public endpoints, disable code execution:
 ```bash
-# Two-server head-to-head ranking (servers from config.json or ENDPOINT1/ENDPOINT2 env vars)
-python3 judge_eval.py --out results/ranking.md
-
-# Single-server grading
-python3 judge_eval.py --single
+python3 eval.py --no-execute
+# or via environment variable:
+EVAL_SAFE=1 python3 eval.py
 ```
-
----
-
-## 22-Stage Evaluation Catalog
-
-| # | Test Name | Target Capability & Verification Methodology |
-|:---:|:---|:---|
-| **1** | **Streaming Latency** | Time-To-First-Token (TTFT) and incremental chunk delivery verification. |
-| **2** | **Multimodal Vision** | Invoice document layout and field extraction from `assets/invoice.png`. |
-| **3** | **Concurrency & Batching** | Parallel continuous batching throughput and FIFO request queueing. |
-| **4** | **4-Task Architecture** | AVL tree, concurrent bounded buffer, event-driven ledger, distributed tracing. |
-| **5** | **Agent Tool Calling** | Multi-turn agent loop, schema validation, and autonomous error recovery. |
-| **6** | **Strict JSON Schema** | Constrained decoding via `response_format={"type": "json_object"}`. |
-| **7** | **Prefix Caching Reuse** | RadixAttention / KV cache reuse: measures cold vs. warm prompt prefill speedup. |
-| **8** | **Client Socket Abort** | Simulates client disconnection mid-generation; verifies GPU worker slot release. |
-| **9** | **Stop Sequences & Sampling** | Enforces exact multi-token stop word truncation and deterministic greedy decoding. |
-| **10** | **High-Entropy KV Recall** | Recalls 10 high-entropy keys buried across thousands of distractor tokens. |
-| **11** | **Precision Ledger Math** | Reconciles multi-entity transaction ledgers with strict decimal precision. |
-| **12** | **Dynamic Code Testing** | Synthesizes an LRU Cache with TTL; dynamically executes unit tests in-memory. |
-| **13** | **API Error Compliance** | Validates proper HTTP 400/422 handling for malformed or out-of-bounds requests. |
-| **14** | **Context Window Scaling** | Stepwise context expansion (4k, 8k, 16k, 32k, 64k, 128k, 200k+) measuring prefill scaling. |
-| **15** | **Adversarial Graph Search** | Multi-hop shortest path search through distractor-heavy topological graphs. |
-| **16** | **Novel Algorithm Fuzzing** | Synthesizes non-standard algorithms; runs 5,000 in-memory property fuzz tests. |
-| **17** | **Combinatorial Anti-Constraints** | IFEval-tier negative constraints (lipograms, strict word counts, syntax rules). |
-| **18** | **Counterfactual Algebra** | Axiomatic re-definition of arithmetic operators; evaluates symbolic deduction. |
-| **19** | **Frontier Needle Depth** | Deep needle retrieval at target context horizon under high information entropy. |
-| **20** | **CruxEval Program Simulation** | Accurate mental execution tracing of intricate Python code to predict output. |
-| **21** | **SWE-bench Bug Patching** | Synthesizes unified git diff patches resolving edge-case production bugs. |
-| **22** | **AIME Olympiad Mathematics** | Solves high-tier competition math problems requiring multi-step discrete derivations. |
-
----
-
-## Server Setup Examples
-
-### vLLM
-```bash
-vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
-python3 eval.py -e http://localhost:8000/v1
-```
-
-### Ollama
-```bash
-ollama serve
-python3 eval.py -e http://localhost:11434/v1 -m qwen2.5:32b
-```
-
-### llama.cpp
-```bash
-./llama-server -m model.gguf --port 8080
-python3 eval.py -e http://localhost:8080/v1
-```
-
-### ExLlamaV3 / Simplex
-```bash
-./linux/simplex start
-python3 eval.py -e http://127.0.0.1:8888/v1
-```
+When disabled, code execution tests gracefully fall back to AST syntax verification.
 
 ---
 

@@ -15,7 +15,7 @@ import hashlib
 
 from client import log, BOLD, GREEN, YELLOW, RED, CYAN, RESET, DEFAULT_RESULTS_DIR
 
-TOTAL_TESTS = 22
+TOTAL_TESTS = 19
 
 # ============================================================================
 # STANDARDIZED TEST CATALOG & METRIC EXTRACTORS
@@ -31,19 +31,16 @@ TEST_CATALOG = [
     (7, "prefix_caching", "Prefix / KV Cache Reuse"),
     (8, "client_abort", "Client Socket Abort Recovery"),
     (9, "stop_sequences", "Stop Words & Greedy Sampling"),
-    (10, "high_entropy_recall", "High-Entropy Key-Value Recall"),
-    (11, "extreme_precision", "Precision Ledger Reconcile"),
-    (12, "code_execution", "Dynamic Code Unit Testing"),
-    (13, "error_handling", "API Error Protocol Compliance"),
-    (14, "context_scaling", "Dynamic Context Scaling"),
-    (15, "multihop_graph", "Adversarial Graph & Distractors"),
-    (16, "novel_algorithm_fuzz", "Novel Algorithm (5k Fuzz)"),
-    (17, "combinatorial_anti_constraints", "Anti-Constraints (IFEval Tier)"),
-    (18, "counterfactual_algebra", "Counterfactual Axiomatic Math"),
-    (19, "frontier_needle_depth", "Frontier Depth Multi-Needle"),
-    (20, "cruxeval", "CruxEval (Mental Code Exec)"),
-    (21, "swe_bench_bug_patch", "SWE-bench (Traceback Fix)"),
-    (22, "aime_olympiad", "AIME Olympiad (Math Reasoning)"),
+    (10, "extreme_precision", "Precision Ledger Reconcile"),
+    (11, "error_handling", "API Error Protocol Compliance"),
+    (12, "context_scaling", "Dynamic Context Scaling"),
+    (13, "multihop_graph", "Adversarial Graph & Distractors"),
+    (14, "novel_algorithm_fuzz", "Novel Algorithm (5k Fuzz)"),
+    (15, "frontier_needle_depth", "Frontier Depth Multi-Needle"),
+    (16, "cruxeval", "CruxEval (Mental Code Exec)"),
+    (17, "swe_bench_bug_patch", "SWE-bench (Traceback Fix)"),
+    (18, "aime_olympiad", "AIME Olympiad (Math Reasoning)"),
+    (19, "gpqa_diamond", "GPQA Diamond (Graduate Science)"),
 ]
 
 
@@ -98,6 +95,11 @@ def _classify_infra(data):
             return True
         if "error" in data and _looks_like_infra_error(data.get("error")):
             return True
+        if "errors" in data and isinstance(data["errors"], list) and data["errors"]:
+            return all(_looks_like_infra_error(e) for e in data["errors"])
+        sub_dicts = [v for k, v in data.items() if isinstance(v, dict) and k != "matrix"]
+        if sub_dicts:
+            return all(_classify_infra(v) for v in sub_dicts)
     return False
 
 
@@ -162,7 +164,7 @@ def extract_test_metrics(test_key: str, data):
     if test_key == "concurrency":
         if not isinstance(data, dict):
             return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
-        levels = [l for l in data.values() if isinstance(l, dict)]
+        levels = [l for l in data.values() if isinstance(l, dict) and "aggregate_tok_s" in l]
         if not levels:
             st = data.get("status", "FAIL")
             err = data.get("error", "-")
@@ -171,9 +173,11 @@ def extract_test_metrics(test_key: str, data):
         st = "PASS" if all_passed else "FAIL"
         tot_tokens = sum(l.get("total_tokens", 0) for l in levels)
         max_agg = max((l.get("aggregate_tok_s", 0) for l in levels), default=0.0)
+        ttfts = [l.get("mean_ttft_ms", 0.0) for l in levels if l.get("mean_ttft_ms")]
+        avg_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
         score = 1.0 if all_passed else 0.0
         desc = f"Max Agg: {max_agg:.1f} tok/s"
-        return {"status": st, "tokens": tot_tokens, "tok_s": round(max_agg, 2), "ttft_ms": 0.0, "score": score, "desc": desc}
+        return {"status": st, "tokens": tot_tokens, "tok_s": round(max_agg, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
 
     if test_key == "capabilities_4tasks":
         if not isinstance(data, dict):
@@ -195,7 +199,11 @@ def extract_test_metrics(test_key: str, data):
     score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
 
     desc = "-"
-    if test_key == "prefix_caching":
+    if test_key == "streaming":
+        desc = f"TTFT: {ttft_ms:.1f}ms"
+    elif test_key == "vision":
+        desc = f"TTFT: {ttft_ms:.1f}ms" if ttft_ms > 0 else "Invoice Parsed"
+    elif test_key == "prefix_caching":
         ratio = data.get("speedup_ratio", 1.0)
         desc = f"{ratio:.1f}x Cache Speedup"
     elif test_key == "tool_calling":
@@ -214,6 +222,9 @@ def extract_test_metrics(test_key: str, data):
         desc = "Regression Tests OK" if st == "PASS" else "Unit Tests Failed"
     elif test_key == "aime_olympiad":
         desc = "Exact Modular Root" if st == "PASS" else "Arithmetic Missed"
+    elif test_key == "gpqa_diamond":
+        score_val = data.get("score") or f"{data.get('passed_count', 0)}/3"
+        desc = f"Score: {score_val}"
     elif test_key == "novel_algorithm_fuzz":
         desc = "5,000 Ops Fuzzed OK" if st == "PASS" else "Fuzz Error"
     elif test_key == "extreme_precision":
@@ -513,11 +524,13 @@ def print_summary_table(report):
             return f"{YELLOW}{st}{RESET}"
         return f"{YELLOW}{st}{RESET}"
 
+    sel_tests = set(report.get("selected_tests") or range(1, TOTAL_TESTS + 1))
+
     # 1. Streaming
     if "streaming" in res:
         s = res.get("streaming", {})
         log(f"{'1. Streaming & Latency':<38} | {fmt_status(s.get('status', 'N/A')):<19} | TTFT: {s.get('ttft_ms', 0):.1f} ms{'':<6} | {s.get('tok_s', 0):.2f} tok/s")
-    else:
+    elif 1 in sel_tests:
         log(f"{'1. Streaming & Latency':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 2. Vision
@@ -526,18 +539,20 @@ def print_summary_table(report):
         v_ttft = f"TTFT: {v.get('ttft_ms', 0):.1f} ms" if 'ttft_ms' in v else "N/A"
         v_speed = f"{v.get('tok_s', 0):.2f} tok/s" if 'tok_s' in v else "N/A"
         log(f"{'2. Multimodal Vision (Invoice)':<38} | {fmt_status(v.get('status', 'N/A')):<19} | {v_ttft:<20} | {v_speed}")
-    else:
+    elif 2 in sel_tests:
         log(f"{'2. Multimodal Vision (Invoice)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 3. Parallel Batching
     if "concurrency" in res:
         c = res.get("concurrency", {})
         for ckey, cval in c.items():
+            if not isinstance(cval, dict):
+                continue
             c_label = f"3. Parallel Batching ({ckey.upper()})"
             c_speed = f"{cval.get('aggregate_tok_s', 0):.2f} tok/s (agg)"
             c_wall = f"{cval.get('wall_time_s', 0):.2f} s wall"
             log(f"{c_label:<38} | {fmt_status(cval.get('status', 'N/A')):<19} | {c_wall:<20} | {c_speed}")
-    else:
+    elif 3 in sel_tests:
         log(f"{'3. Parallel Batching':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 4. Capabilities
@@ -545,7 +560,7 @@ def print_summary_table(report):
         cap = res.get("capabilities_4tasks", {})
         cap_speed = f"{cap.get('average_speed_tok_s', 0):.2f} tok/s (avg)"
         log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status(cap.get('status', 'N/A')):<19} | 4/4 tasks passed{'':<5} | {cap_speed}")
-    else:
+    elif 4 in sel_tests:
         log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 5. Tool Calling
@@ -553,7 +568,7 @@ def print_summary_table(report):
         tc = res.get("tool_calling", {})
         tc_desc = "Agent Error Recovered" if tc.get("turn2_recovered") else ("Turn 1 Valid" if tc.get("turn1_valid") else "Args Invalid")
         log(f"{'5. Tool Calling & Agentic Recovery':<38} | {fmt_status(tc.get('status', 'N/A')):<19} | {tc_desc:<20} | TTFT: {tc.get('ttft_ms', 0):.1f} ms")
-    else:
+    elif 5 in sel_tests:
         log(f"{'5. Tool Calling & Agentic Recovery':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 6. JSON Schema
@@ -561,7 +576,7 @@ def print_summary_table(report):
         js = res.get("json_schema", {})
         js_desc = "Strict Schema Conformed" if js.get("valid_schema") else "Schema Invalid"
         log(f"{'6. JSON Schema Mode (response_format)':<38} | {fmt_status(js.get('status', 'N/A')):<19} | {js_desc:<20} | {js.get('tok_s', 0):.2f} tok/s")
-    else:
+    elif 6 in sel_tests:
         log(f"{'6. JSON Schema Mode (response_format)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 7. Prefix Caching
@@ -569,7 +584,7 @@ def print_summary_table(report):
         pc = res.get("prefix_caching", {})
         pc_desc = f"{pc.get('speedup_ratio', 1.0):.1f}x speedup" if pc.get("speedup_ratio") else "N/A"
         log(f"{'7. Prefix / KV Cache Reuse':<38} | {fmt_status(pc.get('status', 'N/A')):<19} | {pc_desc:<20} | Warm: {pc.get('warm_ttft_s', 0):.3f}s")
-    else:
+    elif 7 in sel_tests:
         log(f"{'7. Prefix / KV Cache Reuse':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 8. Client Abort
@@ -577,7 +592,7 @@ def print_summary_table(report):
         ca = res.get("client_abort", {})
         ca_desc = f"Rec: {ca.get('recovery_latency_ms', 0):.1f} ms"
         log(f"{'8. Client Socket Abort Recovery':<38} | {fmt_status(ca.get('status', 'N/A')):<19} | {ca_desc:<20} | Slots Released")
-    else:
+    elif 8 in sel_tests:
         log(f"{'8. Client Socket Abort Recovery':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     # 9. Stop Sequences
@@ -585,47 +600,31 @@ def print_summary_table(report):
         ss = res.get("stop_sequences", {})
         ss_desc = "Deterministic (temp=0)" if ss.get("deterministic_greedy_reproducible") else "Non-deterministic"
         log(f"{'9. Stop Words & Greedy Sampling':<38} | {fmt_status(ss.get('status', 'N/A')):<19} | {ss_desc:<20} | Tokens Suppressed")
-    else:
+    elif 9 in sel_tests:
         log(f"{'9. Stop Words & Greedy Sampling':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 10. High Entropy
-    if "high_entropy_recall" in res:
-        he = res.get("high_entropy_recall", {})
-        he_speed = f"{he.get('tok_s', 0):.2f} tok/s"
-        log(f"{'10. High-Entropy Key-Value Recall':<38} | {fmt_status(he.get('status', 'N/A')):<19} | TTFT: {he.get('ttft_ms', 0):.1f} ms{'':<4} | {he_speed}")
-    else:
-        log(f"{'10. High-Entropy Key-Value Recall':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 11. Extreme Precision
+    # 10. Extreme Precision
     if "extreme_precision" in res:
         ep = res.get("extreme_precision", {})
         ep_desc = "Exact Matched" if ep.get("matched") else "Balance Diverged"
-        log(f"{'11. Precision Ledger Reconcile':<38} | {fmt_status(ep.get('status', 'N/A')):<19} | {ep_desc:<20} | {ep.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'11. Precision Ledger Reconcile':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'10. Precision Ledger Reconcile':<38} | {fmt_status(ep.get('status', 'N/A')):<19} | {ep_desc:<20} | {ep.get('tok_s', 0):.2f} tok/s")
+    elif 10 in sel_tests:
+        log(f"{'10. Precision Ledger Reconcile':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 12. Code Execution
-    if "code_execution" in res:
-        ce = res.get("code_execution", {})
-        ce_desc = "Dynamic Assertions OK" if ce.get("dynamic_tests_passed") else "Assertion Failure"
-        log(f"{'12. Dynamic Code Unit Testing':<38} | {fmt_status(ce.get('status', 'N/A')):<19} | {ce_desc:<20} | {ce.get('tok_s', 0):.2f} tok/s")
-    else:
-        log(f"{'12. Dynamic Code Unit Testing':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 13. Error Handling
+    # 11. Error Handling
     if "error_handling" in res:
         eh = res.get("error_handling", {})
         eh_desc = "HTTP 400/422 Standard" if eh.get("bad_schema_rejected") else "Non-standard error"
-        log(f"{'13. API Error Protocol Compliance':<38} | {fmt_status(eh.get('status', 'N/A')):<19} | {eh_desc:<20} | Protocol OK")
-    else:
-        log(f"{'13. API Error Protocol Compliance':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'11. API Error Protocol Compliance':<38} | {fmt_status(eh.get('status', 'N/A')):<19} | {eh_desc:<20} | Protocol OK")
+    elif 11 in sel_tests:
+        log(f"{'11. API Error Protocol Compliance':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 14. Context Scaling Summary
+    # 12. Context Scaling Summary
     if "context_scaling" in res:
         cs = res.get("context_scaling", [])
         if cs:
             log("-" * 88)
-            log("  [14. Context Scaling Milestone Performance & Accuracy Breakdown]", bold=True)
+            log("  [12. Context Scaling Milestone Performance & Accuracy Breakdown]", bold=True)
             cs_hdr = f"  {'Context Target':<18} | {'Cached':<8} | {'Prefill TTFT':<14} | {'Cold Speed':<14} | {'Effective':<14} | {'Decode':<12} | {'Accuracy':<10}"
             log(cs_hdr)
             log("  " + "-" * (len(cs_hdr) - 2))
@@ -642,73 +641,65 @@ def print_summary_table(report):
                 else:
                     m_label = f"{step.get('target_tokens', 0):,} toks"
                     log(f"  {m_label:<18} | {'-':<8} | {'FAILED':<14} | {str(step.get('error', 'Error'))[:28]}")
-    else:
-        if 14 in report.get("selected_tests", range(1, TOTAL_TESTS + 1)):
-            log(f"{'14. Dynamic Context Scaling':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+    elif 12 in sel_tests:
+        log(f"{'12. Dynamic Context Scaling':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 15. Multihop Graph Traversal
+    # 13. Multihop Graph Traversal
     if "multihop_graph" in res:
         mh = res.get("multihop_graph", {})
         mh_desc = f"{mh.get('completion_tokens', 0)} tokens"
-        log(f"{'15. Adversarial Graph & Distractors':<38} | {fmt_status(mh.get('status', 'N/A')):<19} | {mh_desc:<20} | {mh.get('tok_s', 0):.2f} tok/s")
-    elif 15 in report.get("selected_tests", set()):
-        log(f"{'15. Adversarial Graph & Distractors':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'13. Adversarial Graph & Distractors':<38} | {fmt_status(mh.get('status', 'N/A')):<19} | {mh_desc:<20} | {mh.get('tok_s', 0):.2f} tok/s")
+    elif 13 in sel_tests:
+        log(f"{'13. Adversarial Graph & Distractors':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 16. Novel Algorithmic Fuzz
+    # 14. Novel Algorithmic Fuzz
     if "novel_algorithm_fuzz" in res:
         fz = res.get("novel_algorithm_fuzz", {})
         fz_desc = "5,000 Ops Fuzzed OK" if fz.get("status") == "PASS" else "Fuzz Assertion Failed"
-        log(f"{'16. Novel Algorithm (5k Fuzz)':<38} | {fmt_status(fz.get('status', 'N/A')):<19} | {fz_desc:<20} | {fz.get('tok_s', 0):.2f} tok/s")
-    elif 16 in report.get("selected_tests", set()):
-        log(f"{'16. Novel Algorithm (5k Fuzz)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'14. Novel Algorithm (5k Fuzz)':<38} | {fmt_status(fz.get('status', 'N/A')):<19} | {fz_desc:<20} | {fz.get('tok_s', 0):.2f} tok/s")
+    elif 14 in sel_tests:
+        log(f"{'14. Novel Algorithm (5k Fuzz)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 17. Combinatorial Anti-Constraints
-    if "combinatorial_anti_constraints" in res:
-        ac = res.get("combinatorial_anti_constraints", {})
-        ac_desc = f"{ac.get('constraints_passed', 0)}/6 Constraints Met"
-        log(f"{'17. Anti-Constraints (IFEval Tier)':<38} | {fmt_status(ac.get('status', 'N/A')):<19} | {ac_desc:<20} | {ac.get('tok_s', 0):.2f} tok/s")
-    elif 17 in report.get("selected_tests", set()):
-        log(f"{'17. Anti-Constraints (IFEval Tier)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 18. Counterfactual Algebra
-    if "counterfactual_algebra" in res:
-        ca = res.get("counterfactual_algebra", {})
-        ca_desc = "Both Roots Solved" if ca.get("status") == "PASS" else ("1 Root Solved" if ca.get("status") == "PARTIAL" else "Roots Missed")
-        log(f"{'18. Counterfactual Axiomatic Math':<38} | {fmt_status(ca.get('status', 'N/A')):<19} | {ca_desc:<20} | {ca.get('tok_s', 0):.2f} tok/s")
-    elif 18 in report.get("selected_tests", set()):
-        log(f"{'18. Counterfactual Axiomatic Math':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
-
-    # 19. Frontier Needle Depth
+    # 15. Frontier Needle Depth
     if "frontier_needle_depth" in res:
         fn = res.get("frontier_needle_depth", {})
         fn_desc = "Composite Checksum OK" if fn.get("status") == "PASS" else "Checksum Missed"
-        log(f"{'19. Frontier Depth Multi-Needle':<38} | {fmt_status(fn.get('status', 'N/A')):<19} | {fn_desc:<20} | {fn.get('tok_s', 0):.2f} tok/s")
-    elif 19 in report.get("selected_tests", set()):
-        log(f"{'19. Frontier Depth Multi-Needle':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'15. Frontier Depth Multi-Needle':<38} | {fmt_status(fn.get('status', 'N/A')):<19} | {fn_desc:<20} | {fn.get('tok_s', 0):.2f} tok/s")
+    elif 15 in sel_tests:
+        log(f"{'15. Frontier Depth Multi-Needle':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 20. CruxEval
+    # 16. CruxEval
     if "cruxeval" in res:
         cx = res.get("cruxeval", {})
         cx_desc = "State Traversed OK" if cx.get("status") == "PASS" else "State Diverged"
-        log(f"{'20. CruxEval (Mental Code Exec)':<38} | {fmt_status(cx.get('status', 'N/A')):<19} | {cx_desc:<20} | {cx.get('tok_s', 0):.2f} tok/s")
-    elif 20 in report.get("selected_tests", set()):
-        log(f"{'20. CruxEval (Mental Code Exec)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'16. CruxEval (Mental Code Exec)':<38} | {fmt_status(cx.get('status', 'N/A')):<19} | {cx_desc:<20} | {cx.get('tok_s', 0):.2f} tok/s")
+    elif 16 in sel_tests:
+        log(f"{'16. CruxEval (Mental Code Exec)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 21. SWE-bench Bug Patching
+    # 17. SWE-bench Bug Patching
     if "swe_bench_bug_patch" in res:
         sw = res.get("swe_bench_bug_patch", {})
         sw_desc = "Regression Tests OK" if sw.get("status") == "PASS" else "Unit Tests Failed"
-        log(f"{'21. SWE-bench (Traceback Fix)':<38} | {fmt_status(sw.get('status', 'N/A')):<19} | {sw_desc:<20} | {sw.get('tok_s', 0):.2f} tok/s")
-    elif 21 in report.get("selected_tests", set()):
-        log(f"{'21. SWE-bench (Traceback Fix)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'17. SWE-bench (Traceback Fix)':<38} | {fmt_status(sw.get('status', 'N/A')):<19} | {sw_desc:<20} | {sw.get('tok_s', 0):.2f} tok/s")
+    elif 17 in sel_tests:
+        log(f"{'17. SWE-bench (Traceback Fix)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
-    # 22. AIME Olympiad Math
+    # 18. AIME Olympiad Math
     if "aime_olympiad" in res:
         am = res.get("aime_olympiad", {})
         am_desc = "Exact Modular Root" if am.get("status") == "PASS" else "Arithmetic Missed"
-        log(f"{'22. AIME Olympiad (Math Reasoning)':<38} | {fmt_status(am.get('status', 'N/A')):<19} | {am_desc:<20} | {am.get('tok_s', 0):.2f} tok/s")
-    elif 22 in report.get("selected_tests", set()):
-        log(f"{'22. AIME Olympiad (Math Reasoning)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+        log(f"{'18. AIME Olympiad (Math Reasoning)':<38} | {fmt_status(am.get('status', 'N/A')):<19} | {am_desc:<20} | {am.get('tok_s', 0):.2f} tok/s")
+    elif 18 in sel_tests:
+        log(f"{'18. AIME Olympiad (Math Reasoning)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
+
+    # 19. GPQA Diamond Graduate Science
+    if "gpqa_diamond" in res:
+        gp = res.get("gpqa_diamond", {})
+        score_val = gp.get("score") or f"{gp.get('passed_count', 0)}/3"
+        gp_desc = f"Score: {score_val}"
+        log(f"{'19. GPQA Diamond (Graduate Science)':<38} | {fmt_status(gp.get('status', 'N/A')):<19} | {gp_desc:<20} | {gp.get('tok_s', 0):.2f} tok/s")
+    elif 19 in sel_tests:
+        log(f"{'19. GPQA Diamond (Graduate Science)':<38} | {fmt_status('SKIPPED'):<19} | {'-':<20} | -")
 
     log("="*88 + "\n")
 
@@ -955,89 +946,90 @@ NAME_TO_TEST_NUM = {
     "abort": 8,
     "stop_sequences": 9,
     "stop": 9,
-    "high_entropy": 10,
-    "high_entropy_recall": 10,
-    "recall": 10,
-    "extreme_precision": 11,
-    "precision": 11,
-    "code_execution": 12,
-    "code": 12,
-    "error_handling": 13,
-    "error": 13,
-    "context_scaling": 14,
-    "context": 14,
-    "scale": 14,
-    "multihop_graph": 15,
-    "multihop": 15,
-    "graph": 15,
-    "distractors": 15,
-    "novel_algorithm_fuzz": 16,
-    "novel_algorithm": 16,
-    "fuzz": 16,
-    "ring_buffer": 16,
-    "combinatorial_anti_constraints": 17,
-    "anti_constraints": 17,
-    "ifeval": 17,
-    "lipogram": 17,
-    "counterfactual_algebra": 18,
-    "algebra": 18,
-    "symbolic": 18,
-    "math": 18,
-    "frontier_needle_depth": 19,
-    "frontier_needle": 19,
-    "frontier": 19,
-    "cruxeval": 20,
-    "code_exec_simulation": 20,
-    "swe_bench": 21,
-    "bug_patch": 21,
-    "patching": 21,
-    "rate_limiter": 21,
-    "aime": 22,
-    "olympiad": 22,
-    "math_olympiad": 22,
+    "extreme_precision": 10,
+    "precision": 10,
+    "error_handling": 11,
+    "error": 11,
+    "context_scaling": 12,
+    "context": 12,
+    "scale": 12,
+    "multihop_graph": 13,
+    "multihop": 13,
+    "graph": 13,
+    "distractors": 13,
+    "novel_algorithm_fuzz": 14,
+    "novel_algorithm": 14,
+    "fuzz": 14,
+    "ring_buffer": 14,
+    "frontier_needle_depth": 15,
+    "frontier_needle": 15,
+    "cruxeval": 16,
+    "code_exec_simulation": 16,
+    "swe_bench": 17,
+    "swe_bench_bug_patch": 17,
+    "bug_patch": 17,
+    "patching": 17,
+    "rate_limiter": 17,
+    "aime": 18,
+    "aime_olympiad": 18,
+    "olympiad": 18,
+    "math_olympiad": 18,
+    "gpqa": 19,
+    "gpqa_diamond": 19,
+    "diamond": 19,
 }
 
-def parse_selected_tests(test_arg: str, suite: str = "all"):
-    if test_arg:
-        selected = set()
-        parts = [p.strip() for p in test_arg.replace(" ", ",").split(",") if p.strip()]
-        for part in parts:
-            if "-" in part and not part.startswith("-"):
-                subparts = part.split("-", 1)
-                if subparts[0].isdigit() and subparts[1].isdigit():
-                    start_n, end_n = int(subparts[0]), int(subparts[1])
-                    for n in range(start_n, end_n + 1):
-                        if 1 <= n <= 22:
-                            selected.add(n)
-                    continue
-            if part.isdigit():
-                n = int(part)
-                if 1 <= n <= 22:
-                    selected.add(n)
+def _parse_test_tokens(arg_str: str) -> set:
+    if not arg_str:
+        return set()
+    result = set()
+    parts = [p.strip() for p in str(arg_str).replace(" ", ",").split(",") if p.strip()]
+    for part in parts:
+        if "-" in part and not part.startswith("-"):
+            subparts = part.split("-", 1)
+            if subparts[0].isdigit() and subparts[1].isdigit():
+                start_n, end_n = int(subparts[0]), int(subparts[1])
+                for n in range(start_n, end_n + 1):
+                    if 1 <= n <= TOTAL_TESTS:
+                        result.add(n)
+                continue
+        if part.isdigit():
+            n = int(part)
+            if 1 <= n <= TOTAL_TESTS:
+                result.add(n)
+        else:
+            lower = part.lower().replace("-", "_")
+            if lower in NAME_TO_TEST_NUM:
+                result.add(NAME_TO_TEST_NUM[lower])
+            elif lower == "flagship":
+                result.update(range(1, 13))
+            elif lower in ("adversarial", "hardened"):
+                result.update(range(13, 16))
+            elif lower in ("frontier", "sota"):
+                result.update(range(16, 20))
+            elif lower == "all":
+                result.update(range(1, 20))
             else:
-                lower = part.lower().replace("-", "_")
-                if lower in NAME_TO_TEST_NUM:
-                    selected.add(NAME_TO_TEST_NUM[lower])
-                elif lower == "flagship":
-                    selected.update(range(1, 15))
-                elif lower in ("adversarial", "hardened"):
-                    selected.update(range(15, 20))
-                elif lower in ("frontier", "sota"):
-                    selected.update(range(20, 23))
-                elif lower == "all":
-                    selected.update(range(1, 23))
-                else:
-                    log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
-        # If --test was given but nothing matched, run nothing (not the full suite).
-        return selected
+                log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
+    return result
 
-    if suite == "flagship":
-        return set(range(1, 15))
+
+def parse_selected_tests(test_arg: str = None, suite: str = "all", exclude_arg: str = None):
+    if test_arg:
+        selected = _parse_test_tokens(test_arg)
+    elif suite == "flagship":
+        selected = set(range(1, 13))
     elif suite == "adversarial":
-        return set(range(15, 20))
+        selected = set(range(13, 16))
     elif suite == "frontier":
-        return set(range(20, 23))
+        selected = set(range(16, 20))
     else:  # "all"
-        return set(range(1, 23))
+        selected = set(range(1, 20))
+
+    if exclude_arg:
+        excluded = _parse_test_tokens(exclude_arg)
+        selected = selected - excluded
+
+    return selected
 
 

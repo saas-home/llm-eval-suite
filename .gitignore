@@ -8,14 +8,19 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+*.egg
 
-# Test & linter caches
+# Test, coverage & linter caches
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .pytype/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
+.tox/
+.nox/
 
 # Environments & Configs
 .venv/
@@ -23,30 +28,42 @@ env/
 venv/
 ENV/
 .env
-.env.local
+.env.*
 *.env
 config.json
 !config.json.example
 !.env.example
 
-# Local logs
+# Local logs & debug dumps
 *.log
+*.tmp
+*.temp
+
+# Editor & IDE artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.#*
+
+# AI & Tooling sandboxes
+.pi/
+.gemini/
+.cursor/
+.claude/
+sandbox/
 
 # Ad-hoc analysis / review / deployment reports (not shipped docs)
 SERVER*-REPORT.md
 CROSS-REPO-REVIEW-*.md
 REVIEW-*.md
 
-# Output Results (Keep template comparison reports, ignore ad-hoc evaluation dumps)
-results/*.json
-results/*.md
+# Output Results (Keep samples and .gitkeep, ignore all generated benchmark dumps to prevent leaking IPs/keys)
+results/*
 !results/.gitkeep
 !results/samples/
-!results/samples/*.md
-
-# Tooling sandboxes (pi / agent runtime)
-.pi/
-sandbox/
+!results/samples/**
 
 # OS artifacts
 .DS_Store

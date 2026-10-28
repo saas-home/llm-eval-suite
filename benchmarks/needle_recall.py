@@ -68,7 +68,12 @@ def call_model(url, messages, max_tokens=1500, temperature=0.0, enable_thinking=
     choice = choices[0]
     msg = choice.get("message", {})
     content = msg.get("content") or ""
-    reasoning = msg.get("reasoning_content") or ""
+    reasoning = (
+        msg.get("reasoning_content")
+        or msg.get("reasoning")
+        or msg.get("thought")
+        or ""
+    )
     usage = data.get("usage") or {}
     prompt_tokens = usage.get("prompt_tokens", 0)
     completion_tokens = usage.get("completion_tokens", 0)

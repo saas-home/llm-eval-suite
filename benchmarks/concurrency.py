@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-Multi-client concurrency and continuous batching stress test script.
+Multi-client concurrency, prefill & decode throughput stress test script.
 Tests:
-- Multiple concurrent streaming requests executing against the API server.
-- Continuous batching across parallel GPU slots.
-- FIFO request queueing when concurrency exceeds available slots.
-- Latency (TTFT), duration, throughput (tok/s), and server health telemetry.
+- Concurrency scaling across multiple client levels (e.g. 1, 2, 3, 4 clients).
+- Prompt prefill and token decode throughput across context horizons (e.g. 2K, 4K, 8K, 16K, 32K tokens).
+- Simultaneous synchronized client release using barriers to stress continuous batching.
+- Latency (TTFT), prefill throughput (tok/s), decode throughput (tok/s), and aggregate throughput.
 """
 
 import json
 import time
 import urllib.request
 import urllib.error
-from urllib.parse import urljoin
 import threading
 import argparse
 import os
-from concurrent.futures import ThreadPoolExecutor
+import uuid
+import statistics
 
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
@@ -44,7 +44,27 @@ def check_health(health_url, api_key=""):
     except Exception as e:
         return {"error": str(e)}
 
-def client_task(client_id, prompt, api_url, model, max_tokens, temperature, results, lock, api_key=""):
+def build_concurrency_prompt(target_tokens: int, client_id: int, total_clients: int) -> str:
+    filler_para = (
+        "Distributed computing clusters coordinate state using consensus protocols, replicated logs, "
+        "and partitioned key-value indices. Efficient vector pipelines serialize operations to minimize "
+        "inter-node bus contention and optimize high-throughput parallel execution paths. "
+    )
+    needed_tokens = max(100, target_tokens - 60)
+    repeat_count = max(1, int(needed_tokens / 36))
+    
+    header = (
+        f"[BENCHMARK CONCURRENCY MATRIX | Client: {client_id}/{total_clients} | "
+        f"Target Context: {target_tokens} | Nonce: {uuid.uuid4().hex[:12]}]\n\n"
+    )
+    body = filler_para * repeat_count
+    footer = (
+        f"\n\n[Client {client_id} Query]: In one concise technical sentence, state the primary mechanism "
+        f"for optimizing parallel execution throughput in distributed clusters."
+    )
+    return header + body + footer
+
+def client_task(client_id, prompt, api_url, model, max_tokens, temperature, results, lock, barrier, api_key=""):
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -58,15 +78,18 @@ def client_task(client_id, prompt, api_url, model, max_tokens, temperature, resu
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     req = urllib.request.Request(api_url, data=data, headers=headers)
-    
-    t_start = time.perf_counter()
+
     t_first = None
     t_last = None
     token_count = 0
     prompt_tokens = 0
     completion_tokens = 0
     error_msg = None
-    
+
+    if barrier:
+        barrier.wait()
+    t_start = time.perf_counter()
+
     try:
         with urllib.request.urlopen(req, timeout=300) as resp:
             for line in resp:
@@ -80,11 +103,11 @@ def client_task(client_id, prompt, api_url, model, max_tokens, temperature, resu
                     chunk = json.loads(line_data)
                 except Exception:
                     continue
-                
+
                 if "error" in chunk:
                     error_msg = str(chunk["error"])
                     break
-                    
+
                 choices = chunk.get("choices") or []
                 if choices:
                     choice = choices[0]
@@ -92,7 +115,12 @@ def client_task(client_id, prompt, api_url, model, max_tokens, temperature, resu
                         error_msg = "Stream terminated with finish_reason: error"
                         break
                     delta = choice.get("delta", {})
-                    content = delta.get("content") or delta.get("reasoning_content")
+                    content = (
+                        delta.get("content")
+                        or delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                    )
                     if content:
                         now = time.perf_counter()
                         if t_first is None:
@@ -111,10 +139,13 @@ def client_task(client_id, prompt, api_url, model, max_tokens, temperature, resu
     duration = (t_end - t_start)
     if completion_tokens == 0:
         completion_tokens = token_count
-        
+    if prompt_tokens == 0:
+        prompt_tokens = int(len(prompt.split()) * 1.33)
+
     decode_time = (t_last - t_first) if (t_first and t_last and t_last > t_first) else 0.0
     decode_speed = (completion_tokens - 1) / decode_time if (decode_time > 0 and completion_tokens > 1) else 0.0
-    
+    prefill_speed = (prompt_tokens / ttft) if ttft > 0 else 0.0
+
     with lock:
         results[client_id] = {
             "prompt": prompt[:40] + ("..." if len(prompt) > 40 else ""),
@@ -122,19 +153,87 @@ def client_task(client_id, prompt, api_url, model, max_tokens, temperature, resu
             "completion_tokens": completion_tokens,
             "ttft_s": ttft,
             "total_time_s": duration,
-            "tok_per_sec": decode_speed,
-            "start_offset_s": t_start,
-            "end_offset_s": t_end,
+            "decode_tok_s": decode_speed,
+            "prefill_tok_s": prefill_speed,
+            "t_dispatch": t_start,
+            "t_first": t_first if t_first else (t_start + ttft),
+            "t_last": t_last if t_last else t_end,
             "error": error_msg
         }
 
+def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature, api_key=""):
+    table_header = (
+        f"{'Context':>8} | {'Prompt Tok':>10} | {'Compl Tok':>9} | {'Mean TTFT (s)':>14} | "
+        f"{'Avg Prefill (t/s)':>17} | {'Agg Prefill (t/s)':>17} | "
+        f"{'Avg Decode (t/s)':>16} | {'Agg Decode (t/s)':>16} | {'Status':>8}"
+    )
+
+    has_errors = False
+    for c in clients:
+        label_suffix = " (Single-Client Baseline)" if c == 1 else f" ({c} Concurrent Parallel Streams)"
+        print(f"\n[Client Concurrency Level: {c} Client{'s' if c > 1 else ''}]{label_suffix}")
+        print(table_header)
+        print("-" * len(table_header))
+
+        for ctx in contexts:
+            barrier = threading.Barrier(c)
+            results = {}
+            lock = threading.Lock()
+            threads = []
+            t_start = time.perf_counter()
+
+            for i in range(c):
+                p = build_concurrency_prompt(ctx, i + 1, c)
+                t = threading.Thread(
+                    target=client_task,
+                    args=(i + 1, p, api_url, model, tokens, temperature, results, lock, barrier, api_key)
+                )
+                threads.append(t)
+                t.start()
+
+            for t in threads:
+                t.join()
+            wall_time = time.perf_counter() - t_start
+
+            tot_prompt = sum(r["prompt_tokens"] for r in results.values())
+            tot_completion = sum(r["completion_tokens"] for r in results.values() if not r.get("error"))
+            errors = [r["error"] for r in results.values() if r.get("error")]
+            if errors:
+                has_errors = True
+            valid_results = [r for r in results.values() if not r.get("error")]
+
+            ttfts_s = [r["ttft_s"] for r in valid_results if r["ttft_s"] > 0]
+            mean_ttft_s = statistics.mean(ttfts_s) if ttfts_s else 0.0
+
+            # Prefill throughput: aggregate batch throughput and per-client average
+            max_ttft_s = max((r["ttft_s"] for r in valid_results), default=0.0)
+            agg_prefill = (tot_prompt / max_ttft_s) if max_ttft_s > 0 else 0.0
+            avg_prefill = (agg_prefill / c) if c > 0 else 0.0
+
+            # Decode throughput: aggregate across concurrent streams and per-client average
+            decode_speeds = [r["decode_tok_s"] for r in valid_results if r["decode_tok_s"] > 0]
+            agg_decode = sum(decode_speeds)
+            avg_decode = (agg_decode / c) if c > 0 else 0.0
+
+            status = "PASS" if not errors and tot_completion > 0 else "FAIL"
+            row = (
+                f"{ctx:>8,d} | {tot_prompt:>10,d} | {tot_completion:>9,d} | {mean_ttft_s:>14.2f} | "
+                f"{avg_prefill:>17.1f} | {agg_prefill:>17.1f} | "
+                f"{avg_decode:>16.1f} | {agg_decode:>16.1f} | {status:>8}"
+            )
+            print(row)
+        print("-" * len(table_header))
+    return not has_errors
+
 def main():
-    parser = argparse.ArgumentParser(description="Multi-client concurrency and continuous batching stress test.")
+    parser = argparse.ArgumentParser(description="Multi-client concurrency, prefill and decode throughput stress test.")
     parser.add_argument("--url", default=DEFAULT_API_URL, help="API completions endpoint URL")
     parser.add_argument("--health-url", default=None, help="Server health endpoint URL")
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help="Model ID")
-    parser.add_argument("--parallel", "-p", "--concurrency", "-c", type=int, default=4, help="Number of concurrent clients (default: 4)")
-    parser.add_argument("--tokens", "-t", type=int, default=128, help="Max generation tokens per client (default: 128)")
+    parser.add_argument("--clients", "-c", type=int, nargs="+", default=[1, 2, 3, 4], help="Concurrency client levels (default: 1 2 3 4)")
+    parser.add_argument("--contexts", type=int, nargs="+", default=[2000, 4000, 8000, 16000, 32000], help="Context token horizons (default: 2000 4000 8000 16000 32000)")
+    parser.add_argument("--parallel", "-p", type=int, default=None, help="Legacy single-level parallelism flag")
+    parser.add_argument("--tokens", "-t", type=int, default=64, help="Max generation tokens per client (default: 64)")
     parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature (default: 0.7)")
     parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help="API key")
     args = parser.parse_args()
@@ -146,81 +245,30 @@ def main():
         else:
             health_url = DEFAULT_HEALTH_URL
 
-    print("=" * 80)
-    print("Multi-Client Concurrency & Continuous Batching Stress Test")
+    clients = [args.parallel] if args.parallel is not None else sorted(list(set(args.clients)))
+    contexts = sorted(list(set(args.contexts)))
+
+    print("=" * 88)
+    print("Multi-Client Concurrency, Prefill & Decode Matrix Benchmark")
     print(f"Target URL   : {args.url}")
     print(f"Health URL   : {health_url}")
     print(f"Model ID     : {args.model}")
-    print(f"Parallelism  : {args.parallel} concurrent client requests")
+    print(f"Clients      : {clients}")
+    print(f"Contexts     : {contexts}")
     print(f"Max Tokens   : {args.tokens} tokens/client")
     print(f"Temperature  : {args.temperature}")
-    print("=" * 80)
+    print("=" * 88)
 
     h_before = check_health(health_url, api_key=args.api_key)
     print(f"Health check before test: {h_before}\n")
 
-    results = {}
-    lock = threading.Lock()
-    
-    # Assign prompts to clients
-    prompts = [SAMPLE_PROMPTS[i % len(SAMPLE_PROMPTS)] for i in range(args.parallel)]
+    success = run_matrix_benchmark(clients, contexts, args.url, args.model, args.tokens, args.temperature, args.api_key)
 
-    t0 = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=args.parallel) as executor:
-        futures = [
-            executor.submit(
-                client_task,
-                i + 1,
-                prompts[i],
-                args.url,
-                args.model,
-                args.tokens,
-                args.temperature,
-                results,
-                lock,
-                args.api_key
-            )
-            for i in range(args.parallel)
-        ]
-        
-        # Probe health shortly after launching all requests
-        time.sleep(0.5)
-        h_mid = check_health(health_url, api_key=args.api_key)
-        print(f"Health check during active generation: {h_mid}\n")
-        
-        for f in futures:
-            f.result()
-
-    t_total = time.perf_counter() - t0
     h_after = check_health(health_url, api_key=args.api_key)
-    print(f"Health check after test: {h_after}\n")
+    print(f"\nHealth check after test: {h_after}")
+    print("=" * 88)
 
-    total_tokens = sum(r["completion_tokens"] for r in results.values() if not r.get("error"))
-    aggregate_tok_s = total_tokens / t_total if t_total > 0 else 0.0
-
-    header = f"{'Client':<8} | {'Tokens':<8} | {'TTFT (s)':<10} | {'Total Time (s)':<16} | {'Speed (tok/s)':<14} | {'Timeline (s)'}"
-    print(header)
-    print("-" * len(header))
-    
-    has_errors = False
-    for cid in sorted(results.keys()):
-        r = results[cid]
-        if r.get("error"):
-            has_errors = True
-            print(f"Client {cid:<2} | {'FAILED':<8} | Error: {r['error']}")
-            continue
-        rel_start = r["start_offset_s"] - t0
-        rel_end = r["end_offset_s"] - t0
-        timeline = f"{rel_start:.2f}s -> {rel_end:.2f}s"
-        print(f"Client {cid:<2} | {r['completion_tokens']:<8} | {r['ttft_s']:<10.3f} | {r['total_time_s']:<16.2f} | {r['tok_per_sec']:<14.2f} | {timeline}")
-
-    print("-" * len(header))
-    print(f"Total Wall-Clock Time : {t_total:.2f} s")
-    print(f"Total Tokens Emitted  : {total_tokens} tokens")
-    print(f"Aggregate Throughput  : {aggregate_tok_s:.2f} tokens/s")
-    print("=" * 80)
-
-    if has_errors:
+    if not success:
         raise SystemExit(1)
 
 if __name__ == "__main__":

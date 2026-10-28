@@ -76,7 +76,12 @@ def run_test(api_url, prompt_text, max_tokens=64, model="default", api_key=""):
                     break
 
                 delta = choices[0].get("delta", {})
-                content = delta.get("content") or delta.get("reasoning_content")
+                content = (
+                    delta.get("content")
+                    or delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                    or delta.get("thought")
+                )
                 if content:
                     now = time.perf_counter()
                     if t_first is None:

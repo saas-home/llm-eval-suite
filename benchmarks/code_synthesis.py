@@ -82,7 +82,11 @@ def call_model(url, messages, max_tokens=2048, temperature=0.1, model="default",
 
                     delta = choices[0].get("delta", {})
                     c = delta.get("content")
-                    r = delta.get("reasoning_content")
+                    r = (
+                        delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                    )
                     if c or r:
                         now = time.perf_counter()
                         if t_first is None:

@@ -34,12 +34,14 @@ os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
 # ANSI terminal colors (respect NO_COLOR env and non-TTY pipes)
 NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
 BOLD = "" if NO_COLOR else "\033[1m"
+DIM = "" if NO_COLOR else "\033[2m"
 GREEN = "" if NO_COLOR else "\033[32m"
 YELLOW = "" if NO_COLOR else "\033[33m"
 RED = "" if NO_COLOR else "\033[31m"
 CYAN = "" if NO_COLOR else "\033[36m"
 MAGENTA = "" if NO_COLOR else "\033[35m"
 RESET = "" if NO_COLOR else "\033[0m"
+CLEAR_LINE = "" if NO_COLOR else "\033[K"
 
 
 def log(msg, bold=False, color=""):
@@ -89,24 +91,33 @@ def _backoff_delay(attempt, status_code=None, retry_after=None):
     return random.uniform(0.0, window)  # full jitter
 
 
+def normalize_endpoint(endpoint: str) -> str:
+    """Normalizes an endpoint URL (strips trailing slashes, /chat/completions, and appends /v1 to bare hosts)."""
+    if not endpoint:
+        return ""
+    endpoint = endpoint.strip().rstrip("/")
+    if endpoint.endswith("/chat/completions"):
+        endpoint = endpoint[:-len("/chat/completions")].rstrip("/")
+    try:
+        parsed = urlparse(endpoint)
+        if not parsed.path:
+            endpoint = f"{endpoint}/v1"
+    except Exception:
+        pass
+    return endpoint
+
+
 class LLMClient:
     """OpenAI-compatible chat completions client (non-streaming + SSE streaming)."""
 
     def __init__(self, endpoint: str, api_key: str = None, model: str = None):
-        endpoint = endpoint.rstrip("/")
-        if endpoint.endswith("/chat/completions"):
-            endpoint = endpoint[:-len("/chat/completions")]
-        elif not endpoint.endswith("/v1"):
-            # Only append /v1 to bare host endpoints (no path component).
-            # Custom gateway paths (e.g. /api, /proxy) are left untouched.
-            parsed = urlparse(endpoint)
-            if not parsed.path:
-                endpoint = f"{endpoint}/v1"
-
-        self.base_url = endpoint
+        self.base_url = normalize_endpoint(endpoint)
         self.completions_url = f"{self.base_url}/chat/completions"
         self.models_url = f"{self.base_url}/models"
-        self.health_url = self.base_url.replace("/v1", "/health")
+        if self.base_url.endswith("/v1"):
+            self.health_url = f"{self.base_url[:-3]}/health"
+        else:
+            self.health_url = f"{self.base_url}/health"
         self.api_key = api_key
         self.model = model
 
@@ -130,6 +141,13 @@ class LLMClient:
         except Exception as e:
             log(f"Warning: Could not fetch models from {self.models_url}: {e}", color=YELLOW)
             return []
+
+    def discover_model(self, fallback="default"):
+        """Returns the first discovered model ID/name, or fallback."""
+        models = self.fetch_models()
+        if models and isinstance(models[0], dict):
+            return models[0].get("id") or models[0].get("name") or fallback
+        return fallback
 
     def fetch_health(self):
         req = urllib.request.Request(self.health_url, headers=self._get_headers())
@@ -183,11 +201,51 @@ class LLMClient:
                     with urllib.request.urlopen(req, timeout=timeout) as resp:
                         res_json = json.loads(resp.read().decode("utf-8"))
                     total_time = time.perf_counter() - t0
+                    if isinstance(res_json, dict) and res_json.get("error"):
+                        err = res_json["error"]
+                        err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                        return {
+                            "error": f"API Error: {err_msg}",
+                            "failure_kind": "client" if any(w in err_msg.lower() for w in ["invalid", "not found", "bad request"]) else "infra",
+                            "text": "",
+                            "content": "",
+                            "reasoning": "",
+                            "tool_calls": None,
+                            "total_time": total_time,
+                            "ttft": total_time,
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "cached_tokens": 0,
+                            "decode_speed": 0.0,
+                            "raw": res_json
+                        }
                     choices = res_json.get("choices") or [{}]
                     choice = choices[0] if choices else {}
+                    if choice.get("finish_reason") == "error":
+                        err_msg = choice.get("message", {}).get("content", "Server error during generation")
+                        return {
+                            "error": f"Server finish_reason error: {err_msg}",
+                            "failure_kind": "infra",
+                            "text": "",
+                            "content": "",
+                            "reasoning": "",
+                            "tool_calls": None,
+                            "total_time": total_time,
+                            "ttft": total_time,
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "cached_tokens": 0,
+                            "decode_speed": 0.0,
+                            "raw": res_json
+                        }
                     msg = choice.get("message", {})
                     content = msg.get("content") or ""
-                    reasoning = msg.get("reasoning_content") or ""
+                    reasoning = (
+                        msg.get("reasoning_content")
+                        or msg.get("reasoning")
+                        or msg.get("thought")
+                        or ""
+                    )
                     full_text = f"{reasoning}\n{content}".strip() if reasoning else (content or "")
                     tool_calls = msg.get("tool_calls")
                     usage = res_json.get("usage", {})
@@ -232,12 +290,45 @@ class LLMClient:
                                 c = json.loads(d_str)
                             except Exception:
                                 continue
+                            if isinstance(c, dict) and c.get("error"):
+                                err = c["error"]
+                                err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
+                                return {
+                                    "error": f"Stream error: {err_msg}",
+                                    "failure_kind": "infra",
+                                    "text": "".join(chunks),
+                                    "content": "".join(content_chunks),
+                                    "reasoning": "".join(reasoning_chunks),
+                                    "tool_calls": None,
+                                    "total_time": time.perf_counter() - t0,
+                                    "ttft": (t_first - t0) if t_first else (time.perf_counter() - t0),
+                                    "prompt_tokens": prompt_tokens,
+                                    "completion_tokens": completion_tokens or token_count,
+                                    "cached_tokens": cached_tokens,
+                                    "decode_speed": 0.0
+                                }
                             if "usage" in c and c["usage"]:
                                 prompt_tokens = c["usage"].get("prompt_tokens", prompt_tokens)
                                 completion_tokens = c["usage"].get("completion_tokens", completion_tokens)
                                 cached_tokens = (c["usage"].get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                             choices = c.get("choices", [])
                             if choices:
+                                if choices[0].get("finish_reason") == "error":
+                                    err_msg = choices[0].get("message", {}).get("content", "Server error during streaming")
+                                    return {
+                                        "error": f"Stream finish_reason error: {err_msg}",
+                                        "failure_kind": "infra",
+                                        "text": "".join(chunks),
+                                        "content": "".join(content_chunks),
+                                        "reasoning": "".join(reasoning_chunks),
+                                        "tool_calls": None,
+                                        "total_time": time.perf_counter() - t0,
+                                        "ttft": (t_first - t0) if t_first else (time.perf_counter() - t0),
+                                        "prompt_tokens": prompt_tokens,
+                                        "completion_tokens": completion_tokens or token_count,
+                                        "cached_tokens": cached_tokens,
+                                        "decode_speed": 0.0
+                                    }
                                 delta = choices[0].get("delta", {})
                                 if "tool_calls" in delta and delta["tool_calls"]:
                                     for tc_delta in delta["tool_calls"]:
@@ -255,7 +346,12 @@ class LLMClient:
                                             tool_calls_acc[tc_idx]["function"]["name"] = fn_delta.get("name")
                                         if fn_delta.get("arguments"):
                                             tool_calls_acc[tc_idx]["function"]["arguments"] += fn_delta.get("arguments")
-                                reasoning_part = delta.get("reasoning_content") or ""
+                                reasoning_part = (
+                                    delta.get("reasoning_content")
+                                    or delta.get("reasoning")
+                                    or delta.get("thought")
+                                    or ""
+                                )
                                 content_part = delta.get("content") or ""
                                 chunk_text = reasoning_part + content_part
                                 if chunk_text:
@@ -351,12 +447,15 @@ class LLMClient:
                 }
 
 
-def detect_max_context(model_obj, warn=False):
-    """Detects the context window from a /models entry; falls back to 32768."""
+def detect_max_context(model_obj, warn=False, default=32768):
+    """Detects the context window from a /models entry; falls back to default (32768)."""
     if not isinstance(model_obj, dict):
         if warn:
-            log("Warning: Could not detect max context from model metadata; assuming 32,768 tokens.", color=YELLOW)
-        return 32768
+            if default:
+                log(f"Warning: Could not detect max context from model metadata; assuming {default:,} tokens.", color=YELLOW)
+            else:
+                log("Warning: Could not detect max context from model metadata.", color=YELLOW)
+        return default
     candidates = [
         model_obj.get("max_model_len"),
         model_obj.get("context_length"),
@@ -367,11 +466,16 @@ def detect_max_context(model_obj, warn=False):
         model_obj.get("max_tokens"),
     ]
     for c in candidates:
-        if isinstance(c, int) and c > 0:
-            return c
+        if isinstance(c, (int, float)) and c > 0:
+            return int(c)
+        if isinstance(c, str) and c.strip().isdigit() and int(c.strip()) > 0:
+            return int(c.strip())
     if warn:
-        log("Warning: Server did not report a context limit; assuming 32,768 tokens (override with --max-context).", color=YELLOW)
-    return 32768
+        if default:
+            log(f"Warning: Server did not report a context limit; assuming {default:,} tokens (override with --max-context).", color=YELLOW)
+        else:
+            log("Warning: Server did not report a context limit (override with --max-context).", color=YELLOW)
+    return default
 
 
 def build_context_milestones(max_context: int, max_ratio: float = 0.80):
@@ -394,17 +498,73 @@ def build_context_milestones(max_context: int, max_ratio: float = 0.80):
 
 def extract_python_code(raw_content: str, prefer_class: str = None) -> str:
     """Robustly extracts python code from assistant responses, handling markdown fences and edge cases."""
-    blocks = re.findall(r"```(?:python)?\s*\n(.*?)```", raw_content, re.DOTALL | re.IGNORECASE)
-    code = ""
-    if blocks:
-        if prefer_class:
-            filtered = [b for b in blocks if prefer_class in b]
-            code = max(filtered, key=len).strip() if filtered else max(blocks, key=len).strip()
-        else:
-            code = max(blocks, key=len).strip()
-    else:
-        m = re.search(r"```(?:python)?\s*\n(.*)", raw_content, re.DOTALL | re.IGNORECASE)
-        code = m.group(1).strip() if m else raw_content.strip()
-        code = re.sub(r"```\s*$", "", code).strip()
+    fence_pattern = r"```(?:python|python3|py)?\s*\n(.*?)```"
+    blocks = re.findall(fence_pattern, raw_content, re.DOTALL | re.IGNORECASE)
 
-    return code
+    # Check for unclosed block at end of response (e.g. truncated generation)
+    unclosed_match = re.search(r"```(?:python|python3|py)?\s*\n((?:(?!```).)*)$", raw_content, re.DOTALL | re.IGNORECASE)
+    unclosed_code = unclosed_match.group(1).strip() if unclosed_match else ""
+    if unclosed_code:
+        unclosed_code = re.sub(r"```\s*$", "", unclosed_code).strip()
+
+    all_blocks = list(blocks)
+    if unclosed_code and unclosed_code not in all_blocks:
+        all_blocks.append(unclosed_code)
+
+    if prefer_class:
+        pref_blocks = [b.strip() for b in all_blocks if prefer_class in b]
+        if pref_blocks:
+            return max(pref_blocks, key=len)
+        if prefer_class in unclosed_code:
+            return unclosed_code
+        if prefer_class not in raw_content:
+            return ""
+
+    if blocks:
+        return max(blocks, key=len).strip()
+    if unclosed_code:
+        return unclosed_code
+
+    if any(k in raw_content for k in ("def ", "class ", "import ", "return ")):
+        code = raw_content.strip()
+        code = re.sub(r"```\s*$", "", code).strip()
+        return code
+
+    return ""
+
+
+def assemble_python_script(code: str, preamble: str = "", harness: str = "") -> str:
+    """
+    Assembles model-generated code with an optional import preamble and verification harness.
+    Guarantees that any 'from __future__ import ...' statements appear at the very top of the
+    final script to satisfy Python syntax requirements.
+    """
+    future_imports = []
+
+    def strip_future(text: str) -> str:
+        lines = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("from __future__ import"):
+                if stripped not in future_imports:
+                    future_imports.append(stripped)
+            else:
+                lines.append(line)
+        return "\n".join(lines)
+
+    clean_preamble = strip_future(preamble).strip()
+    clean_code = strip_future(code).strip()
+    clean_harness = strip_future(harness).strip()
+
+    sections = []
+    if future_imports:
+        sections.append("\n".join(future_imports))
+    if clean_preamble:
+        sections.append(clean_preamble)
+    if clean_code:
+        sections.append(clean_code)
+    if clean_harness:
+        sections.append(clean_harness)
+
+    return "\n\n".join(sections)
+

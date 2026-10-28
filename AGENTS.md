@@ -7,14 +7,14 @@ Guidance for AI coding agents (and humans) working in this repository.
 **Zero external dependencies.** The entire suite runs on the Python 3.8+
 standard library (`urllib`, `json`, `threading`, `concurrent.futures`,
 `socket`, `subprocess`). Do **not** add a runtime dependency. Dev-only tooling
-(ruff, mypy, towncrier, pytest) lives in the optional `dev` extra and is never
+(ruff, mypy, pytest) lives in the optional `dev` extra and is never
 imported by the runtime.
 
 ## Layout
 
 | File | Role |
 |------|------|
-| `eval.py` | Main orchestrator: 22 endpoint tests + scoring + CLI |
+| `eval.py` | Main orchestrator: 19 endpoint tests + scoring + CLI |
 | `compare.py` | Head-to-head / live-arena comparison of two endpoints |
 | `judge_eval.py` | LLM-judge code-quality evaluation |
 | `client.py` | Shared OpenAI-compatible HTTP client + retry + formatting |
@@ -61,5 +61,4 @@ the shared modules.
   API keys). Never commit result dumps.
 - `config.json` is gitignored (may hold API keys). `config.json.example` is the
   committed template.
-- Changelog: add a fragment to `changelog.d/` (see its README) instead of
-  editing `CHANGELOG.md` directly.
+- Changelog: document notable changes directly in `CHANGELOG.md`.

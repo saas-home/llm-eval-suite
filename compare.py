@@ -27,19 +27,20 @@ import threading
 import re
 import env_loader
 
-from client import LLMClient
-
-
-# ANSI Color & Formatting Constants
-NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
-CYAN = "" if NO_COLOR else "\033[96m"
-GREEN = "" if NO_COLOR else "\033[92m"
-YELLOW = "" if NO_COLOR else "\033[93m"
-RED = "" if NO_COLOR else "\033[91m"
-MAGENTA = "" if NO_COLOR else "\033[95m"
-BOLD = "" if NO_COLOR else "\033[1m"
-DIM = "" if NO_COLOR else "\033[2m"
-RESET = "" if NO_COLOR else "\033[0m"
+from client import (
+    LLMClient,
+    normalize_endpoint,
+    NO_COLOR,
+    BOLD,
+    DIM,
+    GREEN,
+    YELLOW,
+    RED,
+    CYAN,
+    MAGENTA,
+    RESET,
+    CLEAR_LINE,
+)
 
 
 BENCHMARK_TASKS = [
@@ -395,15 +396,9 @@ def discover_model(endpoint: str, api_key: str = "", specified_model: str = None
         return specified_model
     try:
         client = LLMClient(endpoint=endpoint, api_key=api_key)
-        models = client.fetch_models()
-        if models:
-            m0 = models[0]
-            m_id = m0.get("id") or m0.get("name")
-            if m_id:
-                return m_id
+        return client.discover_model(fallback=specified_model or "default")
     except Exception:
-        pass
-    return specified_model or "default"
+        return specified_model or "default"
 
 
 def evaluate_arena_task(task_id: str, full_output: str) -> dict:
@@ -726,7 +721,13 @@ def _stream_worker(endpoint: str, model: str, api_key: str, task: dict, state: d
                     break
 
                 delta = choices[0].get("delta", {})
-                text_piece = delta.get("content") or delta.get("reasoning_content") or ""
+                text_piece = (
+                    delta.get("content")
+                    or delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                    or delta.get("thought")
+                    or ""
+                )
                 if text_piece:
                     now = time.perf_counter()
                     if state["t_first"] is None:
@@ -876,7 +877,7 @@ def run_live_arena(
                 s2_str = f"M2: ERROR"
 
             if sys.stdout.isatty():
-                sys.stdout.write(f"\r  {CYAN}{s1_str:<42}{RESET} ⚔️   {MAGENTA}{s2_str:<42}{RESET}\033[K")
+                sys.stdout.write(f"\r  {CYAN}{s1_str:<42}{RESET} ⚔️   {MAGENTA}{s2_str:<42}{RESET}{CLEAR_LINE}")
                 sys.stdout.flush()
             else:
                 if now - last_non_tty_print >= 2.5:
@@ -887,7 +888,7 @@ def run_live_arena(
         t2.join()
 
         if sys.stdout.isatty():
-            sys.stdout.write("\r\033[K")
+            sys.stdout.write(f"\r{CLEAR_LINE}")
             sys.stdout.flush()
 
         # Evaluate outputs
@@ -1297,40 +1298,25 @@ def main():
 
     # Route 1: Offline Report Comparison
     if reports:
-        from eval import compare_benchmark_reports
+        from reporting import compare_benchmark_reports
         compare_benchmark_reports(reports, output_markdown=args.out if args.out and args.out.endswith(".md") else None)
 
     # Route 2: Native Arena Mode (Live Concurrent Comparison)
     elif args.live or (args.endpoint1 and args.endpoint2):
         ep1 = args.endpoint1 or cfg.get("endpoint1") or cfg.get("endpoint") or os.getenv("ENDPOINT1") or args.url
         ep2 = args.endpoint2 or cfg.get("endpoint2") or os.getenv("ENDPOINT2")
-        m1 = args.model1 or cfg.get("model1") or cfg.get("model") or os.getenv("MODEL1") or args.model
-        m2 = args.model2 or cfg.get("model2") or os.getenv("MODEL2")
-        k1 = args.api_key1 or cfg.get("api_key1") or cfg.get("api_key") or os.getenv("API_KEY1") or args.api_key or ""
-        k2 = args.api_key2 or cfg.get("api_key2") or os.getenv("API_KEY2") or ""
+
+        ep1_matched = normalize_endpoint(ep1) in (normalize_endpoint(cfg.get("endpoint1")), normalize_endpoint(cfg.get("endpoint")))
+        ep2_matched = normalize_endpoint(ep2) == normalize_endpoint(cfg.get("endpoint2"))
+
+        m1 = args.model1 or (cfg.get("model1") or cfg.get("model") if ep1_matched else None) or os.getenv("MODEL1") or args.model
+        m2 = args.model2 or (cfg.get("model2") if ep2_matched else None) or os.getenv("MODEL2")
+        k1 = args.api_key1 or (cfg.get("api_key1") or cfg.get("api_key") if ep1_matched else None) or os.getenv("API_KEY1") or args.api_key or ""
+        k2 = args.api_key2 or (cfg.get("api_key2") if ep2_matched else None) or os.getenv("API_KEY2") or ""
 
         if not ep1 or not ep2:
             print(f"{RED}Error: Arena Mode requires both endpoint1 and endpoint2.{RESET}")
             sys.exit(1)
-
-        config_changed = (
-            ep1 != cfg.get("endpoint1") or
-            ep2 != cfg.get("endpoint2") or
-            m1 != cfg.get("model1") or
-            m2 != cfg.get("model2")
-        )
-
-        if config_changed or not loaded_from_file:
-            if sys.stdin.isatty():
-                ans = input(f"\nSave Arena server configuration (Server 1 & Server 2) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
-                if ans in ("y", "yes"):
-                    saved_p = env_loader.save_config(
-                        endpoint=ep1, model=m1, api_key=k1,
-                        endpoint2=ep2, model2=m2, api_key2=k2,
-                        config_file=config_path
-                    )
-                    if saved_p:
-                        print(f"{GREEN}Arena configuration saved to {saved_p}!{RESET}")
 
         run_live_arena(
             endpoint1=ep1,
@@ -1349,8 +1335,9 @@ def main():
                   f"Use --live (with --endpoint1/--endpoint2) for side-by-side comparison.{RESET}")
         out_file = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "compare_benchmark.json")
         target_url = args.url if args.url != default_url else (cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or default_url)
-        target_model = args.model if args.model != "default" else (cfg.get("model") or os.getenv("OPENAI_MODEL") or "default")
-        target_key = args.api_key if args.api_key != "" else (cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or "")
+        ep_matched = normalize_endpoint(target_url) in (normalize_endpoint(cfg.get("endpoint")), normalize_endpoint(cfg.get("endpoint1")))
+        target_model = args.model if args.model != "default" else ((cfg.get("model") if ep_matched else None) or os.getenv("OPENAI_MODEL") or "default")
+        target_key = args.api_key if args.api_key != "" else ((cfg.get("api_key") if ep_matched else "") or os.getenv("OPENAI_API_KEY") or "")
         if target_model == "default":
             target_model = discover_model(target_url, target_key, None)
             if target_model == "default":

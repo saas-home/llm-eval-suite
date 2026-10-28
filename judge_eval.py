@@ -21,20 +21,16 @@ import urllib.error
 import argparse
 import env_loader
 
-from client import LLMClient
+from client import LLMClient, extract_python_code
 
 
 def discover_model_safe(endpoint: str, api_key: str) -> str:
     """Best-effort model discovery; returns 'default' if unavailable."""
     try:
         client = LLMClient(endpoint=endpoint, api_key=api_key)
-        models = client.fetch_models()
-        if models:
-            m0 = models[0]
-            return m0.get("id") or m0.get("name") or "default"
+        return client.discover_model(fallback="default")
     except Exception:
-        pass
-    return "default"
+        return "default"
 
 HARD_BENCHMARK_TASKS = [
     {
@@ -191,9 +187,7 @@ def send_chat_completion_robust(endpoint: str, model: str, api_key: str, message
 
 def test_code_syntax(code_text: str) -> tuple:
     """Verifies if generated Python code is syntactically valid (AST compilation check)."""
-    blocks = re.findall(r'```python(.*?)```', code_text, re.DOTALL)
-    target_code = max(blocks, key=len) if blocks else code_text
-
+    target_code = extract_python_code(code_text)
     try:
         ast.parse(target_code)
         return True, "Valid Python Syntax."

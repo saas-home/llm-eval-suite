@@ -57,7 +57,6 @@ dev = [
     "mypy>=1.15.0",
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
-    "towncrier>=24.8.0",
 ]
 
 [tool.setuptools]
@@ -93,38 +92,3 @@ omit = ["tests/*", "benchmarks/*"]
 
 [tool.coverage.report]
 show_missing = true
-
-# towncrier: CHANGELOG.md is generated from fragments in changelog.d/ so two
-# branches never edit the same changelog lines and never conflict.
-[tool.towncrier]
-package = "llm-eval-suite"
-directory = "changelog.d"
-filename = "CHANGELOG.md"
-start_string = "<!-- towncrier release notes start -->\n"
-title_format = "## [{version}] — {project_date}"
-wrap = false
-
-[[tool.towncrier.type]]
-directory = "added"
-name = "Added"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "changed"
-name = "Changed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "fixed"
-name = "Fixed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "removed"
-name = "Removed"
-showcontent = true
-
-[[tool.towncrier.type]]
-directory = "security"
-name = "Security"
-showcontent = true

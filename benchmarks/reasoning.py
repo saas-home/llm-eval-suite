@@ -263,7 +263,13 @@ def execute_stream(endpoint: str, model: str, task: dict, max_tokens: int, tempe
                 choices = chunk.get("choices", [])
                 if choices:
                     delta = choices[0].get("delta", {})
-                    content_piece = delta.get("content") or delta.get("reasoning_content") or ""
+                    content_piece = (
+                        delta.get("content")
+                        or delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                        or ""
+                    )
                     if content_piece:
                         now = time.perf_counter()
                         if t_first is None:

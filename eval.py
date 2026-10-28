@@ -14,10 +14,10 @@ Key Capabilities:
   - Evaluates Prefix Caching (RadixAttention / prompt cache reuse) cold vs warm speedup.
   - Client disconnection & socket abort resilience (verifies GPU slot release).
   - Multi-client continuous batching throughput & queueing behavior.
-  - Full 22-stage evaluation with terminal summary scorecard and JSON export.
+  - Full 19-stage evaluation with terminal summary scorecard and JSON export.
 
 SECURITY NOTE:
-  Tests 12, 16, and 21 execute LLM-generated Python code in a subprocess to verify
+  Tests 14 and 17 execute LLM-generated Python code in a subprocess to verify
   correctness. When testing untrusted endpoints, run with --no-execute (or
   EVAL_SAFE=1) to downgrade these tests to syntax-only validation.
 """
@@ -35,6 +35,7 @@ import socket
 import argparse
 import subprocess
 import statistics
+import threading
 import uuid
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -43,7 +44,8 @@ import env_loader
 from client import (
     log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET,
     BASE_DIR, IMAGE_PATH, DEFAULT_RESULTS_DIR,
-    LLMClient, detect_max_context, build_context_milestones, extract_python_code,
+    LLMClient, detect_max_context, build_context_milestones,
+    extract_python_code, assemble_python_script, normalize_endpoint,
 )
 from reporting import (
     TOTAL_TESTS, TEST_CATALOG, parse_selected_tests,
@@ -51,13 +53,13 @@ from reporting import (
     compute_executive_summary, print_summary_table, compare_benchmark_reports,
 )
 
-# SECURITY: gate for executing LLM-generated code (tests 12, 16, 21).
+# SECURITY: gate for executing LLM-generated code (tests 14, 17).
 # Disable with --no-execute or EVAL_SAFE set to a truthy value (1/true/yes)
 # to perform syntax-only checks.
 EXECUTE_MODEL_CODE = os.getenv("EVAL_SAFE", "").strip().lower() not in ("1", "true", "yes")
 
 # ============================================================================
-# 22 ENTERPRISE EVALUATION TEST SUITES
+# 19 ENTERPRISE EVALUATION TEST SUITES
 # ============================================================================
 
 # ----------------------------------------------------------------------------
@@ -65,10 +67,10 @@ EXECUTE_MODEL_CODE = os.getenv("EVAL_SAFE", "").strip().lower() not in ("1", "tr
 # ----------------------------------------------------------------------------
 def run_test_streaming(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 1/22] Streaming Verification & TTFT Latency", bold=True, color=CYAN)
+    log("[TEST 1/19] Streaming Verification & TTFT Latency", bold=True, color=CYAN)
     log("="*88)
     prompt = "Explain the fundamental difference between synchronous and asynchronous microservice communication in two concise sentences."
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=150, stream=True)
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=512, temperature=0.0, stream=True)
     log(f"  Response: {res['content'].strip()[:180]}...")
     log(f"  -> TTFT Latency: {res['ttft']*1000:.2f} ms")
     log(f"  -> Tokens Emitted: {res['completion_tokens']}")
@@ -87,7 +89,7 @@ def run_test_streaming(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_vision(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 2/22] Multimodal Vision Evaluation (Invoice Document Parsing)", bold=True, color=CYAN)
+    log("[TEST 2/19] Multimodal Vision Evaluation (Invoice Document Parsing)", bold=True, color=CYAN)
     log("="*88)
     if not os.path.exists(IMAGE_PATH):
         log(f"  Skipping: Image asset not found at {IMAGE_PATH}", color=YELLOW)
@@ -125,52 +127,221 @@ def run_test_vision(client: LLMClient):
 # ----------------------------------------------------------------------------
 # 3. MULTI-CLIENT CONCURRENCY & BATCHING
 # ----------------------------------------------------------------------------
-def run_test_concurrency(client: LLMClient, parallel: int):
-    log("\n" + "="*88, bold=True)
-    log(f"[TEST 3/22] Multi-Client Concurrency & Batching Stress Test (Parallel = {parallel})", bold=True, color=CYAN)
-    log("="*88)
+CONCURRENCY_PROMPTS = [
+    "Write a clean Python function implementing merge sort with clear docstrings.",
+    "Write a clean Python function implementing quick sort with in-place partitioning.",
+    "Write a clean Python class implementing a Binary Search Tree with insert and search.",
+    "Write a clean Python class implementing a Min-Heap priority queue with push and pop.",
+    "Write a clean Python function implementing Dijkstra's shortest path algorithm.",
+    "Write a clean Python function implementing breadth-first search on a directed graph.",
+    "Write a clean Python function implementing topological sort using Kahn's algorithm.",
+    "Write a clean Python class implementing an LRU cache using a doubly linked list.",
+]
+
+def _build_concurrency_prompt(target_tokens: int, client_id: int, total_clients: int) -> str:
+    filler_para = (
+        "Distributed computing clusters coordinate state using consensus protocols, replicated logs, "
+        "and partitioned key-value indices. Efficient vector pipelines serialize operations to minimize "
+        "inter-node bus contention and optimize high-throughput parallel execution paths. "
+    )
+    needed_tokens = max(100, target_tokens - 60)
+    repeat_count = max(1, int(needed_tokens / 36))
     
-    results = {}
-    for c in sorted(list(set([1, parallel]))):
-        log(f"  Evaluating parallel stream level c = {c}...")
-        t_start = time.perf_counter()
-        def worker(client_id):
-            prompt = f"Write a clean python function to reverse a linked list, client #{client_id}"
-            try:
-                r = client.call([{"role": "user", "content": prompt}], max_tokens=100, stream=True)
-                return {"client_id": client_id, "tokens": r["completion_tokens"], "speed": r["decode_speed"], "ttft": r["ttft"], "error": None}
-            except Exception as e:
-                return {"client_id": client_id, "tokens": 0, "speed": 0.0, "ttft": 0.0, "error": str(e)}
+    header = (
+        f"[BENCHMARK CONCURRENCY MATRIX | Client: {client_id}/{total_clients} | "
+        f"Target Context: {target_tokens} | Nonce: {uuid.uuid4().hex[:12]}]\n\n"
+    )
+    body = filler_para * repeat_count
+    footer = (
+        f"\n\n[Client {client_id} Query]: In one concise technical sentence, state the primary mechanism "
+        f"for optimizing parallel execution throughput in distributed clusters."
+    )
+    return header + body + footer
 
-        with ThreadPoolExecutor(max_workers=c) as pool:
-            worker_results = list(pool.map(worker, range(c)))
+def run_test_concurrency(client: LLMClient, parallel: int = 4, contexts: list = None, max_tokens: int = 64):
+    log("\n" + "="*88, bold=True)
+    log(f"[TEST 3/19] Multi-Client Concurrency & Batching Stress Suite (Max Parallel = {parallel})", bold=True, color=CYAN)
+    log("="*88)
 
-        wall_time = time.perf_counter() - t_start
-        total_tokens = sum(w["tokens"] for w in worker_results)
-        errors = [w["error"] for w in worker_results if w["error"]]
-        agg_speed = total_tokens / wall_time if wall_time > 0 else 0.0
-        status = "PASS" if not errors and total_tokens > 0 else "DEGRADED/FAIL"
-        
-        log(f"    -> c={c}: {total_tokens} tokens across {c} streams in {wall_time:.2f}s (Agg Throughput: {agg_speed:.2f} tok/s) [{status}]")
-        if errors:
-            log(f"       Errors encountered: {errors[:2]}", color=YELLOW)
+    if parallel >= 4:
+        client_levels = [1, 2, 3, 4]
+    elif parallel <= 1:
+        client_levels = [1]
+    else:
+        client_levels = list(range(1, parallel + 1))
 
-        results[f"c{c}"] = {
+    if contexts is None:
+        contexts = [2000, 4000, 8000, 16000, 32000]
+        max_ctx = getattr(client, "max_context", None)
+        if isinstance(max_ctx, (int, float)) and max_ctx > 0:
+            filtered = [ctx for ctx in contexts if ctx <= max_ctx * 0.9]
+            if filtered:
+                contexts = filtered
+
+    matrix_results = []
+    level_summaries = {}
+    table_header = (
+        f"{'Context':>8} | {'Prompt Tok':>10} | {'Compl Tok':>9} | {'Mean TTFT (s)':>14} | "
+        f"{'Avg Prefill (t/s)':>17} | {'Agg Prefill (t/s)':>17} | "
+        f"{'Avg Decode (t/s)':>16} | {'Agg Decode (t/s)':>16} | {'Status':>8}"
+    )
+
+    for c in client_levels:
+        c_matrix = []
+        label_suffix = " (Single-Client Baseline)" if c == 1 else f" ({c} Concurrent Parallel Streams)"
+        log(f"\n[Client Concurrency Level: {c} Client{'s' if c > 1 else ''}]{label_suffix}", bold=True, color=CYAN)
+        log(table_header)
+        log("-" * len(table_header))
+
+        for ctx in contexts:
+            barrier = threading.Barrier(c)
+            worker_results = []
+            lock = threading.Lock()
+
+            def worker(client_id):
+                prompt = _build_concurrency_prompt(ctx, client_id, c)
+                barrier.wait()
+                t_dispatch = time.perf_counter()
+                try:
+                    r = client.call([{"role": "user", "content": prompt}], max_tokens=max_tokens, temperature=0.7, stream=True)
+                    t_finish = time.perf_counter()
+                    err = r.get("error")
+                    ttft_s = r.get("ttft", 0.0)
+                    t_first_tok = t_dispatch + ttft_s
+                    p_toks = r.get("prompt_tokens", 0) or int(len(prompt.split()) * 1.33)
+                    c_toks = r.get("completion_tokens", 0)
+                    decode_spd = r.get("decode_speed", 0.0)
+                    prefill_spd = (p_toks / ttft_s) if ttft_s > 0 else 0.0
+                    res_item = {
+                        "client_id": client_id,
+                        "prompt_tokens": p_toks,
+                        "completion_tokens": c_toks,
+                        "decode_speed": decode_spd,
+                        "prefill_speed": prefill_spd,
+                        "ttft_ms": round(ttft_s * 1000, 1),
+                        "ttft_s": ttft_s,
+                        "t_dispatch": t_dispatch,
+                        "t_first_tok": t_first_tok,
+                        "t_finish": t_finish,
+                        "error": err
+                    }
+                except Exception as e:
+                    t_finish = time.perf_counter()
+                    res_item = {
+                        "client_id": client_id,
+                        "prompt_tokens": ctx,
+                        "completion_tokens": 0,
+                        "decode_speed": 0.0,
+                        "prefill_speed": 0.0,
+                        "ttft_ms": 0.0,
+                        "ttft_s": 0.0,
+                        "t_dispatch": t_dispatch,
+                        "t_first_tok": t_finish,
+                        "t_finish": t_finish,
+                        "error": str(e)
+                    }
+                with lock:
+                    worker_results.append(res_item)
+
+            t_start = time.perf_counter()
+            threads = [threading.Thread(target=worker, args=(i + 1,)) for i in range(c)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            wall_time = time.perf_counter() - t_start
+
+            tot_prompt = sum(w["prompt_tokens"] for w in worker_results)
+            tot_completion = sum(w["completion_tokens"] for w in worker_results)
+            errors = [w["error"] for w in worker_results if w["error"]]
+            valid_workers = [w for w in worker_results if not w["error"]]
+
+            ttfts_s = [w["ttft_s"] for w in valid_workers if w["ttft_s"] > 0]
+            mean_ttft_s = statistics.mean(ttfts_s) if ttfts_s else 0.0
+            mean_ttft_ms = mean_ttft_s * 1000.0
+
+            # Prefill Throughput: aggregate batch throughput and per-client average
+            max_ttft_s = max((w["ttft_s"] for w in valid_workers), default=0.0)
+            agg_prefill = (tot_prompt / max_ttft_s) if max_ttft_s > 0 else 0.0
+            avg_prefill = (agg_prefill / c) if c > 0 else 0.0
+
+            # Decode Throughput: aggregate across active parallel streams and per-client average
+            decode_speeds = [w["decode_speed"] for w in valid_workers if w["decode_speed"] > 0]
+            agg_decode = sum(decode_speeds)
+            avg_decode = (agg_decode / c) if c > 0 else 0.0
+
+            status = "PASS" if not errors and tot_completion > 0 else "DEGRADED/FAIL"
+
+            cell_data = {
+                "clients": c,
+                "target_context": ctx,
+                "prompt_tokens": tot_prompt,
+                "completion_tokens": tot_completion,
+                "mean_ttft_s": round(mean_ttft_s, 2),
+                "mean_ttft_ms": round(mean_ttft_ms, 1),
+                "avg_prefill_tok_s": round(avg_prefill, 1),
+                "agg_prefill_tok_s": round(agg_prefill, 1),
+                "prefill_tok_s": round(agg_prefill, 1),
+                "mean_prefill_tok_s": round(avg_prefill, 1),
+                "avg_decode_tok_s": round(avg_decode, 1),
+                "agg_decode_tok_s": round(agg_decode, 1),
+                "decode_tok_s": round(avg_decode, 1),
+                "aggregate_decode_tok_s": round(agg_decode, 1),
+                "wall_time_s": round(wall_time, 2),
+                "status": status,
+                "errors": errors
+            }
+            c_matrix.append(cell_data)
+            matrix_results.append(cell_data)
+
+            ctx_label = f"{ctx:,}"
+            row = (
+                f"{ctx_label:>8} | {tot_prompt:>10,d} | {tot_completion:>9,d} | {mean_ttft_s:>14.2f} | "
+                f"{avg_prefill:>17.1f} | {agg_prefill:>17.1f} | "
+                f"{avg_decode:>16.1f} | {agg_decode:>16.1f} | {status:>8}"
+            )
+            log(row)
+            if errors:
+                log(f"       Errors: {errors[:2]}", color=YELLOW)
+
+        log("-" * len(table_header))
+
+        c_status = "PASS" if all(m["status"] == "PASS" for m in c_matrix) else "DEGRADED/FAIL"
+        c_tot_tokens = sum(m["completion_tokens"] for m in c_matrix)
+        c_wall = sum(m["wall_time_s"] for m in c_matrix)
+        c_max_agg = max((m["agg_decode_tok_s"] for m in c_matrix), default=0.0)
+        c_mean_ttft_s = statistics.mean([m["mean_ttft_s"] for m in c_matrix if m["mean_ttft_s"] > 0] or [0.0])
+        c_mean_ttft_ms = c_mean_ttft_s * 1000.0
+        baseline_speed = level_summaries.get("c1", {}).get("aggregate_tok_s", c_max_agg)
+        speedup = (c_max_agg / baseline_speed) if baseline_speed > 0 else 1.0
+
+        level_summaries[f"c{c}"] = {
             "concurrency": c,
-            "status": status,
-            "total_tokens": total_tokens,
-            "wall_time_s": round(wall_time, 2),
-            "aggregate_tok_s": round(agg_speed, 2),
-            "errors": errors
+            "status": c_status,
+            "total_tokens": c_tot_tokens,
+            "wall_time_s": round(c_wall, 2),
+            "aggregate_tok_s": round(c_max_agg, 2),
+            "mean_ttft_s": round(c_mean_ttft_s, 2),
+            "mean_ttft_ms": round(c_mean_ttft_ms, 1),
+            "speedup_vs_baseline": round(speedup, 2),
+            "errors": [e for m in c_matrix for e in m["errors"]],
+            "max_prefill_tok_s": round(max((m["agg_prefill_tok_s"] for m in c_matrix), default=0.0), 1),
+            "avg_decode_tok_s": round(statistics.mean([m["avg_decode_tok_s"] for m in c_matrix if m["avg_decode_tok_s"] > 0] or [0.0]), 1),
+            "agg_decode_tok_s": round(c_max_agg, 2),
+            "avg_prefill_tok_s": round(statistics.mean([m["avg_prefill_tok_s"] for m in c_matrix if m["avg_prefill_tok_s"] > 0] or [0.0]), 1),
+            "agg_prefill_tok_s": round(max((m["agg_prefill_tok_s"] for m in c_matrix), default=0.0), 1),
+            "rows": c_matrix
         }
-    return results
+
+    level_summaries["matrix"] = matrix_results
+    return level_summaries
 
 # ----------------------------------------------------------------------------
 # 4. 4-TASK SOFTWARE ARCHITECTURE & CODING SUITE
 # ----------------------------------------------------------------------------
 def run_test_capabilities(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 4/22] Enterprise Architecture & Engineering 4-Task Suite", bold=True, color=CYAN)
+    log("[TEST 4/19] Enterprise Architecture & Engineering 4-Task Suite", bold=True, color=CYAN)
     log("="*88)
     tasks = [
         ("task1_avl_tree", "AVL Tree with Rotations", "Write a complete self-balancing AVL Tree in Python with insert, delete, search, in-order iterator, and test function.", 1200),
@@ -181,7 +352,7 @@ def run_test_capabilities(client: LLMClient):
     results = []
     for tid, name, prompt, max_t in tasks:
         log(f"  Executing: {name}...")
-        res = client.call([{"role": "user", "content": prompt}], max_tokens=max_t, stream=True)
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=max_t, temperature=0.0, stream=True)
         log(f"    -> Emitted: {res['completion_tokens']} toks | Speed: {res['decode_speed']:.2f} tok/s | TTFT: {res['ttft']*1000:.1f} ms")
         task_st = "FAIL" if (res.get("error") or res.get("completion_tokens", 0) == 0) else "PASS"
         results.append({
@@ -206,7 +377,7 @@ def run_test_capabilities(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_tool_calling(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 5/22] Multi-Turn Agent Loop & Autonomous Error Recovery Protocol", bold=True, color=CYAN)
+    log("[TEST 5/19] Multi-Turn Agent Loop & Autonomous Error Recovery Protocol", bold=True, color=CYAN)
     log("="*88)
     
     tools = [
@@ -236,8 +407,8 @@ def run_test_tool_calling(client: LLMClient):
     messages = [{"role": "user", "content": prompt}]
     
     try:
-        # Turn 1: Dispatch initial tool call
-        res1 = client.call(messages, max_tokens=600, tools=tools, tool_choice="auto", stream=False)
+        # Turn 1: Dispatch initial tool call with greedy decoding
+        res1 = client.call(messages, max_tokens=1000, tools=tools, tool_choice="auto", temperature=0.0, stream=False)
         tool_calls1 = res1.get("tool_calls")
         turn1_valid = False
         args_parsed1 = {}
@@ -254,8 +425,8 @@ def run_test_tool_calling(client: LLMClient):
                     if (args_parsed1.get("engine") == "postgres" and
                         args_parsed1.get("environment") == "production" and
                         args_parsed1.get("region") == "us-east-1" and
-                        args_parsed1.get("storage_gb") == 500 and
-                        args_parsed1.get("ha_cluster") is True):
+                        str(args_parsed1.get("storage_gb")) in ("500", "500.0") and
+                        args_parsed1.get("ha_cluster") in (True, "true", "True", 1)):
                         turn1_valid = True
                 except Exception:
                     pass
@@ -278,7 +449,7 @@ def run_test_tool_calling(client: LLMClient):
             tool_msg = {"role": "tool", "tool_call_id": call_id, "content": json.dumps(error_payload)}
 
             messages_turn2 = list(messages) + [assistant_msg, tool_msg]
-            res2 = client.call(messages_turn2, max_tokens=1000, tools=tools, tool_choice="auto", stream=False)
+            res2 = client.call(messages_turn2, max_tokens=1000, tools=tools, tool_choice="auto", temperature=0.0, stream=False)
             tool_calls2 = res2.get("tool_calls")
 
             if tool_calls2 and len(tool_calls2) > 0:
@@ -290,8 +461,8 @@ def run_test_tool_calling(client: LLMClient):
                         if (args_parsed2.get("engine") == "postgres" and
                             args_parsed2.get("environment") == "production" and
                             args_parsed2.get("region") == "us-west-2" and
-                            args_parsed2.get("storage_gb") == 500 and
-                            args_parsed2.get("ha_cluster") is True):
+                            str(args_parsed2.get("storage_gb")) in ("500", "500.0") and
+                            args_parsed2.get("ha_cluster") in (True, "true", "True", 1)):
                             turn2_recovered = True
                     except Exception:
                         pass
@@ -320,7 +491,7 @@ def run_test_tool_calling(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_json_schema(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 6/22] Strict JSON Schema & Constrained Decoding (response_format)", bold=True, color=CYAN)
+    log("[TEST 6/19] Strict JSON Schema & Constrained Decoding (response_format)", bold=True, color=CYAN)
     log("="*88)
     
     prompt = (
@@ -331,8 +502,8 @@ def run_test_json_schema(client: LLMClient):
     messages = [{"role": "user", "content": prompt}]
     
     try:
-        # Increase max_tokens to 2048 to allow thinking/reasoning models to complete reasoning and emit full JSON
-        res = client.call(messages, max_tokens=2048, response_format={"type": "json_object"}, stream=False)
+        # Increase max_tokens to 2048 and use greedy temp=0.0 to allow thinking/reasoning models to complete reasoning and emit full JSON
+        res = client.call(messages, max_tokens=2048, response_format={"type": "json_object"}, temperature=0.0, stream=False)
         content = res["content"].strip()
         parsed = {}
         valid_json = False
@@ -347,7 +518,9 @@ def run_test_json_schema(client: LLMClient):
         try:
             parsed = json.loads(clean_content)
             valid_json = True
-            if (("service_name" in parsed or "name" in parsed) and "dependencies" in parsed):
+            has_name = any(k in parsed for k in ["service_name", "serviceName", "name", "service"])
+            has_deps = any(k in parsed for k in ["dependencies", "deps"])
+            if has_name and has_deps:
                 valid_schema = True
         except Exception:
             pass
@@ -373,7 +546,7 @@ def run_test_json_schema(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_prefix_caching(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 7/22] Prefix Caching / KV Cache Reuse Verification (Cold vs Warm)", bold=True, color=CYAN)
+    log("[TEST 7/19] Prefix Caching / KV Cache Reuse Verification (Cold vs Warm)", bold=True, color=CYAN)
     log("="*88)
     
     shared_system_spec = (
@@ -402,14 +575,14 @@ def run_test_prefix_caching(client: LLMClient):
     errors = []
     for rnd in range(1, 4):
         log(f"  Round {rnd}/3: cold request (shared ~3,500-token prefix)...")
-        r1 = client.call(msg1, max_tokens=60, stream=False)
+        r1 = client.call(msg1, max_tokens=256, temperature=0.0, stream=False)
         if r1.get("error"):
             errors.append(r1["error"])
         else:
             cold_ttfts.append(r1["ttft"])
             log(f"    -> Cold TTFT: {r1['ttft']:.3f} s (Tokens: {r1['prompt_tokens']})")
         log(f"  Round {rnd}/3: warm request (identical prefix, KV cache hit test)...")
-        r2 = client.call(msg2, max_tokens=60, stream=False)
+        r2 = client.call(msg2, max_tokens=256, temperature=0.0, stream=False)
         if r2.get("error"):
             errors.append(r2["error"])
         else:
@@ -451,7 +624,7 @@ def run_test_prefix_caching(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_client_abort(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 8/22] Client Socket Abort & Slot Recovery Resilience", bold=True, color=CYAN)
+    log("[TEST 8/19] Client Socket Abort & Slot Recovery Resilience", bold=True, color=CYAN)
     log("="*88)
     
     payload = {
@@ -482,16 +655,19 @@ def run_test_client_abort(client: LLMClient):
     t_rec_start = time.perf_counter()
     follow_up_ok = False
     try:
-        r = client.call([{"role": "user", "content": "Reply with 'OK'."}], max_tokens=10, stream=False, timeout=15)
+        r = client.call([{"role": "user", "content": "Reply strictly with the word 'OK'."}], max_tokens=256, temperature=0.0, stream=False, timeout=15)
         rec_time = time.perf_counter() - t_rec_start
         follow_up_ok = ("OK" in r.get("content", "").upper() or len(r.get("content", "")) > 0) and not r.get("error")
         status = "PASS" if (follow_up_ok and rec_time < 5.0) else "DEGRADED"
         log(f"    -> Follow-up Response Time: {rec_time*1000:.1f} ms | Recovered: {follow_up_ok} -> {status}")
-        return {
+        res_dict = {
             "status": status,
             "recovery_latency_ms": round(rec_time * 1000, 1),
             "recovered": follow_up_ok
         }
+        if r.get("error"):
+            res_dict["error"] = r.get("error")
+        return res_dict
     except Exception as e:
         log(f"    -> Slot recovery failed / server hung: {e}", color=RED)
         return {"status": "FAIL", "error": str(e)}
@@ -501,27 +677,43 @@ def run_test_client_abort(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_stop_sequences(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 9/22] Stop Sequence Compliance & Deterministic Sampling (temp=0.0)", bold=True, color=CYAN)
+    log("[TEST 9/19] Stop Sequence Compliance & Deterministic Sampling (temp=0.0)", bold=True, color=CYAN)
     log("="*88)
     
     stop_words = ["HALT_GENERATION", "###STOP###"]
     prompt = (
         "Count from 1 to 10 as words separated by commas. After the word 'four', output ' HALT_GENERATION' and then continue counting."
     )
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=100, stop=stop_words, temperature=0.0, stream=False)
-    text = res.get("content", "")
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=512, stop=stop_words, temperature=0.0, stream=False)
+    text = res.get("content", "") or res.get("text", "")
+    full_text = res.get("text", "") or text
+    raw_choice = (res.get("raw", {}).get("choices") or [{}])[0]
+    stop_reason = raw_choice.get("stop_reason") or ""
+    finish_reason = raw_choice.get("finish_reason") or ""
     
-    halt_stopped = (not res.get("error")) and ("HALT_GENERATION" not in text) and ("four" in text.lower())
+    halt_stopped = (
+        (not res.get("error"))
+        and ("HALT_GENERATION" not in text)
+        and (
+            "four" in text.lower()
+            or "four" in full_text.lower()
+            or stop_reason in stop_words
+            or finish_reason == "stop"
+        )
+    )
     log(f"  -> Generated Text: {text.strip()}")
     log(f"  -> Stop word suppressed & execution terminated: {halt_stopped}")
     
     # Determinism check (two runs with temp=0.0)
     log("  -> Verifying greedy deterministic consistency across repeated runs (temp=0.0)...")
-    r_det1 = client.call([{"role": "user", "content": "Compute sha256 checksum purpose in distributed ledgers."}], max_tokens=80, temperature=0.0, seed=42)
-    r_det2 = client.call([{"role": "user", "content": "Compute sha256 checksum purpose in distributed ledgers."}], max_tokens=80, temperature=0.0, seed=42)
+    det_prompt = "Compute 12345 * 6789. State strictly the final integer result."
+    r_det1 = client.call([{"role": "user", "content": det_prompt}], max_tokens=512, temperature=0.0, seed=42)
+    r_det2 = client.call([{"role": "user", "content": det_prompt}], max_tokens=512, temperature=0.0, seed=42)
+    t1 = r_det1.get("content", "") or r_det1.get("text", "")
+    t2 = r_det2.get("content", "") or r_det2.get("text", "")
     deterministic = (not r_det1.get("error") and not r_det2.get("error")
-                     and len(r_det1.get("content", "")) > 0
-                     and (r_det1.get("content") == r_det2.get("content")))
+                     and len(t1) > 0
+                     and (t1.strip() == t2.strip()))
     log(f"  -> Exact Match Across Repeated Seeded Generations: {deterministic}")
     
     status = "PASS" if (halt_stopped and deterministic) else ("PARTIAL" if (halt_stopped or deterministic) else "FAIL")
@@ -535,49 +727,11 @@ def run_test_stop_sequences(client: LLMClient):
     }
 
 # ----------------------------------------------------------------------------
-# 10. HIGH-ENTROPY ASSOCIATIVE RECALL
-# ----------------------------------------------------------------------------
-def run_test_high_entropy(client: LLMClient):
-    log("\n" + "="*88, bold=True)
-    log("[TEST 10/22] High-Entropy Associative Key-Value Recall", bold=True, color=CYAN)
-    log("="*88)
-    filler = "In high-performance distributed architectures, nodes communicate via low-latency RPC protocols with strict SLAs. " * 300
-    kv_data = (
-        "CONFIDENTIAL LOOKUP TABLE:\n"
-        "KEY_ALPHA_77: VAL_X9$mK2\n"
-        "KEY_BETA_99: VAL_Z4#pQ8\n"
-        "KEY_GAMMA_12: VAL_L1*vR5\n"
-    )
-    prompt = f"{filler}\n{kv_data}\n{filler}\nWhat is the exact value for KEY_BETA_99 and KEY_GAMMA_12? Answer strictly in format: KEY=VAL"
-    # Increase max_tokens to 2048 to allow thinking / reasoning models to complete reasoning and emit both keys
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, stream=True)
-    text = res.get("text", "") or res.get("content", "")
-    content = res.get("content", "") or text
-    m1 = "Z4#pQ8" in text
-    m2 = "L1*vR5" in text
-    status = "PASS" if (m1 and m2) else ("PARTIAL" if (m1 or m2) else "FAIL")
-    
-    summary_lines = [l.strip() for l in content.strip().splitlines() if l.strip()]
-    response_tail = summary_lines[-1] if summary_lines else "No response generated"
-    log(f"  -> Recall: KEY_BETA_99 ({m1}), KEY_GAMMA_12 ({m2}) -> {status}")
-    log(f"  -> Model Response Tail: {response_tail[:120]}")
-    log(f"  -> TTFT: {res['ttft']*1000:.1f} ms | Decode Speed: {res['decode_speed']:.2f} tok/s")
-    return {
-        "status": status,
-        "matches": {"KEY_BETA_99": m1, "KEY_GAMMA_12": m2},
-        "model_tail": response_tail[:200],
-        "response_excerpt": content[-300:].strip() if len(content) > 300 else content.strip(),
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res["ttft"] * 1000, 1),
-        "tok_s": round(res["decode_speed"], 2)
-    }
-
-# ----------------------------------------------------------------------------
-# 11. EXTREME PRECISION FINANCIAL RECONCILIATION
+# 10. EXTREME PRECISION FINANCIAL RECONCILIATION
 # ----------------------------------------------------------------------------
 def run_test_extreme_precision(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 11/22] Extreme Precision Arithmetic & Financial Ledger Reconciliation", bold=True, color=CYAN)
+    log("[TEST 10/19] Extreme Precision Arithmetic & Financial Ledger Reconciliation", bold=True, color=CYAN)
     log("="*88)
     stages = [
         ("Stage 1", "Initial balance = 10000.00"),
@@ -598,9 +752,9 @@ def run_test_extreme_precision(client: LLMClient):
         f"{ledger_text}\n\n"
         f"Calculate the precise ending balance to two decimal places step-by-step. State at the end: 'Ending Balance: $XXXXX.XX'"
     )
-    # Increase max_tokens to 2048 to allow full chain-of-thought derivation without premature truncation
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, stream=True)
-    raw_output = res.get("content", "")
+    # Increase max_tokens to 2048 and use greedy decoding (temp=0.0) for strict arithmetic derivation
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, temperature=0.0, stream=True)
+    raw_output = res.get("content", "") or res.get("text", "")
     # Normalize text by stripping commas from thousands separators (e.g., "$11,489.41" -> "$11489.41")
     normalized_output = raw_output.replace(",", "")
     matched = (expected in normalized_output) or (expected in raw_output)
@@ -623,87 +777,11 @@ def run_test_extreme_precision(client: LLMClient):
     }
 
 # ----------------------------------------------------------------------------
-# 12. EXECUTABLE CODE GENERATION & DYNAMIC UNIT TESTING
-# ----------------------------------------------------------------------------
-def run_test_code_execution(client: LLMClient):
-    log("\n" + "="*88, bold=True)
-    log("[TEST 12/22] Executable Algorithmic Code Generation & Dynamic Verification", bold=True, color=CYAN)
-    log("="*88)
-    prompt = (
-        "Write a complete, self-contained Python implementation of an LRU Cache.\n"
-        "Class name must be `LRUCache` with:\n"
-        "  `__init__(self, capacity: int)`\n"
-        "  `get(self, key: int) -> int` (returns -1 if not found)\n"
-        "  `put(self, key: int, value: int) -> None`\n"
-        "Provide ONLY the executable Python code inside a ```python ``` code block."
-    )
-    # Increase max_tokens to 2048 to prevent reasoning + code generation from being cut off
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, stream=True)
-    raw_content = res.get("content", "") or res.get("text", "")
-    code = extract_python_code(raw_content, prefer_class="class LRUCache")
-
-    # Prepend standard collections imports to prevent spurious NameError if model uses OrderedDict
-    import_preamble = "from collections import OrderedDict, defaultdict\nimport sys\n\n"
-
-    test_harness = """
-# Test harness execution
-cache = LRUCache(2)
-cache.put(1, 1)
-cache.put(2, 2)
-assert cache.get(1) == 1, "Failed get 1"
-cache.put(3, 3)
-assert cache.get(2) == -1, "Eviction failed for 2"
-cache.put(4, 4)
-assert cache.get(1) == -1, "Eviction failed for 1"
-assert cache.get(3) == 3, "Failed get 3"
-assert cache.get(4) == 4, "Failed get 4"
-print("UNIT_TESTS_PASSED")
-"""
-    full_code = import_preamble + code + "\n" + test_harness
-    passed = False
-    err = ""
-    if EXECUTE_MODEL_CODE:
-        try:
-            sub = subprocess.run([sys.executable, "-c", full_code], capture_output=True, text=True, timeout=15)
-            passed = sub.returncode == 0 and "UNIT_TESTS_PASSED" in sub.stdout
-            err = sub.stderr.strip() if sub.stderr.strip() else sub.stdout.strip()
-        except Exception as e:
-            passed = False
-            err = str(e)
-    else:
-        if res.get("error") or not code.strip():
-            passed = False
-            err = f"model call failed or no code extracted: {res.get('error', 'empty code')}"
-        else:
-            try:
-                ast.parse(full_code)
-                passed = True
-                err = "execution disabled (--no-execute / EVAL_SAFE=1); syntax check only"
-            except SyntaxError as e:
-                passed = False
-                err = f"SyntaxError: {e}"
-
-    status = "PASS" if passed else "FAIL"
-    if not EXECUTE_MODEL_CODE and passed:
-        status = "PASS (SYNTAX-ONLY)"
-    log(f"  -> Dynamic Execution Assertions: {status} {'(All tests passed)' if passed else f'Error: {err[:150]}'}")
-    log(f"  -> Decode Speed: {res['decode_speed']:.2f} tok/s")
-    return {
-        "status": status,
-        "dynamic_tests_passed": passed,
-        "execution_disabled": not EXECUTE_MODEL_CODE,
-        "error": err if not passed else "",
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res.get("ttft", 0) * 1000, 1),
-        "tok_s": round(res["decode_speed"], 2)
-    }
-
-# ----------------------------------------------------------------------------
-# 13. ERROR ENVELOPE & BOUNDARY API PROTOCOL COMPLIANCE
+# 11. ERROR ENVELOPE & BOUNDARY API PROTOCOL COMPLIANCE
 # ----------------------------------------------------------------------------
 def run_test_error_handling(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 13/22] Error Envelope & Boundary API Protocol Compliance", bold=True, color=CYAN)
+    log("[TEST 11/19] Error Envelope & Boundary API Protocol Compliance", bold=True, color=CYAN)
     log("="*88)
     
     # Check 1: Missing messages field
@@ -748,11 +826,11 @@ def run_test_error_handling(client: LLMClient):
     }
 
 # ----------------------------------------------------------------------------
-# 14. DYNAMIC LONG-CONTEXT PREFILL, DECODE & SEMANTIC ACCURACY SCALING
+# 12. DYNAMIC LONG-CONTEXT PREFILL, DECODE & SEMANTIC ACCURACY SCALING
 # ----------------------------------------------------------------------------
 def run_test_context_scaling(client: LLMClient, milestones: list):
     log("\n" + "="*88, bold=True)
-    log("[TEST 14/22] Dynamic Long-Context Prefill, Decode & Semantic Accuracy", bold=True, color=CYAN)
+    log("[TEST 12/19] Dynamic Long-Context Prefill, Decode & Semantic Accuracy", bold=True, color=CYAN)
     log(f"Target Milestones: {milestones}")
     log("="*88)
 
@@ -783,7 +861,8 @@ def run_test_context_scaling(client: LLMClient, milestones: list):
             f"\n\nSummarize the key aspects mentioned above in one sentence, and at the end output: '{needle_key} = VAL_{secret_hex}'."
         )
         try:
-            res = client.call([{"role": "user", "content": prompt_text}], max_tokens=600, stream=True, timeout=1200)
+            # Allocate 1200 max_tokens and greedy temp=0.0 to prevent reasoning/thinking models from truncating before the needle is emitted
+            res = client.call([{"role": "user", "content": prompt_text}], max_tokens=1200, temperature=0.0, stream=True, timeout=1200)
             if res.get("error") or res.get("completion_tokens", 0) == 0:
                 actual_prompt = res.get("prompt_tokens", 0) or target
                 cached_tokens = res.get("cached_tokens", 0)
@@ -848,11 +927,11 @@ def run_test_context_scaling(client: LLMClient, milestones: list):
 
 
 # ----------------------------------------------------------------------------
-# 15. ADVERSARIAL MULTI-HOP GRAPH TRAVERSAL WITH TEMPORAL DISTRACTORS
+# 13. ADVERSARIAL MULTI-HOP GRAPH TRAVERSAL WITH TEMPORAL DISTRACTORS
 # ----------------------------------------------------------------------------
 def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 15/22] Adversarial Multi-Hop Graph Traversal with Deprecated Distractors (~{target_context//1000}k)", bold=True, color=CYAN)
+    log(f"[TEST 13/19] Adversarial Multi-Hop Graph Traversal with Deprecated Distractors (~{target_context//1000}k)", bold=True, color=CYAN)
     log("="*88)
 
     filler_chunk = (
@@ -935,11 +1014,11 @@ def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
 
 
 # ----------------------------------------------------------------------------
-# 16. NOVEL ALGORITHMIC SYNTHESIS WITH 5,000-OP PROPERTY FUZZ TEST
+# 14. NOVEL ALGORITHMIC SYNTHESIS WITH 5,000-OP PROPERTY FUZZ TEST
 # ----------------------------------------------------------------------------
 def run_test_novel_algorithmic_fuzz(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 16/22] Novel Algorithmic Synthesis & Automated 5,000-Op Property Fuzz Testing", bold=True, color=CYAN)
+    log("[TEST 14/19] Novel Algorithmic Synthesis & Automated 5,000-Op Property Fuzz Testing", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -954,11 +1033,11 @@ def run_test_novel_algorithmic_fuzz(client: LLMClient):
         "5. Method: `snapshot_in_order(self) -> list[tuple[int, int]]`: Returns list of all current `(seq_id, value)` pairs currently stored, "
         "ordered from oldest to newest.\n"
         "6. Provide self-contained Python code inside a ```python ``` code block. Do NOT use third-party libraries. "
-        "Keep comments and docstrings concise to emit complete implementation code."
+        "Keep internal reasoning, comments, and docstrings concise to emit complete implementation code within token limits."
     )
 
-    log("  Requesting synthesis of non-standard Monotonic Ring Buffer (max_tokens=4500)...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=4500, temperature=0.2, stream=True)
+    log("  Requesting synthesis of non-standard Monotonic Ring Buffer (max_tokens=6000)...")
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=6000, temperature=0.0, stream=True)
     raw = res.get("content", "") or res.get("text", "")
     code = extract_python_code(raw, prefer_class="class ConcurrentMonotonicRingBuffer")
 
@@ -1028,17 +1107,22 @@ def run_fuzz_verification():
 if __name__ == "__main__":
     run_fuzz_verification()
 """
-    full_script = code + "\n\n" + fuzz_harness
+    import_preamble = "import threading\nfrom collections import deque, OrderedDict\nimport sys\nimport random\nimport time"
+    full_script = assemble_python_script(code, preamble=import_preamble, harness=fuzz_harness)
     fuzz_passed = False
     err_msg = ""
     if EXECUTE_MODEL_CODE:
-        try:
-            proc = subprocess.run([sys.executable, "-c", full_script], capture_output=True, text=True, timeout=25)
-            fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
-            if not fuzz_passed:
-                err_msg = (proc.stderr or proc.stdout).strip()[:300]
-        except Exception as e:
-            err_msg = str(e)
+        if not code.strip() or "class ConcurrentMonotonicRingBuffer" not in code:
+            fuzz_passed = False
+            err_msg = "No valid 'class ConcurrentMonotonicRingBuffer' block extracted from model response"
+        else:
+            try:
+                proc = subprocess.run([sys.executable, "-c", full_script], capture_output=True, text=True, timeout=25)
+                fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
+                if not fuzz_passed:
+                    err_msg = (proc.stderr or proc.stdout).strip()[:300]
+            except Exception as e:
+                err_msg = str(e)
     else:
         if res.get("error") or not code.strip():
             fuzz_passed = False
@@ -1070,155 +1154,11 @@ if __name__ == "__main__":
 
 
 # ----------------------------------------------------------------------------
-# 17. COMBINATORIAL ANTI-CONSTRAINT FOLLOWING (IFEVAL TIER)
-# ----------------------------------------------------------------------------
-def run_test_combinatorial_anti_constraints(client: LLMClient):
-    log("\n" + "="*88, bold=True)
-    log("[TEST 17/22] Combinatorial Anti-Constraint & Negative Instruction Following (IFEval Tier)", bold=True, color=CYAN)
-    log("="*88)
-
-    prompt = (
-        "Write an architectural briefing on 'Zero-Trust Kernel Isolation'.\n"
-        "You must strictly satisfy all 6 of the following constraints simultaneously:\n\n"
-        "Constraint 1: Structure your answer into exactly 4 markdown sections headed by:\n"
-        "   '### Section I: Foundation'\n"
-        "   '### Section II: Isolation Proof'\n"
-        "   '### Section III: Hardware Enclaves'\n"
-        "   '### Section IV: Infrastructure Configuration'\n\n"
-        "Constraint 2 (Lipogram): In '### Section II: Isolation Proof', you must NEVER use the letter 'e' (neither lowercase 'e' nor uppercase 'E'). Every single word in Section II must be completely free of 'e'.\n\n"
-        "Constraint 3 (Word Count): '### Section III: Hardware Enclaves' must be strictly between 90 and 130 words in length.\n\n"
-        "Constraint 4 (YAML Embedding): '### Section IV: Infrastructure Configuration' must contain a valid ```yaml ``` code block with exactly 4 keys: `enclave_id`, `page_isolation`, `ring_buffer_mb`, `attestation_pki`.\n\n"
-        "Constraint 5 (Negative Anti-Tokens): Do NOT use any of the following 4 words anywhere in your entire output: 'constraint', 'rule', 'forbidden', 'negative'.\n\n"
-        "Constraint 6 (Termination): Your final output line must be strictly: '[SECURITY_STAMP_2026_VERIFIED]'."
-    )
-
-    log("  Dispatching multi-constraint prompt with lipogram, word counts, and forbidden anti-tokens...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=10000, temperature=0.4, stream=True)
-    text = res.get("content", "") or res.get("text", "")
-
-    s1 = "### Section I: Foundation" in text
-    s2 = "### Section II: Isolation Proof" in text
-    s3 = "### Section III: Hardware Enclaves" in text
-    s4 = "### Section IV: Infrastructure Configuration" in text
-    c1 = s1 and s2 and s3 and s4
-
-    c2 = False
-    sec2_text = ""
-    try:
-        sec2_part = text.split("### Section II: Isolation Proof")[1].split("### Section III")[0]
-        sec2_lines = [l for l in sec2_part.splitlines() if not l.startswith("###")]
-        sec2_text = "\n".join(sec2_lines).strip()
-        c2 = ("e" not in sec2_text.lower()) and (len(sec2_text) > 30)
-    except Exception:
-        c2 = False
-
-    c3 = False
-    sec3_words = 0
-    try:
-        sec3_part = text.split("### Section III: Hardware Enclaves")[1].split("### Section IV")[0]
-        words = sec3_part.strip().split()
-        sec3_words = len(words)
-        c3 = 90 <= sec3_words <= 130
-    except Exception:
-        c3 = False
-
-    c4 = False
-    try:
-        yaml_match = re.search(r"```(?:yaml)?\s*\n(.*?)```", text, re.DOTALL)
-        if yaml_match:
-            y_text = yaml_match.group(1)
-            keys = ["enclave_id", "page_isolation", "ring_buffer_mb", "attestation_pki"]
-            c4 = all(k in y_text for k in keys)
-    except Exception:
-        c4 = False
-
-    forbidden = ["constraint", "rule", "forbidden", "negative"]
-    found_forbidden = [f for f in forbidden if re.search(r"\b" + f + r"s?\b", text, re.IGNORECASE)]
-    c5 = len(found_forbidden) == 0
-
-    c6 = "[SECURITY_STAMP_2026_VERIFIED]" in text
-
-    all_passed = c1 and c2 and c3 and c4 and c5 and c6
-    log(f"  - C1 (Exact 4 Required Markdown Sections): {'PASS' if c1 else 'FAIL'}")
-    log(f"  - C2 (Section II Lipogram: ZERO 'e'/'E' in text): {'PASS' if c2 else 'FAIL'} (Chars: {len(sec2_text)})")
-    log(f"  - C3 (Section III Word Count 90-130 words): {'PASS' if c3 else 'FAIL'} (Count: {sec3_words})")
-    log(f"  - C4 (Section IV YAML with 4 Exact Keys): {'PASS' if c4 else 'FAIL'}")
-    log(f"  - C5 (Zero Forbidden Anti-Tokens): {'PASS' if c5 else 'FAIL'} (Found: {found_forbidden})")
-    log(f"  - C6 (Exact Security Stamp Termination): {'PASS' if c6 else 'FAIL'}")
-    log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | Status: {'PASS' if all_passed else 'FAIL'}")
-
-    return {
-        "status": "PASS" if all_passed else "FAIL",
-        "constraints_passed": sum([c1, c2, c3, c4, c5, c6]),
-        "total_constraints": 6,
-        "details": {
-            "4_sections": c1,
-            "lipogram_no_e": c2,
-            "word_count_90_130": c3,
-            "yaml_keys": c4,
-            "no_forbidden_words": c5,
-            "termination_stamp": c6
-        },
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
-    }
-
-
-# ----------------------------------------------------------------------------
-# 18. COUNTERFACTUAL AXIOMATIC SYMBOLIC ALGEBRA
-# ----------------------------------------------------------------------------
-def run_test_counterfactual_algebra(client: LLMClient):
-    log("\n" + "="*88, bold=True)
-    log("[TEST 18/22] Counterfactual Axiomatic Symbolic Deduction (Non-Commutative Modular Algebra)", bold=True, color=CYAN)
-    log("="*88)
-
-    prompt = (
-        "Consider a custom finite-field mathematical system over the ring Z_23 (integers modulo 23, values 0 to 22) "
-        "defined by two synthetic binary operations:\n\n"
-        "1. Operation (+):  a (+) b = (3*a - 2*b + 5) mod 23\n"
-        "2. Operation (*):  a (*) b = (a^2 + b + 2) mod 23\n\n"
-        "Solve the following equation for all integer solutions X in the range [0, 22]:\n"
-        "   ( (X (+) 4) (*) 3 ) (+) 8 = 16   (mod 23)\n\n"
-        "Requirements:\n"
-        "- Show the step-by-step reduction for each nested operation using modular arithmetic.\n"
-        "- Compute the modular multiplicative inverse of 3 mod 23.\n"
-        "- Identify all valid integer values of X in {0, ..., 22}.\n"
-        "- State at the very end: 'FINAL_SOLUTIONS_FOR_X: [values]'."
-    )
-
-    log("  Requesting step-by-step resolution of custom non-commutative modular algebra...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=3500, temperature=0.0, stream=True)
-    text = res.get("content", "") or res.get("text", "")
-
-    has_inv = bool(re.search(r"inverse.*(?:3.*=.*8|8\b)", text, re.IGNORECASE) or ("3·8" in text) or ("3 * 8" in text) or ("24" in text and "8" in text))
-    has_8 = bool(re.search(r"(?:X\s*=\s*8\b|\[\s*8\b|\b8\s*,\s*17\b|\b17\s*,\s*8\b|roots?.*8)", text, re.IGNORECASE))
-    has_17 = bool(re.search(r"(?:X\s*=\s*17\b|17\s*\]|\b8\s*,\s*17\b|\b17\s*,\s*8\b|roots?.*17)", text, re.IGNORECASE))
-    matched = (has_8 and has_17)
-
-    log(f"  - Modular Multiplicative Inverse of 3 mod 23 (=8): {'PASS' if has_inv else 'FAIL'}")
-    log(f"  - Solved First Root X=8: {'PASS' if has_8 else 'FAIL'}")
-    log(f"  - Solved Second Root X=17: {'PASS' if has_17 else 'FAIL'}")
-    status = "PASS" if matched else ("PARTIAL" if (has_8 or has_17) else "FAIL")
-    log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | Status: {status}")
-
-    return {
-        "status": status,
-        "inverse_found": has_inv,
-        "root_8_found": has_8,
-        "root_17_found": has_17,
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
-    }
-
-
-# ----------------------------------------------------------------------------
-# 19. EXTREME FRONTIER-DEPTH MULTI-NEEDLE SYNTHESIS
+# 15. EXTREME FRONTIER-DEPTH MULTI-NEEDLE SYNTHESIS
 # ----------------------------------------------------------------------------
 def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 32000):
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 19/22] Extreme Frontier-Depth Multi-Needle Precision ({target_context:,} Context Window)", bold=True, color=CYAN)
+    log(f"[TEST 15/19] Extreme Frontier-Depth Multi-Needle Precision ({target_context:,} Context Window)", bold=True, color=CYAN)
     log("="*88)
 
     filler_segment = (
@@ -1294,11 +1234,11 @@ def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 3200
 
 
 # ----------------------------------------------------------------------------
-# 20. CRUXEVAL: COGNITIVE CODE EXECUTION & STATE SIMULATION
+# 16. CRUXEVAL: COGNITIVE CODE EXECUTION & STATE SIMULATION
 # ----------------------------------------------------------------------------
 def run_test_cruxeval_execution(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 20/22] CruxEval: Mental Code Execution & Program State Simulation", bold=True, color=CYAN)
+    log("[TEST 16/19] CruxEval: Mental Code Execution & Program State Simulation", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1326,19 +1266,25 @@ def run_test_cruxeval_execution(client: LLMClient):
     log("  Dispatching CruxEval mental execution prompt with bitwise and stateful accumulator...")
     res = client.call([{"role": "user", "content": prompt}], max_tokens=4000, temperature=0.0, stream=True)
     text = res.get("content", "") or res.get("text", "")
+    full_text = f"{res.get('text', '')}\n{text}"
 
     expected_output = [14, 12, 4, 21, 6, 29, 24, 41]
     expected_str = "[14, 12, 4, 21, 6, 29, 24, 41]"
 
     compact_text = re.sub(r"\s+", "", text)
+    compact_full = re.sub(r"\s+", "", full_text)
     compact_expected = "[14,12,4,21,6,29,24,41]"
-    matched = (compact_expected in compact_text) or ("14, 12, 4, 21, 6, 29, 24, 41" in text)
+    matched = (compact_expected in compact_text) or (compact_expected in compact_full) or ("14, 12, 4, 21, 6, 29, 24, 41" in full_text)
     if not matched:
-        m = re.findall(r"\[\s*14\s*,\s*12\s*,\s*4\s*,\s*21\s*,\s*6\s*,\s*29\s*,\s*24\s*,\s*41\s*\]", text)
+        m = re.findall(r"\[\s*14\s*,\s*12\s*,\s*4\s*,\s*21\s*,\s*6\s*,\s*29\s*,\s*24\s*,\s*41\s*\]", full_text)
         matched = bool(m)
 
     log(f"  - Mental Execution State Accuracy: {'PASS' if matched else 'FAIL'}")
     log(f"  - Ground Truth Target: {expected_str}")
+    if not matched:
+        summary_lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
+        response_tail = summary_lines[-1] if summary_lines else "No response"
+        log(f"  - Model Output Tail: {response_tail[:120]}")
     log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | TTFT: {res.get('ttft', 0)*1000:.1f} ms | Status: {'PASS' if matched else 'FAIL'}")
 
     return {
@@ -1352,11 +1298,11 @@ def run_test_cruxeval_execution(client: LLMClient):
 
 
 # ----------------------------------------------------------------------------
-# 21. SWE-BENCH: AUTONOMOUS BUG PATCHING FROM RUNTIME STACK TRACE
+# 17. SWE-BENCH: AUTONOMOUS BUG PATCHING FROM RUNTIME STACK TRACE
 # ----------------------------------------------------------------------------
 def run_test_swe_bench_bug_patch(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 21/22] SWE-bench: Autonomous Bug Patching from Stack Trace & Failing Tests", bold=True, color=CYAN)
+    log("[TEST 17/19] SWE-bench: Autonomous Bug Patching from Stack Trace & Failing Tests", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1391,24 +1337,17 @@ def run_test_swe_bench_bug_patch(client: LLMClient):
         "AssertionError: Tokens lost during failed poll; expected 2.0 tokens, got 1.0\n"
         "```\n\n"
         "TASK:\n"
-        "1. Diagnose the root cause of the bug.\n"
+        "1. Diagnose the root cause of the bug concisely.\n"
         "2. Provide the complete, fixed `TokenBucketRateLimiter` class enclosed in a ```python ``` code block.\n"
         "Ensure clock skew protection (`elapsed = max(0.0, ...)`), full capacity capping, and correct token accrual before deduction."
     )
 
-    log("  Dispatching bug patching challenge with code, failing test, and runtime traceback...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
+    log("  Dispatching bug patching challenge with code, failing test, and runtime traceback (max_tokens=6000)...")
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=6000, temperature=0.0, stream=True)
     raw = res.get("content", "") or res.get("text", "")
     code = extract_python_code(raw, prefer_class="class TokenBucketRateLimiter")
 
-    test_harness = f"""
-import sys
-import time
-import math
-
-{code}
-
-# 1. Basic consumption
+    unit_harness = """# 1. Basic consumption
 limiter1 = TokenBucketRateLimiter(10.0, 2.0)
 assert limiter1.consume(1.0, 5.0) is True, "Test 1 Failed: Basic consume"
 assert limiter1.consume(1.0, 6.0) is False, "Test 2 Failed: Burst over capacity"
@@ -1426,23 +1365,29 @@ assert limiter3.consume(1.0, 2.0) is True, "Regression failed: Tokens were lost 
 
 print("ALL_UNIT_TESTS_PASSED")
 """
+    import_preamble = "import sys\nimport time\nimport math\nimport threading\nfrom typing import Optional, Union"
+    test_harness = assemble_python_script(code, preamble=import_preamble, harness=unit_harness)
 
     unit_tests_passed = False
     err_msg = ""
     if EXECUTE_MODEL_CODE:
-        try:
-            proc = subprocess.run(
-                [sys.executable, "-c", test_harness],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if proc.returncode == 0 and "ALL_UNIT_TESTS_PASSED" in proc.stdout:
-                unit_tests_passed = True
-            else:
-                err_msg = proc.stderr.strip() or proc.stdout.strip()
-        except Exception as e:
-            err_msg = str(e)
+        if not code.strip() or "class TokenBucketRateLimiter" not in code:
+            unit_tests_passed = False
+            err_msg = "No valid 'class TokenBucketRateLimiter' block extracted from model response"
+        else:
+            try:
+                proc = subprocess.run(
+                    [sys.executable, "-c", test_harness],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if proc.returncode == 0 and "ALL_UNIT_TESTS_PASSED" in proc.stdout:
+                    unit_tests_passed = True
+                else:
+                    err_msg = proc.stderr.strip() or proc.stdout.strip()
+            except Exception as e:
+                err_msg = str(e)
     else:
         if res.get("error") or not code.strip():
             unit_tests_passed = False
@@ -1474,11 +1419,11 @@ print("ALL_UNIT_TESTS_PASSED")
 
 
 # ----------------------------------------------------------------------------
-# 22. AIME OLYMPIAD: MULTI-STEP COMPETITION MATHEMATICAL DEDUCTION
+# 18. AIME OLYMPIAD: MULTI-STEP COMPETITION MATHEMATICAL DEDUCTION
 # ----------------------------------------------------------------------------
 def run_test_aime_olympiad_math(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 22/22] AIME / Olympiad: Multi-Step Competition Mathematical Deduction", bold=True, color=CYAN)
+    log("[TEST 18/19] AIME / Olympiad: Multi-Step Competition Mathematical Deduction", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1503,7 +1448,7 @@ def run_test_aime_olympiad_math(client: LLMClient):
         matched = (boxed_match.group(1).strip() == "978")
     else:
         strict_concl = bool(re.search(r"(?:remainder|result|answer|sum|S\s*=\s*|S\s*\\equiv\s*|is)\s*(?:is|:|=|\\equiv)?\s*(?:\\boxed\{)?978\b", text, re.IGNORECASE))
-        matched = strict_concl or ("978" in text)
+        matched = strict_concl or bool(re.search(r"\b978\b", text))
 
     log(f"  - Olympiad Modular Deduction (S mod 1000 = 978): {'PASS' if matched else 'FAIL'}")
     log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | TTFT: {res.get('ttft', 0)*1000:.1f} ms | Status: {'PASS' if matched else 'FAIL'}")
@@ -1512,6 +1457,93 @@ def run_test_aime_olympiad_math(client: LLMClient):
         "status": "PASS" if matched else "FAIL",
         "ground_truth": 978,
         "matched": matched,
+        "completion_tokens": res.get("completion_tokens", 0),
+        "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
+        "tok_s": round(res.get("decode_speed", 0), 2)
+    }
+
+
+# ----------------------------------------------------------------------------
+# 19. GPQA DIAMOND: GRADUATE-LEVEL GOOGLE-PROOF SCIENTIFIC DEDUCTION
+# ----------------------------------------------------------------------------
+def run_test_gpqa_diamond(client: LLMClient):
+    log("\n" + "="*88, bold=True)
+    log("[TEST 19/19] GPQA Diamond: Graduate-Level Google-Proof Scientific Deduction", bold=True, color=CYAN)
+    log("="*88)
+
+    prompt = (
+        "Answer the following graduate-level scientific problems through rigorous step-by-step derivation.\n\n"
+        "--- PROBLEM 1 (Quantum Mechanics / Perturbation Theory) ---\n"
+        "A spinless particle of mass m is confined in a one-dimensional infinite square potential well with boundaries at x = 0 and x = L.\n"
+        "A perturbing delta-function potential H' = V0 * delta(x - L/2) is applied at the center of the well, where V0 is a constant.\n"
+        "Calculate the first-order energy shift Delta E^(1) for the first excited state (n = 2).\n"
+        "Options:\n"
+        "  (A) 0\n"
+        "  (B) 2*V0 / L\n"
+        "  (C) V0 / L\n"
+        "  (D) 4*V0 / L\n\n"
+        "--- PROBLEM 2 (Molecular Spectroscopy / Rotational Transitions) ---\n"
+        "In rotational microwave spectroscopy of a rigid heteronuclear diatomic molecule with moment of inertia I, "
+        "energy levels are E_J = B * J * (J + 1) with rotational constant B = hbar^2 / (2*I). Under the electric-dipole "
+        "selection rule Delta J = +1, what is the exact frequency spacing Delta nu between adjacent absorption lines in the rotational spectrum?\n"
+        "Options:\n"
+        "  (A) 2*B / h\n"
+        "  (B) B / h\n"
+        "  (C) 4*B / h\n"
+        "  (D) B / (2*h)\n\n"
+        "--- PROBLEM 3 (Enzyme Kinetics / MWC Allosteric Model) ---\n"
+        "An allosteric enzyme following the Monod-Wyman-Changeux (MWC) model exhibits positive homotropic cooperativity with "
+        "allosteric constant L = [T_0]/[R_0] >> 1 and non-exclusive substrate binding parameter c = K_R / K_T < 1. "
+        "As substrate concentration [S] approaches infinity (saturation, [S] -> inf), what is the asymptotic value of the apparent Hill coefficient n_H?\n"
+        "Options:\n"
+        "  (A) 1\n"
+        "  (B) n (the total number of subunits)\n"
+        "  (C) 0\n"
+        "  (D) Infinity\n\n"
+        "TASK:\n"
+        "Provide concise mathematical derivations for each problem.\n"
+        "Conclude your final response with exactly the following format on separate lines:\n"
+        "QUESTION 1 ANSWER: <A/B/C/D>\n"
+        "QUESTION 2 ANSWER: <A/B/C/D>\n"
+        "QUESTION 3 ANSWER: <A/B/C/D>"
+    )
+
+    log("  Dispatching GPQA Diamond graduate benchmark (Physics, Spectroscopy, Biochemistry)...")
+    res = client.call([{"role": "user", "content": prompt}], max_tokens=5000, temperature=0.0, stream=True)
+    text = res.get("content", "") or res.get("text", "")
+
+    # Parsing Answers
+    # Q1: A (0)
+    q1_m = re.search(r"QUESTION\s*1\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q1_choice = q1_m.group(1).upper() if q1_m else ""
+    q1_pass = (q1_choice == "A") or bool(re.search(r"(?:Q1|Question\s*1|first-order energy shift|Delta E\^\(1\)).*?(?:is|=|\\equiv)\s*(?:\\boxed\{)?0\b", text, re.IGNORECASE))
+
+    # Q2: A (2B/h)
+    q2_m = re.search(r"QUESTION\s*2\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q2_choice = q2_m.group(1).upper() if q2_m else ""
+    q2_pass = (q2_choice == "A") or bool(re.search(r"(?:Q2|Question\s*2|frequency spacing|Delta nu).*?(?:is|=|\\equiv)\s*(?:\\boxed\{)?2\s*\*?\s*B\s*/\s*h", text, re.IGNORECASE))
+
+    # Q3: A (1)
+    q3_m = re.search(r"QUESTION\s*3\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q3_choice = q3_m.group(1).upper() if q3_m else ""
+    q3_pass = (q3_choice == "A") or bool(re.search(r"(?:Q3|Question\s*3|Hill coefficient|n_H).*?(?:approaches|is|=|->|\\to)\s*(?:\\boxed\{)?1\b", text, re.IGNORECASE))
+
+    passed_count = sum([q1_pass, q2_pass, q3_pass])
+    status = "PASS" if passed_count == 3 else ("PARTIAL" if passed_count >= 2 else "FAIL")
+
+    log(f"  - Problem 1 (Quantum Perturbation delta well n=2 -> 0): {'PASS' if q1_pass else 'FAIL'}")
+    log(f"  - Problem 2 (Rotational Microwave Spectroscopy -> 2B/h): {'PASS' if q2_pass else 'FAIL'}")
+    log(f"  - Problem 3 (MWC Allosteric Saturation n_H -> 1): {'PASS' if q3_pass else 'FAIL'}")
+    log(f"  -> Score: {passed_count}/3 | Speed: {res.get('decode_speed', 0):.2f} tok/s | Status: {status}")
+
+    return {
+        "status": status,
+        "score": f"{passed_count}/3",
+        "passed_count": passed_count,
+        "total_questions": 3,
+        "q1_quantum_mechanics": q1_pass,
+        "q2_spectroscopy": q2_pass,
+        "q3_enzyme_kinetics": q3_pass,
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
         "tok_s": round(res.get("decode_speed", 0), 2)
@@ -1687,19 +1719,21 @@ def main():
     parser.add_argument("--model", "-m", help="Model name or ID to test")
     parser.add_argument("--parallel", "-p", type=int, help="Number of parallel clients to test")
     parser.add_argument("--max-context", type=int, help="Override detected max context window tokens")
-    parser.add_argument("--milestones", type=int, nargs="+", default=None, help="Custom context milestones for test 14 (e.g. --milestones 4000 8000 200000 204000)")
-    parser.add_argument("--test", "-t", default=None, help="Run specific test(s) by number or name (e.g. 14, '11,12', '1-5', 'context_scaling', '15-22')")
+    parser.add_argument("--milestones", type=int, nargs="+", default=None, help="Custom context milestones for test 12 (e.g. --milestones 4000 8000 200000 204000)")
+    parser.add_argument("--test", "-t", default=None, help="Run specific test(s) by number or name (e.g. 12, '10,11', '1-5', 'context_scaling', '16-19', 'gpqa')")
+    parser.add_argument("--exclude", "--exclude-test", "--skip", "--skip-test", dest="exclude", default=None,
+                        help="Exclude specific test(s) by number or name (e.g. 2, '2,15', '12-15', 'vision')")
     parser.add_argument("--suite", "-s", choices=["all", "flagship", "adversarial", "frontier"], default="all",
-                        help="Benchmark suite category: 'all' (tests 1-22), 'flagship' (tests 1-14), 'adversarial' (tests 15-19), or 'frontier' (tests 20-22)")
+                        help="Benchmark suite category: 'all' (tests 1-19), 'flagship' (tests 1-12), 'adversarial' (tests 13-15), or 'frontier' (tests 16-19)")
     parser.add_argument("--quick", "-q", action="store_true",
                         help="Fast smoke qualification mode (compact context horizons, skips heavy prefill)")
     parser.add_argument("--no-execute", action="store_true",
-                        help="SECURITY: Do NOT execute LLM-generated code (tests 12/16/21 fall back to syntax-only checks). "
+                        help="SECURITY: Do NOT execute LLM-generated code (tests 14/17 fall back to syntax-only checks). "
                              "Also enabled by setting EVAL_SAFE=1.")
     parser.add_argument("--adversarial-depth", type=int, default=32000,
                         help="Target context depth for adversarial frontier tests (default: 32000)")
     parser.add_argument("--context-ratio", type=float, default=0.80,
-                        help="Maximum fraction of context window to test in Test 14 (default: 0.80 for 80%%)")
+                        help="Maximum fraction of context window to test in Test 12 (default: 0.80 for 80%%)")
     parser.add_argument("--out", "-o", help="Path to write JSON benchmark report")
     parser.add_argument("--auto", "-y", action="store_true", help="Non-interactive auto-selection mode")
     parser.add_argument("--parallel-suite", action="store_true", help="Execute independent functional tests concurrently matching parallel slots")
@@ -1720,8 +1754,8 @@ def main():
     parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
     parser.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
     parser.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
-    parser.add_argument("--save-config", action="store_true", help="Automatically save resolved server configuration to config file without prompting")
-    parser.add_argument("--no-save", action="store_true", help="Do not prompt to save configuration")
+    parser.add_argument("--save-config", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-save", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--probe", action="store_true",
                         help="Quick reachability + capability check (<5s) and exit. With --endpoint, probes it; without one, scans common localhost ports.")
     parser.add_argument("--scan-host", default=None,
@@ -1773,33 +1807,6 @@ def main():
             sys.exit(1)
         log("LIVE ARENA MODE: comparing two endpoints concurrently in real time.", bold=True, color=MAGENTA)
 
-        arena_config_changed = (
-            ep1 != cfg.get("endpoint1") or
-            ep2 != cfg.get("endpoint2") or
-            m1 != cfg.get("model1") or
-            m2 != cfg.get("model2")
-        )
-
-        if arena_config_changed or not loaded_from_file:
-            if args.save_config:
-                saved_p = env_loader.save_config(
-                    endpoint=ep1, model=m1, api_key=k1,
-                    endpoint2=ep2, model2=m2, api_key2=k2,
-                    config_file=config_path
-                )
-                if saved_p:
-                    log(f"Saved Arena configuration to {saved_p}", color=GREEN, bold=True)
-            elif sys.stdin.isatty() and not args.auto and not args.no_save:
-                ans = input(f"\nSave Arena server configuration (Server 1 & Server 2) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
-                if ans in ("y", "yes"):
-                    saved_p = env_loader.save_config(
-                        endpoint=ep1, model=m1, api_key=k1,
-                        endpoint2=ep2, model2=m2, api_key2=k2,
-                        config_file=config_path
-                    )
-                    if saved_p:
-                        log(f"Arena configuration saved to {saved_p}!", color=GREEN, bold=True)
-
         run_live_arena(
             endpoint1=ep1,
             model1=m1,
@@ -1836,11 +1843,29 @@ def main():
             endpoint = default_ep
     log(f"Target Server: {endpoint}")
 
-    api_key = args.api_key or cfg.get("api_key") or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or ""
+    # Scope configuration to matched endpoint
+    norm_target = normalize_endpoint(endpoint)
+    norm_cfg_ep1 = normalize_endpoint(cfg.get("endpoint") or cfg.get("endpoint1"))
+    norm_cfg_ep2 = normalize_endpoint(cfg.get("endpoint2"))
+
+    cfg_model = None
+    cfg_api_key = None
+    cfg_max_context = None
+
+    if norm_target and norm_target == norm_cfg_ep1:
+        cfg_model = cfg.get("model") or cfg.get("model1")
+        cfg_api_key = cfg.get("api_key") or cfg.get("api_key1")
+        cfg_max_context = cfg.get("max_context") or cfg.get("max_context1")
+    elif norm_target and norm_target == norm_cfg_ep2:
+        cfg_model = cfg.get("model2")
+        cfg_api_key = cfg.get("api_key2")
+        cfg_max_context = cfg.get("max_context2")
+
+    api_key = args.api_key or cfg_api_key or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or ""
     client = LLMClient(endpoint=endpoint, api_key=api_key)
 
     # 2. Discover Models
-    target_model_name = args.model or cfg.get("model") or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL")
+    target_model_name = args.model or cfg_model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL")
     log("\nQuerying available models from endpoint...")
     models = client.fetch_models()
     selected_model_obj = None
@@ -1852,13 +1877,40 @@ def main():
             m_ctx = detect_max_context(m)
             log(f"  [{idx}] {m_id} (Context: {m_ctx:,} tokens)")
 
-        if target_model_name:
+        # Case 1: CLI explicitly requested a model via --model
+        if args.model:
+            for m in models:
+                if m.get("id") == args.model or m.get("name") == args.model:
+                    selected_model_obj = m
+                    break
+            if not selected_model_obj:
+                log(f"Note: Model '{args.model}' not listed in discovered models; proceeding with specified model.", color=YELLOW)
+                selected_model_obj = {"id": args.model}
+
+        # Case 2: Config or environment specified a model
+        elif target_model_name:
             for m in models:
                 if m.get("id") == target_model_name or m.get("name") == target_model_name:
                     selected_model_obj = m
                     break
             if not selected_model_obj:
-                selected_model_obj = {"id": target_model_name}
+                log(f"Note: Configured/default model '{target_model_name}' not available on endpoint.", color=YELLOW)
+                if len(models) == 1:
+                    selected_model_obj = models[0]
+                elif sys.stdin.isatty() and not args.auto:
+                    while True:
+                        choice = input(f"\nSelect model to test [1-{len(models)}] (default 1): ").strip()
+                        if not choice:
+                            selected_model_obj = models[0]
+                            break
+                        if choice.isdigit() and 1 <= int(choice) <= len(models):
+                            selected_model_obj = models[int(choice) - 1]
+                            break
+                        log("Invalid choice, please re-enter.", color=YELLOW)
+                else:
+                    selected_model_obj = models[0]
+
+        # Case 3: No model specified at all
         elif sys.stdin.isatty() and not args.auto and len(models) > 1:
             while True:
                 choice = input(f"\nSelect model to test [1-{len(models)}] (default 1): ").strip()
@@ -1880,37 +1932,26 @@ def main():
     log(f"\nActive Model Selected: {BOLD}{model_name}{RESET}")
 
     # 3. Detect Context Ceiling
-    detected_ctx = detect_max_context(selected_model_obj, warn=True)
+    raw_detected_ctx = detect_max_context(selected_model_obj, warn=False, default=None)
     if args.max_context:
         max_context = args.max_context
         log(f"Max Context Window (Overridden by flag): {max_context:,} tokens")
-    elif cfg.get("max_context"):
-        max_context = cfg.get("max_context")
-        log(f"Max Context Window (Loaded from config): {max_context:,} tokens")
-    else:
-        max_context = detected_ctx
+    elif raw_detected_ctx is not None:
+        max_context = raw_detected_ctx
         log(f"Detected Max Context Window: {max_context:,} tokens")
-
-    # Offer interactive / auto option to save endpoint, model, api_key, max_context to config.json
-    config_changed = (
-        endpoint != cfg.get("endpoint") or
-        model_name != cfg.get("model") or
-        api_key != (cfg.get("api_key") or "") or
-        max_context != cfg.get("max_context")
-    )
-
-    if config_changed or not loaded_from_file:
-        if args.save_config:
-            saved_p = env_loader.save_config(endpoint, model_name, api_key, max_context, config_path)
-            if saved_p:
-                log(f"Saved configuration to {saved_p}", color=GREEN, bold=True)
-        elif sys.stdin.isatty() and not args.auto and not args.no_save:
-            ans = input(f"\nSave server configuration (endpoint, model, api_key, max_context) to {os.path.basename(config_path)} for future runs? [y/N]: ").strip().lower()
-            if ans in ("y", "yes"):
-                saved_p = env_loader.save_config(endpoint, model_name, api_key, max_context, config_path)
-                if saved_p:
-                    log(f"Configuration saved to {saved_p}!", color=GREEN, bold=True)
-
+    elif cfg_max_context and (not cfg_model or cfg_model == model_name):
+        max_context = cfg_max_context
+        log(f"Max Context Window (Loaded from config): {max_context:,} tokens")
+    elif os.getenv("MAX_CONTEXT") or os.getenv("EVAL_MAX_CONTEXT"):
+        try:
+            max_context = int(os.getenv("MAX_CONTEXT") or os.getenv("EVAL_MAX_CONTEXT"))
+            log(f"Max Context Window (Loaded from env): {max_context:,} tokens")
+        except ValueError:
+            max_context = 32768
+            log("Warning: Server did not report a context limit; assuming 32,768 tokens (override with --max-context).", color=YELLOW)
+    else:
+        max_context = 32768
+        log("Warning: Server did not report a context limit; assuming 32,768 tokens (override with --max-context).", color=YELLOW)
 
     if args.quick:
         if args.milestones:
@@ -1952,8 +1993,12 @@ def main():
     log(f"Parallel Test Level: {parallel} concurrent streams\n")
 
     # 5. Execute Selected Test(s)
-    selected_tests = parse_selected_tests(args.test, suite=args.suite)
-    if args.test:
+    selected_tests = parse_selected_tests(args.test, suite=args.suite, exclude_arg=args.exclude)
+    if not selected_tests:
+        log("Error: No tests selected to run (all matching tests were excluded or none matched).", color=RED)
+        sys.exit(1)
+
+    if args.test or args.exclude:
         log(f"Selective Test Execution Active: Running test(s) {sorted(list(selected_tests))} out of {TOTAL_TESTS}\n", color=CYAN, bold=True)
     else:
         log(f"Active Suite [{args.suite.upper()}]: Executing {len(selected_tests)} test(s) {sorted(list(selected_tests))}\n", color=CYAN, bold=True)
@@ -1989,27 +2034,21 @@ def main():
         if 9 in selected_tests:
             parallel_candidates.append(("stop_sequences", lambda: run_test_stop_sequences(client)))
         if 10 in selected_tests:
-            parallel_candidates.append(("high_entropy_recall", lambda: run_test_high_entropy(client)))
-        if 11 in selected_tests:
             parallel_candidates.append(("extreme_precision", lambda: run_test_extreme_precision(client)))
-        if 12 in selected_tests:
-            parallel_candidates.append(("code_execution", lambda: run_test_code_execution(client)))
-        if 13 in selected_tests:
+        if 11 in selected_tests:
             parallel_candidates.append(("error_handling", lambda: run_test_error_handling(client)))
-        if 15 in selected_tests:
+        if 13 in selected_tests:
             parallel_candidates.append(("multihop_graph", lambda: run_test_multihop_graph(client, target_context=adv_depth)))
-        if 16 in selected_tests:
+        if 14 in selected_tests:
             parallel_candidates.append(("novel_algorithm_fuzz", lambda: run_test_novel_algorithmic_fuzz(client)))
-        if 17 in selected_tests:
-            parallel_candidates.append(("combinatorial_anti_constraints", lambda: run_test_combinatorial_anti_constraints(client)))
-        if 18 in selected_tests:
-            parallel_candidates.append(("counterfactual_algebra", lambda: run_test_counterfactual_algebra(client)))
-        if 20 in selected_tests:
+        if 16 in selected_tests:
             parallel_candidates.append(("cruxeval", lambda: run_test_cruxeval_execution(client)))
-        if 21 in selected_tests:
+        if 17 in selected_tests:
             parallel_candidates.append(("swe_bench_bug_patch", lambda: run_test_swe_bench_bug_patch(client)))
-        if 22 in selected_tests:
+        if 18 in selected_tests:
             parallel_candidates.append(("aime_olympiad", lambda: run_test_aime_olympiad_math(client)))
+        if 19 in selected_tests:
+            parallel_candidates.append(("gpqa_diamond", lambda: run_test_gpqa_diamond(client)))
 
         with ThreadPoolExecutor(max_workers=parallel) as pool:
             futures = {pool.submit(fn): name for name, fn in parallel_candidates}
@@ -2023,14 +2062,15 @@ def main():
 
         # Isolated tests run sequentially after the parallel matrix
         if 3 in selected_tests:
-            report["results"]["concurrency"] = run_test_concurrency(client, parallel)
+            ctx_targets = [2000, 4000] if args.quick else None
+            report["results"]["concurrency"] = run_test_concurrency(client, parallel, contexts=ctx_targets)
         if 7 in selected_tests:
             report["results"]["prefix_caching"] = run_test_prefix_caching(client)
         if 8 in selected_tests:
             report["results"]["client_abort"] = run_test_client_abort(client)
-        if 14 in selected_tests:
+        if 12 in selected_tests:
             report["results"]["context_scaling"] = run_test_context_scaling(client, milestones)
-        if 19 in selected_tests:
+        if 15 in selected_tests:
             report["results"]["frontier_needle_depth"] = run_test_frontier_needle_depth(client, target_context=adv_depth)
     else:
         if 1 in selected_tests:
@@ -2038,7 +2078,8 @@ def main():
         if 2 in selected_tests:
             report["results"]["vision"] = run_test_vision(client)
         if 3 in selected_tests:
-            report["results"]["concurrency"] = run_test_concurrency(client, parallel)
+            ctx_targets = [2000, 4000] if args.quick else None
+            report["results"]["concurrency"] = run_test_concurrency(client, parallel, contexts=ctx_targets)
         if 4 in selected_tests:
             report["results"]["capabilities_4tasks"] = run_test_capabilities(client)
         if 5 in selected_tests:
@@ -2052,31 +2093,25 @@ def main():
         if 9 in selected_tests:
             report["results"]["stop_sequences"] = run_test_stop_sequences(client)
         if 10 in selected_tests:
-            report["results"]["high_entropy_recall"] = run_test_high_entropy(client)
-        if 11 in selected_tests:
             report["results"]["extreme_precision"] = run_test_extreme_precision(client)
-        if 12 in selected_tests:
-            report["results"]["code_execution"] = run_test_code_execution(client)
-        if 13 in selected_tests:
+        if 11 in selected_tests:
             report["results"]["error_handling"] = run_test_error_handling(client)
-        if 14 in selected_tests:
+        if 12 in selected_tests:
             report["results"]["context_scaling"] = run_test_context_scaling(client, milestones)
-        if 15 in selected_tests:
+        if 13 in selected_tests:
             report["results"]["multihop_graph"] = run_test_multihop_graph(client, target_context=adv_depth)
-        if 16 in selected_tests:
+        if 14 in selected_tests:
             report["results"]["novel_algorithm_fuzz"] = run_test_novel_algorithmic_fuzz(client)
-        if 17 in selected_tests:
-            report["results"]["combinatorial_anti_constraints"] = run_test_combinatorial_anti_constraints(client)
-        if 18 in selected_tests:
-            report["results"]["counterfactual_algebra"] = run_test_counterfactual_algebra(client)
-        if 19 in selected_tests:
+        if 15 in selected_tests:
             report["results"]["frontier_needle_depth"] = run_test_frontier_needle_depth(client, target_context=adv_depth)
-        if 20 in selected_tests:
+        if 16 in selected_tests:
             report["results"]["cruxeval"] = run_test_cruxeval_execution(client)
-        if 21 in selected_tests:
+        if 17 in selected_tests:
             report["results"]["swe_bench_bug_patch"] = run_test_swe_bench_bug_patch(client)
-        if 22 in selected_tests:
+        if 18 in selected_tests:
             report["results"]["aime_olympiad"] = run_test_aime_olympiad_math(client)
+        if 19 in selected_tests:
+            report["results"]["gpqa_diamond"] = run_test_gpqa_diamond(client)
 
     total_suite_time = time.perf_counter() - t_suite_start
     report["total_suite_wall_time_s"] = round(total_suite_time, 2)

@@ -111,7 +111,13 @@ def main():
                         break
 
                     delta = choices[0].get("delta", {})
-                    content_piece = delta.get("content") or delta.get("reasoning_content") or ""
+                    content_piece = (
+                        delta.get("content")
+                        or delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                        or ""
+                    )
                     if content_piece:
                         if first_token_time is None:
                             first_token_time = time.perf_counter()
