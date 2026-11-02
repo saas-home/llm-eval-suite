@@ -12,6 +12,7 @@ import time
 import json
 import re
 import random
+import atexit
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse
@@ -29,7 +30,9 @@ def _resolve_image_path():
 
 IMAGE_PATH = _resolve_image_path()
 DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "results")
+DEFAULT_LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
+os.makedirs(DEFAULT_LOGS_DIR, exist_ok=True)
 
 # ANSI terminal colors (respect NO_COLOR env and non-TTY pipes)
 NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
@@ -43,12 +46,50 @@ MAGENTA = "" if NO_COLOR else "\033[35m"
 RESET = "" if NO_COLOR else "\033[0m"
 CLEAR_LINE = "" if NO_COLOR else "\033[K"
 
+_LOG_FILE_HANDLE = None
+
+
+def init_file_logger(log_file_path: str = None) -> str:
+    """Initializes diagnostic file logger in results/logs directory for debugging and diagnosis."""
+    global _LOG_FILE_HANDLE
+    if not log_file_path:
+        log_file_path = os.path.join(DEFAULT_LOGS_DIR, f"eval_diag_{time.strftime('%Y%m%d_%H%M%S')}.log")
+    try:
+        close_file_logger()
+        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+        _LOG_FILE_HANDLE = open(log_file_path, "a", encoding="utf-8")
+        return log_file_path
+    except Exception:
+        return ""
+
+
+def close_file_logger():
+    """Flushes and cleanly closes the active diagnostic log file handle."""
+    global _LOG_FILE_HANDLE
+    if _LOG_FILE_HANDLE:
+        try:
+            _LOG_FILE_HANDLE.flush()
+            _LOG_FILE_HANDLE.close()
+        except Exception:
+            pass
+        _LOG_FILE_HANDLE = None
+
+
+atexit.register(close_file_logger)
+
 
 def log(msg, bold=False, color=""):
     prefix = bold and BOLD or ""
     c = color or ""
     suffix = (bold or color) and RESET or ""
     print(f"{prefix}{c}{msg}{suffix}", flush=True)
+    if _LOG_FILE_HANDLE:
+        try:
+            clean_msg = re.sub(r"\033\[[0-9;]*m", "", str(msg))
+            _LOG_FILE_HANDLE.write(clean_msg + "\n")
+            _LOG_FILE_HANDLE.flush()
+        except Exception:
+            pass
 
 
 # --- Retry policy (backoff + rate-limit handling) --------------------------
@@ -160,7 +201,7 @@ class LLMClient:
     def call(self, messages, max_tokens=1024, temperature=0.0, stream=False,
              tools=None, tool_choice=None, response_format=None, stop=None,
              seed=None, timeout=600, chat_template_kwargs=None, reasoning_effort=None,
-             retries=2):
+             retries=2, chunk_callback=None):
         """
         Sends a chat completion request. Retries transient failures (5xx,
         timeouts, connection errors) up to `retries` additional attempts.
@@ -365,6 +406,11 @@ class LLMClient:
                                         reasoning_chunks.append(reasoning_part)
                                     if content_part:
                                         content_chunks.append(content_part)
+                                    if chunk_callback:
+                                        try:
+                                            chunk_callback(chunk_text, t_first, now, token_count)
+                                        except Exception:
+                                            pass
                     t_end = time.perf_counter()
                     total_time = t_end - t0
                     ttft = (t_first - t0) if t_first else total_time

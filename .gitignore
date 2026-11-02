@@ -36,6 +36,7 @@ config.json
 
 # Local logs & debug dumps
 *.log
+logs/
 *.tmp
 *.temp
 

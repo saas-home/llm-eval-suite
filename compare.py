@@ -20,8 +20,6 @@ import sys
 import os
 import time
 import json
-import urllib.request
-import urllib.error
 import argparse
 import threading
 import re
@@ -659,102 +657,57 @@ def compute_task_advantage(res1: dict, res2: dict, name1: str, name2: str) -> st
 
 
 def _stream_worker(endpoint: str, model: str, api_key: str, task: dict, state: dict):
-    """Worker thread that executes a single streaming completion request and updates state."""
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": task["system"]},
-            {"role": "user", "content": task["prompt"]},
-        ],
-        "max_tokens": task["max_tokens"],
-        "temperature": task["temperature"],
-        "stream": True,
-        "stream_options": {"include_usage": True},
-    }
-
-    url = endpoint.rstrip("/")
-    if not url.endswith("/chat/completions"):
-        url = f"{url}/chat/completions"
-
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers)
+    """Worker thread that executes a single streaming completion request via LLMClient and updates state."""
+    client = LLMClient(endpoint=endpoint, model=model, api_key=api_key)
+    messages = [
+        {"role": "system", "content": task["system"]},
+        {"role": "user", "content": task["prompt"]},
+    ]
 
     t_start = time.perf_counter()
     state["t_start"] = t_start
     state["status"] = "CONNECTING"
 
+    def on_chunk(chunk_text, t_first, now, token_count):
+        state["status"] = "STREAMING"
+        if state["t_first"] is None:
+            state["t_first"] = t_first
+            state["ttft_ms"] = (t_first - t_start) * 1000.0
+        state["chunks"].append(chunk_text)
+        state["tokens"] = token_count
+        elapsed = now - t_first
+        if elapsed > 0 and token_count > 1:
+            state["tok_s"] = (token_count - 1) / elapsed
+        elif elapsed > 0:
+            state["tok_s"] = token_count / elapsed
+
     try:
-        with urllib.request.urlopen(req, timeout=300) as response:
-            state["status"] = "STREAMING"
-            for line in response:
-                line_str = line.decode("utf-8", errors="replace").strip()
-                if not line_str.startswith("data:"):
-                    continue
-                data_str = line_str[5:].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data_str)
-                except Exception:
-                    continue
-
-                if "error" in chunk:
-                    state["error"] = str(chunk["error"])
-                    state["status"] = "ERROR"
-                    break
-
-                if "usage" in chunk and chunk["usage"]:
-                    state["completion_tokens"] = chunk["usage"].get("completion_tokens", state["completion_tokens"])
-
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-
-                if choices[0].get("finish_reason") == "error":
-                    err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
-                    state["error"] = err_msg
-                    state["status"] = "ERROR"
-                    break
-
-                delta = choices[0].get("delta", {})
-                text_piece = (
-                    delta.get("content")
-                    or delta.get("reasoning_content")
-                    or delta.get("reasoning")
-                    or delta.get("thought")
-                    or ""
-                )
-                if text_piece:
-                    now = time.perf_counter()
-                    if state["t_first"] is None:
-                        state["t_first"] = now
-                        state["ttft_ms"] = (now - t_start) * 1000.0
-                    state["chunks"].append(text_piece)
-                    state["tokens"] += 1
-                    elapsed = now - state["t_first"]
-                    if elapsed > 0 and state["tokens"] > 1:
-                        state["tok_s"] = (state["tokens"] - 1) / elapsed
-                    elif elapsed > 0:
-                        state["tok_s"] = state["tokens"] / elapsed
-
+        res = client.call(
+            messages=messages,
+            max_tokens=task["max_tokens"],
+            temperature=task["temperature"],
+            stream=True,
+            timeout=300,
+            chunk_callback=on_chunk,
+        )
         t_end = time.perf_counter()
         state["t_end"] = t_end
-        total_time = t_end - t_start
-        state["total_time_s"] = total_time
-        final_tokens = state["completion_tokens"] if state["completion_tokens"] > 0 else state["tokens"]
-        gen_time = (t_end - state["t_first"]) if state["t_first"] else total_time
-        final_speed = ((final_tokens - 1) / gen_time) if gen_time > 0 and final_tokens > 1 else (final_tokens / gen_time if gen_time > 0 else 0.0)
-        state["tokens"] = final_tokens
-        state["tok_s"] = round(final_speed, 2)
-        if state["ttft_ms"] is None:
-            state["ttft_ms"] = round(total_time * 1000.0, 1)
-        if state["status"] != "ERROR":
+        state["total_time_s"] = t_end - t_start
+        if res.get("error"):
+            state["error"] = res["error"]
+            state["status"] = "ERROR"
+        else:
+            state["completion_tokens"] = res.get("completion_tokens", state["tokens"])
+            final_tokens = state["completion_tokens"] if state["completion_tokens"] > 0 else state["tokens"]
+            state["tokens"] = final_tokens
+            state["tok_s"] = round(res.get("decode_speed", state["tok_s"]), 2)
+            if not state["chunks"]:
+                fallback_content = res.get("content") or res.get("text") or ""
+                if fallback_content:
+                    state["chunks"].append(fallback_content)
+            if state["ttft_ms"] is None:
+                state["ttft_ms"] = round(res.get("ttft", 0.0) * 1000.0, 1)
             state["status"] = "DONE"
-
     except Exception as e:
         t_end = time.perf_counter()
         state["t_end"] = t_end
@@ -1261,31 +1214,34 @@ def main():
     default_url = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
     parser = argparse.ArgumentParser(description="LLM Inference Arena & Comparison Harness (Native Arena Mode or Offline Report Comparison)")
 
-    # Native Arena Mode Flags
-    parser.add_argument("--live", "--live-compare", action="store_true",
-                        help="Enable Native Arena Mode: live concurrent comparison between two endpoints side-by-side in real time")
-    parser.add_argument("--endpoint1", "--url1", default=None,
-                        help="First LLM server base endpoint (e.g. http://127.0.0.1:8888/v1)")
-    parser.add_argument("--model1", default=None, help="First model name or ID")
-    parser.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
-    parser.add_argument("--endpoint2", "--url2", default=None,
-                        help="Second LLM server base endpoint (e.g. http://10.0.0.2:8000/v1)")
-    parser.add_argument("--model2", default=None, help="Second model name or ID")
-    parser.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
+    # 1. Live Arena Mode (Real-Time Side-by-Side Benchmark)
+    group_arena = parser.add_argument_group("Live Arena Mode (Real-Time Side-by-Side Benchmark)")
+    group_arena.add_argument("--live", "--live-compare", action="store_true",
+                             help="Enable Live Arena Mode: concurrent benchmark comparing two endpoints side-by-side in real time")
+    group_arena.add_argument("--endpoint1", "--url1", default=None,
+                             help="First LLM server base endpoint (e.g. http://127.0.0.1:8080/v1)")
+    group_arena.add_argument("--model1", default=None, help="First model name or ID")
+    group_arena.add_argument("--api-key1", default="", help="API key for endpoint 1 (optional)")
+    group_arena.add_argument("--endpoint2", "--url2", default=None,
+                             help="Second LLM server base endpoint (e.g. http://10.0.0.2:8000/v1)")
+    group_arena.add_argument("--model2", default=None, help="Second model name or ID")
+    group_arena.add_argument("--api-key2", default="", help="API key for endpoint 2 (optional)")
 
-    # Single-endpoint benchmark flags
-    parser.add_argument("--url", "--endpoint", default=default_url, help="Base API URL for single-endpoint benchmark")
-    parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help="Model name or ID")
-    parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help="API key for single-endpoint benchmark")
+    # 2. Offline Report Comparison
+    group_offline = parser.add_argument_group("Offline Report Comparison")
+    group_offline.add_argument("report_paths", nargs="*", help="Paths to two or more benchmark JSON reports to compare")
+    parser.add_argument("--reports", nargs="+", help=argparse.SUPPRESS)
 
-    # Configuration Flags
-    parser.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
-    parser.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
+    # 3. Output & Configuration
+    group_out = parser.add_argument_group("Output & Configuration")
+    group_out.add_argument("--out", "-o", default=None, help="Output path for Markdown comparison (.md) or JSON report")
+    group_out.add_argument("--config", default=None, help="Path to JSON configuration file (e.g. config.json)")
+    group_out.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
 
-    # Output & Reports
-    parser.add_argument("--out", "-o", default=None, help="Output path for Markdown comparison (.md) or JSON (.json)")
-    parser.add_argument("--reports", nargs="+", help="Compare two or more JSON reports offline head-to-head")
-    parser.add_argument("report_paths", nargs="*", help="JSON reports to compare offline head-to-head")
+    # Suppressed legacy single-endpoint flags (backward-compatible)
+    parser.add_argument("--url", "--endpoint", default=default_url, help=argparse.SUPPRESS)
+    parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help=argparse.SUPPRESS)
+    parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 

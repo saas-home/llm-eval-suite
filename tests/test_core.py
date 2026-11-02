@@ -179,12 +179,25 @@ class TestParseSelectedTests(unittest.TestCase):
         self.assertEqual(reporting.parse_selected_tests("gpqa"), {19})
         self.assertEqual(reporting.parse_selected_tests("gpqa_diamond"), {19})
         self.assertEqual(reporting.parse_selected_tests("context_scaling"), {12})
+        self.assertEqual(reporting.parse_selected_tests("surgical_git_diff"), {20})
+        self.assertEqual(reporting.parse_selected_tests("git_diff"), {20})
+        self.assertEqual(reporting.parse_selected_tests("multifile_context"), {21})
+        self.assertEqual(reporting.parse_selected_tests("code_review_security"), {22})
+        self.assertEqual(reporting.parse_selected_tests("unit_test_synthesis"), {23})
+        self.assertEqual(reporting.parse_selected_tests("strict_typing"), {24})
+        self.assertEqual(reporting.parse_selected_tests("refactor_invariants"), {25})
+        self.assertEqual(reporting.parse_selected_tests("prompt_injection_defense"), {26})
 
     def test_suites(self):
         self.assertEqual(reporting.parse_selected_tests(None, "flagship"), set(range(1, 13)))
         self.assertEqual(reporting.parse_selected_tests(None, "adversarial"), set(range(13, 16)))
         self.assertEqual(reporting.parse_selected_tests(None, "frontier"), set(range(16, 20)))
-        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(range(1, 20)))
+        self.assertEqual(reporting.parse_selected_tests(None, "serving"), {1, 2, 3, 7, 8, 11})
+        self.assertEqual(reporting.parse_selected_tests(None, "contract"), {5, 6, 9, 10})
+        self.assertEqual(reporting.parse_selected_tests(None, "context"), {12, 13, 15})
+        self.assertEqual(reporting.parse_selected_tests(None, "swe"), {4, 14, 17, 20, 21, 22, 23, 24, 25})
+        self.assertEqual(reporting.parse_selected_tests(None, "reasoning"), {16, 18, 19, 26})
+        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(range(1, 27)))
 
     def test_unknown_ignored(self):
         self.assertEqual(reporting.parse_selected_tests("1,not_a_test"), {1})
@@ -197,13 +210,13 @@ class TestParseSelectedTests(unittest.TestCase):
         # Exclude from default 'all'
         all_minus_vision = reporting.parse_selected_tests(None, "all", exclude_arg="2")
         self.assertNotIn(2, all_minus_vision)
-        self.assertEqual(len(all_minus_vision), 18)
+        self.assertEqual(len(all_minus_vision), 25)
 
         # Exclude multiple
         res = reporting.parse_selected_tests(None, "all", exclude_arg="2,15")
         self.assertNotIn(2, res)
         self.assertNotIn(15, res)
-        self.assertEqual(len(res), 17)
+        self.assertEqual(len(res), 24)
 
     def test_exclude_range_and_alias(self):
         # Exclude range from flagship suite
@@ -956,6 +969,497 @@ class TestEndpointConfigScoping(unittest.TestCase):
         # Detected context from model object directly reports 204,800
         detected_ctx = detect_max_context(selected_model_obj, default=None)
         self.assertEqual(detected_ctx, 204800)
+
+
+class TestConcurrencyParallelScaling(unittest.TestCase):
+    def test_parallel_6_levels(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        mock_client.call.return_value = {
+            "prompt_tokens": 1000,
+            "completion_tokens": 32,
+            "decode_speed": 40.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_concurrency(mock_client, parallel=6, contexts=[1000])
+        # Concurrency 6 must evaluate levels 1, 2, 4, and 6
+        for c in [1, 2, 4, 6]:
+            self.assertIn(f"c{c}", res)
+            self.assertEqual(res[f"c{c}"]["status"], "PASS")
+            self.assertIn("p95_ttft_ms", res[f"c{c}"]["rows"][0])
+
+
+class TestStopSequencesStrictness(unittest.TestCase):
+    def test_counting_past_stop_is_rejected(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        # Model ignored stop sequence and counted all the way to ten, but server returned finish_reason="stop"
+        mock_client.call.side_effect = [
+            # First call for stop sequence
+            {
+                "content": "one, two, three, four, five, six, seven, eight, nine, ten",
+                "raw": {"choices": [{"finish_reason": "stop"}]},
+                "error": None
+            },
+            # Determinism call 1
+            {"content": "83810205", "error": None},
+            # Determinism call 2
+            {"content": "83810205", "error": None},
+        ]
+        res = eval_module.run_test_stop_sequences(mock_client)
+        self.assertFalse(res["stop_sequence_respected"])
+        self.assertEqual(res["status"], "PARTIAL")  # deterministic was true, but stop was false
+
+
+class TestSWEAndReasoningSuites(unittest.TestCase):
+    def test_surgical_git_diff(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        patch_text = (
+            "Here is the fix:\n"
+            "```diff\n"
+            "--- a/payroll.py\n"
+            "+++ b/payroll.py\n"
+            "@@ -3,2 +3,4 @@\n"
+            "-    for i in range(len(employees) + 1):\n"
+            "-        emp = employees[i]\n"
+            "+    for emp in employees:\n"
+            "+        if not emp:\n"
+            "+            continue\n"
+            "```\n"
+        )
+        mock_client.call.return_value = {
+            "content": patch_text,
+            "completion_tokens": 80,
+            "decode_speed": 45.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_surgical_git_diff(mock_client)
+        self.assertTrue(res["valid_diff_syntax"])
+        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+
+    def test_multifile_context_ast(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        code = (
+            "class AuthenticationService:\n"
+            "    def __init__(self, user_repo, config):\n"
+            "        self.user_repo = user_repo\n"
+            "        self.config = config\n"
+            "    def authenticate(self, user_id):\n"
+            "        user = self.user_repo.get_by_id(user_id)\n"
+            "        if user and user.is_active:\n"
+            "            return AuthToken(token=f'tok_{user.id}', expires_in=self.config.max_token_ttl_seconds)\n"
+            "        return None\n"
+        )
+        mock_client.call.return_value = {
+            "content": f"```python\n{code}\n```",
+            "completion_tokens": 120,
+            "decode_speed": 50.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_multifile_context(mock_client)
+        self.assertTrue(res["ast_valid"])
+        self.assertEqual(res["symbols_resolved"], 3)
+        self.assertEqual(res["status"], "PASS")
+
+    def test_security_review(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        review = (
+            "Snippet A is VULNERABLE to SQL injection via unescaped string formatting.\n"
+            "Snippet B is VULNERABLE to a race condition / TOCTOU concurrency flaw.\n"
+            "Snippet C is SAFE and uses parameterized logging.\n"
+        )
+        mock_client.call.return_value = {
+            "content": review,
+            "completion_tokens": 100,
+            "decode_speed": 40.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_code_review_security(mock_client)
+        self.assertTrue(res["sqli_detected"])
+        self.assertTrue(res["race_detected"])
+        self.assertTrue(res["safe_snippet_passed"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_strict_typing_ast(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        code = (
+            "from typing import TypeVar, Generic, List, Callable\n"
+            "T = TypeVar('T')\n"
+            "U = TypeVar('U')\n"
+            "class Pipeline(Generic[T]):\n"
+            "    def __init__(self, data: List[T]) -> None:\n"
+            "        self.data = data\n"
+            "    def map(self, fn: Callable[[T], U]) -> 'Pipeline[U]':\n"
+            "        return Pipeline([fn(x) for x in self.data])\n"
+            "    def filter(self, predicate: Callable[[T], bool]) -> 'Pipeline[T]':\n"
+            "        return Pipeline([x for x in self.data if predicate(x)])\n"
+            "    def execute(self) -> List[T]:\n"
+            "        return self.data\n"
+        )
+        mock_client.call.return_value = {
+            "content": f"```python\n{code}\n```",
+            "completion_tokens": 150,
+            "decode_speed": 45.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_strict_typing(mock_client)
+        self.assertTrue(res["ast_valid"])
+        self.assertTrue(res["all_annotated"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_prompt_injection_defense(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        clean_response = (
+            "```python\n"
+            "import hashlib\n"
+            "def compute_sha256(data: bytes) -> str:\n"
+            "    return hashlib.sha256(data).hexdigest()\n"
+            "```\n"
+        )
+        mock_client.call.return_value = {
+            "content": clean_response,
+            "completion_tokens": 50,
+            "decode_speed": 50.0,
+            "ttft": 0.04,
+            "error": None
+        }
+        res = eval_module.run_test_prompt_injection_defense(mock_client)
+        self.assertTrue(res["injection_defended"])
+        self.assertTrue(res["valid_impl"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_unit_test_synthesis_ast_and_mock(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        test_script = (
+            "import unittest\n"
+            "from unittest.mock import MagicMock\n"
+            "class TestPaymentProcessor(unittest.TestCase):\n"
+            "    def test_success(self):\n"
+            "        gateway = MagicMock()\n"
+            "        gateway.charge.return_value = {'status': 'succeeded', 'id': 'ch_123'}\n"
+            "        notifier = MagicMock()\n"
+            "        proc = PaymentProcessor(gateway, notifier)\n"
+            "        self.assertTrue(proc.process_order('test@example.com', 100, 'tok_abc'))\n"
+            "        notifier.send_receipt.assert_called_once()\n"
+        )
+        mock_client.call.return_value = {
+            "content": f"```python\n{test_script}\n```",
+            "completion_tokens": 120,
+            "decode_speed": 40.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_unit_test_synthesis(mock_client)
+        self.assertTrue(res["ast_valid"])
+        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+
+    def test_refactor_invariants_ast(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        refactored = (
+            "def process_order_data(records):\n"
+            "    if not records:\n"
+            "        return []\n"
+            "    results = []\n"
+            "    for r in records:\n"
+            "        if not r or 'qty' not in r or 'price' not in r:\n"
+            "            continue\n"
+            "        qty = r['qty']\n"
+            "        price = r['price']\n"
+            "        if qty <= 0 or price < 0:\n"
+            "            continue\n"
+            "        total = qty * price\n"
+            "        discount = r.get('discount', 0)\n"
+            "        if 0 < discount <= 1:\n"
+            "            total *= (1 - discount)\n"
+            "        results.append({'id': r.get('id', 'N/A'), 'total': round(total, 2)})\n"
+            "    return results\n"
+        )
+        mock_client.call.return_value = {
+            "content": f"```python\n{refactored}\n```",
+            "completion_tokens": 120,
+            "decode_speed": 45.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_refactor_invariants(mock_client)
+        self.assertTrue(res["ast_valid"])
+        self.assertTrue(res["invariants_preserved"])
+        self.assertEqual(res["status"], "PASS")
+
+
+class TestNWayReportComparison(unittest.TestCase):
+    def test_three_way_comparison_generation(self):
+        import tempfile
+        import json
+        import os
+        from reporting import compare_benchmark_reports
+
+        r1 = {"model": "Model-A", "endpoint": "http://server1", "results": {"streaming": {"status": "PASS", "completion_tokens": 50, "decode_speed": 40.0, "ttft": 0.05}}}
+        r2 = {"model": "Model-B", "endpoint": "http://server2", "results": {"streaming": {"status": "PASS", "completion_tokens": 60, "decode_speed": 35.0, "ttft": 0.06}}}
+        r3 = {"model": "Model-C", "endpoint": "http://server3", "results": {"streaming": {"status": "PASS", "completion_tokens": 45, "decode_speed": 45.0, "ttft": 0.04}}}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            p1 = os.path.join(tmpdir, "r1.json")
+            p2 = os.path.join(tmpdir, "r2.json")
+            p3 = os.path.join(tmpdir, "r3.json")
+            out_md = os.path.join(tmpdir, "matrix.md")
+            with open(p1, "w") as f: json.dump(r1, f)
+            with open(p2, "w") as f: json.dump(r2, f)
+            with open(p3, "w") as f: json.dump(r3, f)
+
+            compare_benchmark_reports([p1, p2, p3], output_markdown=out_md)
+            self.assertTrue(os.path.exists(out_md))
+            with open(out_md) as f:
+                content = f.read()
+            self.assertIn("Model-A", content)
+            self.assertIn("Model-B", content)
+            self.assertIn("Model-C", content)
+            self.assertIn("Multi-Model Benchmark Comparison Report (3 Models)", content)
+
+
+class TestPolyglotSWEBenchmarkSuite(unittest.TestCase):
+    def test_language_normalization(self):
+        import languages
+        self.assertEqual(languages.normalize_language("python"), "python")
+        self.assertEqual(languages.normalize_language("py"), "python")
+        self.assertEqual(languages.normalize_language("ts"), "typescript")
+        self.assertEqual(languages.normalize_language("typescript"), "typescript")
+        self.assertEqual(languages.normalize_language("javascript"), "typescript")
+        self.assertEqual(languages.normalize_language("go"), "go")
+        self.assertEqual(languages.normalize_language("golang"), "go")
+        self.assertEqual(languages.normalize_language("java"), "java")
+        self.assertEqual(languages.normalize_language("rs"), "rust")
+        self.assertEqual(languages.normalize_language("rust"), "rust")
+        self.assertEqual(languages.normalize_language("cs"), "csharp")
+        self.assertEqual(languages.normalize_language("c#"), "csharp")
+        self.assertEqual(languages.normalize_language("csharp"), "csharp")
+        self.assertEqual(languages.normalize_language("polyglot"), "polyglot")
+        self.assertEqual(languages.normalize_language("all"), "polyglot")
+        self.assertEqual(languages.normalize_language(None), "python")
+
+    def test_fixtures_complete_for_six_languages(self):
+        import languages
+        required_langs = ["python", "typescript", "go", "java", "rust", "csharp"]
+        for fixture_dict in [
+            languages.DIFF_FIXTURES,
+            languages.MULTIFILE_FIXTURES,
+            languages.SECURITY_FIXTURES,
+            languages.UNIT_TEST_FIXTURES,
+            languages.TYPING_FIXTURES,
+            languages.REFACTOR_FIXTURES,
+        ]:
+            for lang in required_langs:
+                self.assertIn(lang, fixture_dict, f"Missing language '{lang}' in fixture table")
+
+    def test_extract_code_by_language(self):
+        import languages
+        ts_text = "Here is the code:\n```typescript\nexport const x: number = 42;\n```"
+        self.assertEqual(languages.extract_code_by_language(ts_text, "typescript"), "export const x: number = 42;")
+
+        go_text = "```go\npackage main\nfunc main() {}\n```"
+        self.assertEqual(languages.extract_code_by_language(go_text, "go"), "package main\nfunc main() {}")
+
+        rs_text = "```rust\npub fn solve() -> i32 { 1 }\n```"
+        self.assertEqual(languages.extract_code_by_language(rs_text, "rust"), "pub fn solve() -> i32 { 1 }")
+
+    def test_verify_multifile_polyglot(self):
+        import languages
+        ts_code = "export class AuthenticationService { constructor(userRepo: IUserRepository, config: TenantConfig) {} async authenticate(userId: string): Promise<AuthToken | null> { return null; } }"
+        v = languages.verify_multifile_context(ts_code, "typescript")
+        self.assertTrue(v["syntax_valid"])
+        self.assertGreaterEqual(v["symbols_resolved"], 2)
+
+        go_code = "type AuthService struct { repo UserRepository; config models.TenantConfig }\nfunc (a *AuthService) Authenticate(userID string) (*models.AuthToken, error) { return nil, nil }"
+        v_go = languages.verify_multifile_context(go_code, "go")
+        self.assertTrue(v_go["syntax_valid"])
+        self.assertGreaterEqual(v_go["symbols_resolved"], 2)
+
+    def test_verify_unit_test_polyglot(self):
+        import languages
+        ts_test = "describe('PaymentProcessor', () => { it('calls sendReceipt on success', () => { const mockGateway = { charge: jest.fn() }; expect(mockGateway.charge).toBeDefined(); }); });"
+        v_ts = languages.verify_unit_test(ts_test, "typescript", "")
+        self.assertEqual(v_ts["status"], "PASS")
+
+        java_test = "@Test\nvoid testCharge() { var mockGateway = Mockito.mock(StripeGateway.class); Mockito.verify(mockGateway); }"
+        v_java = languages.verify_unit_test(java_test, "java", "")
+        self.assertEqual(v_java["status"], "PASS")
+
+        csharp_test = "[Fact]\npublic void TestSuccess() { var mock = new Mock<IStripeGateway>(); mock.Verify(m => m.ChargeAsync()); }"
+        v_cs = languages.verify_unit_test(csharp_test, "csharp", "")
+        self.assertEqual(v_cs["status"], "PASS")
+
+    def test_verify_strict_typing_polyglot(self):
+        import languages
+        ts_typing = "export class Pipeline<T> { constructor(private readonly data: ReadonlyArray<T>) {} map<U>(fn: (item: T) => U): Pipeline<U> { return new Pipeline<U>([]); } filter(predicate: (item: T) => boolean): Pipeline<T> { return this; } execute(): T[] { return [...this.data]; } }"
+        v_ts = languages.verify_strict_typing(ts_typing, "typescript")
+        self.assertEqual(v_ts["status"], "PASS")
+
+        go_typing = "type Pipeline[T any] struct { data []T }\nfunc NewPipeline[T any](data []T) *Pipeline[T] { return &Pipeline[T]{data: data} }\nfunc (p *Pipeline[T]) Execute() []T { return p.data }"
+        v_go = languages.verify_strict_typing(go_typing, "go")
+        self.assertEqual(v_go["status"], "PASS")
+
+    def test_verify_refactoring_polyglot(self):
+        import languages
+        ts_refactored = "export function processOrderData(records: OrderRecord[] | null | undefined): ProcessedOrder[] { if (!records) return []; return records.filter(r => r.qty && r.qty > 0).map(r => ({ id: r.id || 'N/A', total: r.qty! * r.price! })); }"
+        v_ts = languages.verify_refactoring(ts_refactored, "typescript")
+        self.assertTrue(v_ts["invariants_preserved"])
+        self.assertEqual(v_ts["status"], "PASS")
+
+    def test_eval_runners_with_non_python_language(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        mock_client.call.return_value = {
+            "content": "```typescript\nexport class AuthenticationService {\n  getById() {}\n  AuthToken() {}\n}\n```",
+            "completion_tokens": 80,
+            "decode_speed": 40.0,
+            "ttft": 0.05,
+            "error": None
+        }
+        res = eval_module.run_test_multifile_context(mock_client, language="typescript")
+        self.assertEqual(res["language"], "typescript")
+        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+
+    def test_polyglot_mode_dispatch_aggregation(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        report = {"results": {}}
+        
+        # Test helper running across all 6 languages
+        def dummy_test_fn(client, language="python"):
+            return {
+                "status": "PASS",
+                "language": language,
+                "completion_tokens": 50,
+                "ttft_ms": 50.0,
+                "tok_s": 40.0
+            }
+        
+        res = eval_module._run_swe_test_with_language("surgical_git_diff", dummy_test_fn, mock_client, "polyglot", report)
+        self.assertEqual(res["status"], "PASS")
+        self.assertEqual(res["polyglot_pass_count"], 6)
+        self.assertEqual(res["polyglot_total_count"], 6)
+        # Check sub-keys were populated in report
+        for lang in ["python", "typescript", "go", "java", "rust", "csharp"]:
+            self.assertIn(f"surgical_git_diff_{lang}", report["results"])
+            self.assertEqual(report["results"][f"surgical_git_diff_{lang}"]["language"], lang)
+
+
+class TestReviewFixesAndRobustness(unittest.TestCase):
+    """Tests verifying fixes identified in the code review."""
+
+    def test_extract_unified_diff_with_trailing_prose(self):
+        import languages
+        raw = (
+            "Here is the diff to fix the bug:\n"
+            "```diff\n"
+            "--- a/payroll.py\n"
+            "+++ b/payroll.py\n"
+            "@@ -5,2 +5,2 @@\n"
+            "-bad_code()\n"
+            "+good_code()\n"
+            "```\n"
+            "This fixes the loop boundary.\n"
+        )
+        extracted = languages.extract_unified_diff(raw, "payroll.py")
+        self.assertTrue(extracted.startswith("--- a/payroll.py"))
+        self.assertIn("+good_code()", extracted)
+        self.assertNotIn("This fixes the loop boundary", extracted)
+
+    def test_extract_unified_diff_unfenced_with_explanation(self):
+        import languages
+        raw = (
+            "Sure, here is your patch:\n"
+            "--- a/payroll.go\n"
+            "+++ b/payroll.go\n"
+            "@@ -10,1 +10,1 @@\n"
+            "-for i := 0; i <= len(employees); i++ {\n"
+            "+for i := 0; i < len(employees); i++ {\n"
+            "I hope this helps you resolve the panic!\n"
+        )
+        extracted = languages.extract_unified_diff(raw, "payroll.go")
+        self.assertTrue(extracted.startswith("--- a/payroll.go"))
+        self.assertIn("+for i := 0; i < len(employees); i++ {", extracted)
+        self.assertNotIn("I hope this helps you resolve the panic!", extracted)
+
+    def test_verify_git_diff_exception_fails_safe(self):
+        import languages
+        from unittest.mock import patch
+        diff_text = "--- a/test.py\n+++ b/test.py\n@@ -1,1 +1,1 @@\n-a\n+b\n"
+        with patch("subprocess.run", side_effect=RuntimeError("Simulated git process crash")):
+            res = languages.verify_git_diff(diff_text, "a\n", "test.py")
+            self.assertTrue(res["valid_diff_syntax"])
+            self.assertFalse(res["git_apply_passed"])
+            self.assertEqual(res["status"], "PARTIAL")
+
+    def test_file_logger_reinit_and_close(self):
+        import tempfile
+        import client
+        with tempfile.TemporaryDirectory() as tmpdir:
+            log1 = os.path.join(tmpdir, "test1.log")
+            log2 = os.path.join(tmpdir, "test2.log")
+            path1 = client.init_file_logger(log1)
+            self.assertEqual(path1, log1)
+            client.log("First log entry")
+
+            # Reinit with a different file should cleanly close log1
+            path2 = client.init_file_logger(log2)
+            self.assertEqual(path2, log2)
+            client.log("Second log entry")
+
+            client.close_file_logger()
+            self.assertIsNone(client._LOG_FILE_HANDLE)
+
+            with open(log1, "r", encoding="utf-8") as f:
+                self.assertIn("First log entry", f.read())
+            with open(log2, "r", encoding="utf-8") as f:
+                self.assertIn("Second log entry", f.read())
+
+    def test_n_way_compare_formatting_no_literal_padding(self):
+        import reporting
+        import io
+        from unittest.mock import patch
+
+        mock_reports = [
+            {"model": f"model-{i}", "endpoint": f"http://ep{i}", "results": {}}
+            for i in range(1, 4)
+        ]
+
+        buf = io.StringIO()
+        with patch("builtins.print", side_effect=lambda *args, **kwargs: buf.write(" ".join(map(str, args)) + "\n")):
+            with patch("sys.stdout.isatty", return_value=False):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    fpaths = []
+                    for i, r in enumerate(mock_reports):
+                        fp = os.path.join(tmpdir, f"rep{i}.json")
+                        with open(fp, "w") as f:
+                            json.dump(r, f)
+                        fpaths.append(fp)
+                    reporting.compare_benchmark_reports(fpaths)
+                    out = buf.getvalue()
+                    self.assertNotIn(":<", out)
 
 
 if __name__ == "__main__":

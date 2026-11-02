@@ -1,0 +1,15 @@
+# Docker Compose configuration for llm-eval-suite
+# Run with host networking so the container can directly access local or LAN LLM endpoints.
+# Mounts ./results to preserve generated benchmark artifacts on the host.
+
+services:
+  eval:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: llm-eval-suite:latest
+    network_mode: host
+    volumes:
+      - ./results:/app/results
+      - ./logs:/app/logs
+      - ./config.json:/app/config.json:ro
