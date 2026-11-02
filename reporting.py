@@ -495,6 +495,178 @@ def compute_relative_advantages(m1: dict, m2: dict) -> dict:
     }
 
 
+# ============================================================================
+# WORKLOAD DOMAINS & TASK PURPOSE SUITABILITY
+# ============================================================================
+
+WORKLOAD_DOMAINS = {
+    "agents_and_tools": {
+        "title": "Autonomous Agents & Tool Execution",
+        "tests": ["tool_calling", "json_schema", "client_abort", "prompt_injection_defense"],
+        "recommended_for": "Autonomous agent loops, function calling workflows, structured JSON extraction, and security-critical prompt defense.",
+        "caution_if_failed": "Tool invocation hallucination, schema parsing failure, or vulnerability to prompt injection.",
+    },
+    "deep_reasoning": {
+        "title": "Deep Reasoning, Science & Math",
+        "tests": ["cruxeval", "aime_olympiad", "gpqa_diamond"],
+        "recommended_for": "Complex algorithmic deduction, mental code tracing, Olympiad-level math, and graduate science problems.",
+        "caution_if_failed": "Unreliable on multi-step reasoning, mathematical derivations, or state-tracking logic.",
+    },
+    "long_context_rag": {
+        "title": "Long-Context Retrieval & RAG Pipelines",
+        "tests": ["extreme_precision", "context_scaling", "multihop_graph", "frontier_needle_depth"],
+        "recommended_for": "Repository-scale search, multi-hop document analysis, high-depth needle retrieval, and large-context RAG.",
+        "caution_if_failed": "Context degradation or recall failure when prompts exceed standard context lengths.",
+    },
+    "multimodal_vision": {
+        "title": "Multimodal Vision & Document OCR",
+        "tests": ["vision"],
+        "recommended_for": "Document parsing, invoice/receipt digitization, diagram inspection, and visual question answering.",
+        "caution_if_failed": "Inaccurate OCR, missing visual line-items, or failure to encode image tokens.",
+    },
+    "serving_and_batching": {
+        "title": "High-Throughput Serving & Low-Latency APIs",
+        "tests": ["streaming", "concurrency", "prefix_caching", "stop_sequences", "error_handling"],
+        "recommended_for": "Real-time production APIs, concurrent user serving, low-latency streaming chat, and cost-efficient KV caching.",
+        "caution_if_failed": "High TTFT latency, concurrency contention under multi-client load, or poor prompt-cache reuse.",
+    },
+    "software_engineering": {
+        "title": "Software Engineering & Code Intelligence",
+        "tests": [
+            "capabilities_4tasks", "novel_algorithm_fuzz", "swe_bench_bug_patch",
+            "surgical_git_diff", "multifile_context", "code_review_security",
+            "unit_test_synthesis", "strict_typing", "refactor_invariants"
+        ],
+        "recommended_for": "Automated code refactoring, bug patching, surgical git diffs (git apply), OWASP security reviews, and type compliance.",
+        "caution_if_failed": "Generated code requires test-runner or compiler verification before merging into production.",
+    },
+}
+
+
+def compute_task_suitability_matrix(report: dict) -> dict:
+    """Evaluates benchmark results against core enterprise workload domains to determine
+    what specific tasks and deployment purposes the model is best suited for, and where
+    guardrails or caution are required.
+    """
+    report = normalize_report(report)
+    results = report.get("results", {})
+    domain_matrix = {}
+    best_suited = []
+    caution_areas = []
+
+    for d_key, info in WORKLOAD_DOMAINS.items():
+        evaluated_tests = []
+        passed = 0
+        partial = 0
+        failed = 0
+
+        for t_key in info["tests"]:
+            if t_key in results:
+                m = extract_test_metrics(t_key, results[t_key])
+                if m["status"] == "SKIPPED":
+                    continue
+                evaluated_tests.append(t_key)
+                if "PASS" in m["status"]:
+                    passed += 1
+                elif "PARTIAL" in m["status"]:
+                    partial += 1
+                else:
+                    failed += 1
+
+        total = len(evaluated_tests)
+        if total == 0:
+            continue
+
+        score_pct = round(((passed + 0.5 * partial) / total) * 100.0, 1)
+
+        if score_pct >= 85.0:
+            rating = "EXCELLENT"
+            deployment_status = "Highly Recommended"
+            best_suited.append({
+                "domain": info["title"],
+                "score_pct": score_pct,
+                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['recommended_for']}"
+            })
+        elif score_pct >= 70.0:
+            rating = "COMPETENT"
+            deployment_status = "Recommended with Guardrails"
+            best_suited.append({
+                "domain": info["title"],
+                "score_pct": score_pct,
+                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['recommended_for']} (Recommended with test validation loops)."
+            })
+        elif score_pct >= 50.0:
+            rating = "MARGINAL"
+            deployment_status = "Human Review Required"
+            caution_areas.append({
+                "domain": info["title"],
+                "score_pct": score_pct,
+                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['caution_if_failed']}"
+            })
+        else:
+            rating = "NOT RECOMMENDED"
+            deployment_status = "Not Recommended"
+            caution_areas.append({
+                "domain": info["title"],
+                "score_pct": score_pct,
+                "detail": f"High failure rate ({failed}/{total} failed). {info['caution_if_failed']}"
+            })
+
+        domain_matrix[d_key] = {
+            "title": info["title"],
+            "score_pct": score_pct,
+            "passed": passed,
+            "partial": partial,
+            "failed": failed,
+            "total": total,
+            "rating": rating,
+            "deployment_status": deployment_status,
+            "recommended_for": info["recommended_for"],
+            "caution_if_failed": info["caution_if_failed"],
+        }
+
+    # Granular specific diagnostic cautions
+    if "unit_test_synthesis" in results:
+        u_data = results["unit_test_synthesis"]
+        if isinstance(u_data, dict) and u_data.get("status") == "FAIL":
+            caution_areas.append({
+                "domain": "Unit Test Synthesis",
+                "detail": "Generated unit tests had assertion or execution errors against production code. Use execution-feedback loops (e.g. pytest retry)."
+            })
+
+    if "capabilities_4tasks" in results:
+        cap_data = results["capabilities_4tasks"]
+        if isinstance(cap_data, dict):
+            part_tasks = [t.get("name", t.get("id")) for t in cap_data.get("tasks", []) if t.get("status") in ("PARTIAL", "FAIL")]
+            if part_tasks:
+                caution_areas.append({
+                    "domain": "Large Output Horizons",
+                    "detail": f"Tasks reached output token limits before completion ({', '.join(part_tasks)}). Ensure high max_tokens or chunked prompts."
+                })
+
+    # Overall profile synthesis
+    excellent_domains = [d for d in domain_matrix.values() if d["rating"] == "EXCELLENT"]
+    competent_domains = [d for d in domain_matrix.values() if d["rating"] in ("EXCELLENT", "COMPETENT")]
+
+    if len(excellent_domains) >= 4:
+        overall_profile = "High-tier general-purpose enterprise model, exceptional in agentic execution, reasoning, long-context RAG, and multimodal extraction."
+    elif len(competent_domains) >= 4:
+        overall_profile = "Well-rounded enterprise model suitable for multi-domain deployment with standard validation guardrails."
+    elif any(d["title"] == "Software Engineering & Code Intelligence" and d["rating"] in ("EXCELLENT", "COMPETENT") for d in domain_matrix.values()):
+        overall_profile = "Strong SWE and engineering model suitable for code generation, refactoring, and automated patch creation."
+    elif any(d["title"] == "Autonomous Agents & Tool Execution" and d["rating"] in ("EXCELLENT", "COMPETENT") for d in domain_matrix.values()):
+        overall_profile = "Reliable agentic execution model with strong function-calling and schema compliance."
+    else:
+        overall_profile = "Specialized model; consult domain suitability scores before selecting deployment workloads."
+
+    return {
+        "matrix": domain_matrix,
+        "best_suited_for": best_suited,
+        "caution_areas": caution_areas,
+        "overall_profile": overall_profile,
+    }
+
+
 def compute_executive_summary(report: dict) -> dict:
     report = normalize_report(report)
     results = report.get("results", {})
@@ -552,6 +724,8 @@ def compute_executive_summary(report: dict) -> dict:
     token_conciseness_factor = min(2.0, max(0.2, 1000.0 / (avg_tokens_per_passed if avg_tokens_per_passed > 0 else 1000.0)))
     efficiency_index = round((pass_rate_pct * 0.6) + (min(100.0, avg_speed * 1.5) * 0.25) + (token_conciseness_factor * 15.0), 1)
 
+    suitability = compute_task_suitability_matrix(report)
+
     return {
         "model": report.get("model", "unknown"),
         "endpoint": report.get("endpoint", "unknown"),
@@ -572,7 +746,11 @@ def compute_executive_summary(report: dict) -> dict:
         "avg_decode_tok_s": round(avg_speed, 2),
         "avg_ttft_ms": round(avg_ttft, 1),
         "total_wall_time_s": round(wall_time, 2),
-        "efficiency_index": efficiency_index
+        "efficiency_index": efficiency_index,
+        "workload_suitability": suitability.get("matrix", {}),
+        "best_suited_for": suitability.get("best_suited_for", []),
+        "caution_areas": suitability.get("caution_areas", []),
+        "workload_profile": suitability.get("overall_profile", ""),
     }
 
 
@@ -933,6 +1111,37 @@ def print_summary_table(report):
     log(f"  Total Benchmark Time    : {summary['total_wall_time_s']:.2f} s")
     log(f"  Composite Efficiency Idx: {summary['efficiency_index']:.1f} / 100.0")
     log("="*88 + "\n", bold=True)
+
+    # Workload Suitability & Purpose Qualification
+    matrix = summary.get("workload_suitability", {})
+    best_suited = summary.get("best_suited_for", [])
+    cautions = summary.get("caution_areas", [])
+
+    if matrix:
+        log("="*88, bold=True)
+        log("             MODEL WORKLOAD SUITABILITY & PURPOSE QUALIFICATION                         ", bold=True, color=CYAN)
+        log("="*88, bold=True)
+        log(f"  {'Workload Domain':<40} | {'Score':<8} | {'Rating':<12} | {'Deployment Status'}", bold=True)
+        log("  " + "-" * 86)
+        for _, d_info in matrix.items():
+            r_col = GREEN if d_info["rating"] == "EXCELLENT" else (CYAN if d_info["rating"] == "COMPETENT" else RED)
+            log(f"  {d_info['title']:<40} | {d_info['score_pct']:>5.1f}% | {r_col}{d_info['rating']:<12}{RESET} | {d_info['deployment_status']}")
+        log("  " + "-" * 86)
+
+        if summary.get("workload_profile"):
+            log(f"  Profile Summary: {summary['workload_profile']}\n")
+
+        if best_suited:
+            log("  RECOMMENDED ENTERPRISE PURPOSES (BEST SUITED FOR):", bold=True, color=GREEN)
+            for item in best_suited:
+                log(f"   • {item['domain']}: {item['detail']}")
+
+        if cautions:
+            log("\n  OPERATIONAL LIMITATIONS & WORKLOAD CAUTIONS:", bold=True, color=YELLOW)
+            for item in cautions:
+                detail = item.get("detail", item.get("caution_if_failed", ""))
+                log(f"   • {item['domain']}: {detail}")
+        log("="*88 + "\n", bold=True)
 
 
 def compare_benchmark_reports(file_paths: list, output_markdown: str = None):

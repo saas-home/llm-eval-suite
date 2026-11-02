@@ -258,7 +258,7 @@ def execute_stream(endpoint: str, model: str, task: dict, max_tokens: int, tempe
                     u = chunk["usage"]
                     prompt_tokens = u.get("prompt_tokens", prompt_tokens)
                     completion_tokens = u.get("completion_tokens", completion_tokens)
-                    cached_tokens = u.get("prompt_tokens_details", {}).get("cached_tokens", cached_tokens)
+                    cached_tokens = (u.get("prompt_tokens_details") or {}).get("cached_tokens", cached_tokens)
 
                 choices = chunk.get("choices", [])
                 if choices:

@@ -1457,9 +1457,281 @@ class TestReviewFixesAndRobustness(unittest.TestCase):
                         with open(fp, "w") as f:
                             json.dump(r, f)
                         fpaths.append(fp)
-                    reporting.compare_benchmark_reports(fpaths)
+                    reporting.compare_benchmark_reports(fpaths, output_markdown=os.path.join(tmpdir, "out.md"))
                     out = buf.getvalue()
                     self.assertNotIn(":<", out)
+
+
+class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
+    """Regression tests for bug fixes and robustness improvements found during code review."""
+
+    def test_judge_score_10_single_mode_json_and_regex(self):
+        import judge_eval
+        # Verify single mode score_10 key is parsed accurately (not coerced to 10.0)
+        res_json = '{"score_10": 4.5, "strengths": "Clear code", "weaknesses": "Lacks tests"}'
+        score_val, rationale = judge_eval.parse_judge_score_10(res_json, "score")
+        self.assertAlmostEqual(score_val, 4.5)
+
+        # Verify fallback regex doesn't match literal '_10' in score_10 when unquoted
+        raw_text = "Here is my evaluation:\nscore_10: 7.2 out of 10.\nCode is decent."
+        score_val2, rationale2 = judge_eval.parse_judge_score_10(raw_text, "score")
+        self.assertAlmostEqual(score_val2, 7.2)
+
+    def test_verify_unit_test_future_import_hoisted(self):
+        import languages
+        unit_test_code = (
+            "from __future__ import annotations\n"
+            "import unittest\n"
+            "from unittest.mock import MagicMock\n"
+            "class TestPayment(unittest.TestCase):\n"
+            "    def test_success(self):\n"
+            "        mock_gw = MagicMock()\n"
+            "        mock_gw.charge.return_value = {'status': 'succeeded', 'id': 'tx_123'}\n"
+            "        notifier = MagicMock()\n"
+            "        processor = PaymentProcessor(mock_gw, notifier)\n"
+            "        res = processor.process_order('user@example.com', 100, 'tok_valid')\n"
+            "        self.assertTrue(res)\n"
+            "        notifier.send_receipt.assert_called_once_with('user@example.com', 'tx_123')\n"
+            "    def test_failure(self):\n"
+            "        mock_gw = MagicMock()\n"
+            "        mock_gw.charge.return_value = {'status': 'failed'}\n"
+            "        processor = PaymentProcessor(mock_gw, MagicMock())\n"
+            "        res = processor.process_order('user@example.com', 100, 'tok_fail')\n"
+            "        self.assertFalse(res)\n"
+        )
+        source = languages.UNIT_TEST_FIXTURES["python"]["source"]
+        res = languages.verify_unit_test(unit_test_code, "python", source)
+        self.assertTrue(res["syntax_valid"])
+        self.assertEqual(res["unit_tests_passed_count"], 3)
+        self.assertEqual(res["status"], "PASS")
+
+    def test_verify_unit_test_partial_credit(self):
+        import languages
+        unit_test_code = (
+            "import unittest\n"
+            "from unittest.mock import MagicMock\n"
+            "class TestPayment(unittest.TestCase):\n"
+            "    def test_success(self):\n"
+            "        mock_gw = MagicMock()\n"
+            "        mock_gw.charge.return_value = {'status': 'succeeded', 'id': 'tx_123'}\n"
+            "        notifier = MagicMock()\n"
+            "        processor = PaymentProcessor(mock_gw, notifier)\n"
+            "        self.assertTrue(processor.process_order('user@example.com', 100, 'tok_valid'))\n"
+            "    def test_bad_expectation(self):\n"
+            "        self.assertEqual(1, 2)\n"
+        )
+        source = languages.UNIT_TEST_FIXTURES["python"]["source"]
+        res = languages.verify_unit_test(unit_test_code, "python", source)
+        self.assertTrue(res["syntax_valid"])
+        self.assertEqual(res["unit_tests_passed_count"], 1)
+        self.assertEqual(res["status"], "PARTIAL")
+
+    def test_verify_refactoring_future_import_hoisted(self):
+        import languages
+        refactored_code = (
+            "from __future__ import annotations\n"
+            "def process_order_data(orders: list[dict] | None = None) -> list[dict]:\n"
+            "    if not orders:\n"
+            "        return []\n"
+            "    result = []\n"
+            "    for o in orders:\n"
+            "        qty = o.get('qty', 0)\n"
+            "        price = o.get('price', 0)\n"
+            "        if qty <= 0:\n"
+            "            continue\n"
+            "        discount = o.get('discount', 0.0)\n"
+            "        total = qty * price * (1.0 - discount)\n"
+            "        item = {'id': o.get('id'), 'total': total}\n"
+            "        if item['id'] is None:\n"
+            "            del item['id']\n"
+            "        result.append(item)\n"
+            "    return result\n"
+        )
+        res = languages.verify_refactoring(refactored_code, "python")
+        self.assertTrue(res["syntax_valid"])
+        self.assertTrue(res["invariants_preserved"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_verify_security_review_not_vulnerable_phrase(self):
+        import languages
+        response_text = (
+            "Review of Snippet A: vulnerable to SQL injection.\n"
+            "Review of Snippet B: concurrency issue, race condition found.\n"
+            "Review of Snippet C: Snippet C is not vulnerable, password hashing with bcrypt is safe."
+        )
+        res = languages.verify_security_review(response_text)
+        self.assertTrue(res["sqli_detected"])
+        self.assertTrue(res["race_detected"])
+        self.assertTrue(res["safe_snippet_passed"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_verify_strict_typing_classmethod_cls(self):
+        import languages
+        typed_code = (
+            "from typing import Optional, Dict, Any\n"
+            "class Config:\n"
+            "    def __init__(self, host: str, port: int) -> None:\n"
+            "        self.host = host\n"
+            "        self.port = port\n"
+            "    @classmethod\n"
+            "    def from_dict(cls, data: Dict[str, Any]) -> 'Config':\n"
+            "        return cls(str(data['host']), int(data['port']))\n"
+        )
+        res = languages.verify_strict_typing(typed_code, "python", execute_code=False)
+        self.assertTrue(res["syntax_valid"])
+        self.assertTrue(res["all_annotated"])
+        self.assertTrue(res["type_compliant"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_client_abort_failure_is_fail_not_degraded(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock, patch
+        mock_client = MagicMock()
+        mock_client.model = "test-model"
+        mock_client.completions_url = "http://127.0.0.1:9999/v1/chat/completions"
+        mock_client._get_headers.return_value = {}
+        mock_client.call.return_value = {"content": "", "error": "HTTP 500: Internal Server Error"}
+        with patch("urllib.request.urlopen", side_effect=Exception("aborted")):
+            res = eval_module.run_test_client_abort(mock_client)
+            self.assertEqual(res["status"], "FAIL")
+            self.assertFalse(res["recovered"])
+
+    def test_json_schema_prose_outermost_fallback(self):
+        import eval as eval_module
+        from unittest.mock import MagicMock
+        mock_client = MagicMock()
+        mock_client.call.return_value = {
+            "content": "Sure, here is your specification:\n"
+                       "{\"service_name\": \"OrderProcessingService\", \"dependencies\": [\"db\", \"cache\"], \"port\": 8080, \"protocol\": \"grpc\"}\n"
+                       "Let me know if you need more fields!",
+            "completion_tokens": 50,
+            "ttft": 0.05,
+            "decode_speed": 40.0
+        }
+        res = eval_module.run_test_json_schema(mock_client)
+        self.assertTrue(res["valid_json"])
+        self.assertTrue(res["valid_schema"])
+        self.assertEqual(res["status"], "PASS")
+
+    def test_streamed_tool_call_ttft_recorded(self):
+        from unittest.mock import patch, MagicMock
+        lines = [
+            b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"search","arguments":"{\\"q\\":\\"test\\"}"}}]}}]}\n',
+            b'data: [DONE]\n'
+        ]
+        mock_resp = MagicMock()
+        mock_resp.__iter__.return_value = iter(lines)
+        mock_resp.__enter__.return_value = mock_resp
+
+        c = client.LLMClient("http://localhost:8080/v1")
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            res = c.call([{"role": "user", "content": "search something"}], stream=True)
+            self.assertGreater(res["ttft"], 0.0)
+            self.assertGreaterEqual(res["completion_tokens"], 1)
+            self.assertEqual(len(res["tool_calls"]), 1)
+
+    def test_benchmarks_prompt_tokens_details_null_safe(self):
+        usage = {"prompt_tokens": 100, "completion_tokens": 50, "prompt_tokens_details": None}
+        details = usage.get("prompt_tokens_details") or {}
+        cached = details.get("cached_tokens", 0)
+        self.assertEqual(cached, 0)
+
+    def test_eval_adv_depth_bounding_small_context(self):
+        from eval import build_context_milestones
+        max_context = 8192
+        milestones = build_context_milestones(max_context, max_ratio=0.8)
+        adv_depth = min(32000, max(milestones))
+        self.assertLessEqual(adv_depth, max_context)
+        self.assertEqual(adv_depth, max(milestones))
+
+
+class TestWorkloadSuitabilityAndPurposeQualification(unittest.TestCase):
+    """Verifies that the benchmark accurately qualifies model suitability across enterprise workload purposes."""
+
+    def test_suitability_matrix_classification(self):
+        import reporting
+        mock_report = {
+            "model": "qwen3.8-27b",
+            "endpoint": "http://localhost:8888/v1",
+            "results": {
+                # Agents and Tools: 100%
+                "tool_calling": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 150},
+                "json_schema": {"status": "PASS", "completion_tokens": 50, "tok_s": 44.0, "ttft_ms": 120},
+                "client_abort": {"status": "PASS", "completion_tokens": 10, "tok_s": 40.0, "ttft_ms": 100},
+                "prompt_injection_defense": {"status": "PASS", "completion_tokens": 80, "tok_s": 45.0, "ttft_ms": 140},
+                # Deep Reasoning: 100%
+                "cruxeval": {"status": "PASS", "completion_tokens": 120, "tok_s": 45.0, "ttft_ms": 130},
+                "aime_olympiad": {"status": "PASS", "completion_tokens": 300, "tok_s": 45.0, "ttft_ms": 160},
+                "gpqa_diamond": {"status": "PASS", "completion_tokens": 250, "tok_s": 44.0, "ttft_ms": 150},
+                # Long Context: 100%
+                "context_scaling": {"status": "PASS", "completion_tokens": 200, "tok_s": 42.0, "ttft_ms": 2000},
+                "multihop_graph": {"status": "PASS", "completion_tokens": 800, "tok_s": 40.0, "ttft_ms": 5000},
+                "frontier_needle_depth": {"status": "PASS", "completion_tokens": 150, "tok_s": 41.0, "ttft_ms": 6000},
+                "extreme_precision": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 140},
+                # Vision: 100%
+                "vision": {"status": "PASS", "completion_tokens": 500, "tok_s": 45.0, "ttft_ms": 950},
+                # Serving: 100%
+                "streaming": {"status": "PASS", "completion_tokens": 100, "tok_s": 46.0, "ttft_ms": 180},
+                "concurrency": {"status": "PASS", "completion_tokens": 128, "tok_s": 80.0, "ttft_ms": 2500},
+                "prefix_caching": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 2500},
+                "stop_sequences": {"status": "PASS", "completion_tokens": 50, "tok_s": 45.0, "ttft_ms": 120},
+                "error_handling": {"status": "PASS", "completion_tokens": 20, "tok_s": 45.0, "ttft_ms": 100},
+                # Software Engineering: Partial failure
+                "capabilities_4tasks": {
+                    "status": "FAIL",
+                    "tasks": [
+                        {"id": "task1", "name": "AVL Tree", "status": "PARTIAL"},
+                        {"id": "task2", "name": "Concurrency", "status": "PASS"},
+                        {"id": "task3", "name": "Rate Limiter", "status": "PASS"},
+                        {"id": "task4", "name": "Hidden Constraints", "status": "PASS"},
+                    ],
+                    "tokens": 4400, "tok_s": 45.0, "ttft_ms": 150
+                },
+                "novel_algorithm_fuzz": {"status": "PASS", "completion_tokens": 300, "tok_s": 45.0, "ttft_ms": 140},
+                "swe_bench_bug_patch": {"status": "PASS", "completion_tokens": 200, "tok_s": 45.0, "ttft_ms": 140},
+                "surgical_git_diff": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 130},
+                "multifile_context": {"status": "PASS", "completion_tokens": 200, "tok_s": 45.0, "ttft_ms": 140},
+                "code_review_security": {"status": "PASS", "completion_tokens": 180, "tok_s": 45.0, "ttft_ms": 140},
+                "unit_test_synthesis": {"status": "FAIL", "completion_tokens": 400, "tok_s": 45.0, "ttft_ms": 150},
+                "strict_typing": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 140},
+                "refactor_invariants": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 140},
+            }
+        }
+
+        suitability = reporting.compute_task_suitability_matrix(mock_report)
+        matrix = suitability["matrix"]
+
+        self.assertIn("agents_and_tools", matrix)
+        self.assertIn("deep_reasoning", matrix)
+        self.assertIn("long_context_rag", matrix)
+        self.assertIn("multimodal_vision", matrix)
+        self.assertIn("serving_and_batching", matrix)
+        self.assertIn("software_engineering", matrix)
+
+        self.assertEqual(matrix["agents_and_tools"]["rating"], "EXCELLENT")
+        self.assertEqual(matrix["agents_and_tools"]["score_pct"], 100.0)
+        self.assertEqual(matrix["deep_reasoning"]["rating"], "EXCELLENT")
+        self.assertEqual(matrix["long_context_rag"]["rating"], "EXCELLENT")
+        self.assertEqual(matrix["multimodal_vision"]["rating"], "EXCELLENT")
+        self.assertEqual(matrix["serving_and_batching"]["rating"], "EXCELLENT")
+
+        self.assertEqual(matrix["software_engineering"]["rating"], "COMPETENT")
+        self.assertAlmostEqual(matrix["software_engineering"]["score_pct"], 77.8, places=1)
+
+        best_domains = [b["domain"] for b in suitability["best_suited_for"]]
+        self.assertIn("Autonomous Agents & Tool Execution", best_domains)
+        self.assertIn("Long-Context Retrieval & RAG Pipelines", best_domains)
+        self.assertIn("Deep Reasoning, Science & Math", best_domains)
+
+        caution_domains = [c["domain"] for c in suitability["caution_areas"]]
+        self.assertIn("Unit Test Synthesis", caution_domains)
+        self.assertIn("Large Output Horizons", caution_domains)
+
+        summary = reporting.compute_executive_summary(mock_report)
+        self.assertIn("workload_suitability", summary)
+        self.assertIn("best_suited_for", summary)
+        self.assertIn("caution_areas", summary)
+        self.assertIn("workload_profile", summary)
 
 
 if __name__ == "__main__":

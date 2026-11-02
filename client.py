@@ -394,23 +394,27 @@ class LLMClient:
                                     or ""
                                 )
                                 content_part = delta.get("content") or ""
+                                is_tool_delta = bool("tool_calls" in delta and delta["tool_calls"])
                                 chunk_text = reasoning_part + content_part
-                                if chunk_text:
+                                if chunk_text or is_tool_delta:
                                     now = time.perf_counter()
                                     if t_first is None:
                                         t_first = now
                                     t_last = now
-                                    token_count += 1
-                                    chunks.append(chunk_text)
-                                    if reasoning_part:
-                                        reasoning_chunks.append(reasoning_part)
-                                    if content_part:
-                                        content_chunks.append(content_part)
-                                    if chunk_callback:
-                                        try:
-                                            chunk_callback(chunk_text, t_first, now, token_count)
-                                        except Exception:
-                                            pass
+                                    if chunk_text:
+                                        token_count += 1
+                                        chunks.append(chunk_text)
+                                        if reasoning_part:
+                                            reasoning_chunks.append(reasoning_part)
+                                        if content_part:
+                                            content_chunks.append(content_part)
+                                        if chunk_callback:
+                                            try:
+                                                chunk_callback(chunk_text, t_first, now, token_count)
+                                            except Exception:
+                                                pass
+                                    elif is_tool_delta:
+                                        token_count += 1
                     t_end = time.perf_counter()
                     total_time = t_end - t0
                     ttft = (t_first - t0) if t_first else total_time

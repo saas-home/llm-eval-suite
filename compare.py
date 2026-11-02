@@ -28,6 +28,7 @@ import env_loader
 from client import (
     LLMClient,
     normalize_endpoint,
+    DEFAULT_RESULTS_DIR,
     NO_COLOR,
     BOLD,
     DIM,
@@ -39,6 +40,7 @@ from client import (
     RESET,
     CLEAR_LINE,
 )
+from reporting import compute_relative_advantages, compare_benchmark_reports
 
 
 BENCHMARK_TASKS = [
@@ -955,7 +957,6 @@ def run_live_arena(
     sum2 = compute_model_summary("model2", m2, ep2)
 
     # Relative advantage calculations for Executive Summary
-    from eval import compute_relative_advantages
     adv = compute_relative_advantages(sum1, sum2)
     verdict = adv["verdict"]
 
@@ -1024,9 +1025,8 @@ def run_live_arena(
         md_file = output_file if output_file.endswith(".md") else f"{output_file}.md"
         json_file = output_file if output_file.endswith(".json") else (output_file[:-3] + ".json" if output_file.endswith(".md") else f"{output_file}.json")
     else:
-        results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results")
-        md_file = os.path.join(results_dir, f"live_comparison_{safe_a}_vs_{safe_b}_{timestamp_str}.md")
-        json_file = os.path.join(results_dir, f"live_comparison_{safe_a}_vs_{safe_b}_{timestamp_str}.json")
+        md_file = os.path.join(DEFAULT_RESULTS_DIR, f"live_comparison_{safe_a}_vs_{safe_b}_{timestamp_str}.md")
+        json_file = os.path.join(DEFAULT_RESULTS_DIR, f"live_comparison_{safe_a}_vs_{safe_b}_{timestamp_str}.json")
 
     # Ensure output dir exists
     out_dir = os.path.dirname(md_file)
@@ -1254,7 +1254,6 @@ def main():
 
     # Route 1: Offline Report Comparison
     if reports:
-        from reporting import compare_benchmark_reports
         compare_benchmark_reports(reports, output_markdown=args.out if args.out and args.out.endswith(".md") else None)
 
     # Route 2: Native Arena Mode (Live Concurrent Comparison)
@@ -1289,7 +1288,7 @@ def main():
         if cfg.get("endpoint1") and cfg.get("endpoint2"):
             print(f"{YELLOW}Note: config defines two servers but Arena Mode was not requested. "
                   f"Use --live (with --endpoint1/--endpoint2) for side-by-side comparison.{RESET}")
-        out_file = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "compare_benchmark.json")
+        out_file = args.out or os.path.join(DEFAULT_RESULTS_DIR, "compare_benchmark.json")
         target_url = args.url if args.url != default_url else (cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or default_url)
         ep_matched = normalize_endpoint(target_url) in (normalize_endpoint(cfg.get("endpoint")), normalize_endpoint(cfg.get("endpoint1")))
         target_model = args.model if args.model != "default" else ((cfg.get("model") if ep_matched else None) or os.getenv("OPENAI_MODEL") or "default")

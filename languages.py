@@ -23,6 +23,8 @@ import shutil
 import tempfile
 import subprocess
 
+from client import assemble_python_script
+
 SUPPORTED_LANGUAGES = ["python", "typescript", "go", "java", "rust", "csharp"]
 
 LANGUAGE_ALIASES = {
@@ -1337,7 +1339,10 @@ def verify_security_review(text: str) -> dict:
     ])
 
     c_part = text_lower.split("snippet c")[-1] if "snippet c" in text_lower else text_lower
-    safe_passed = "safe" in c_part or "no vulnerability" in c_part or "clean" in c_part or ("vulnerable" not in c_part)
+    safe_passed = any(k in c_part for k in [
+        "safe", "no vulnerability", "no vulnerabilities", "not vulnerable",
+        "clean", "secure", "no issue", "no security issue"
+    ]) or ("vulnerable" not in c_part)
 
     status = "PASS" if (sqli_detected and race_detected and safe_passed) else ("PARTIAL" if (sqli_detected or race_detected) else "FAIL")
     return {
@@ -1373,7 +1378,7 @@ def verify_unit_test(code: str, language: str, source_code: str, execute_code: b
                     with open(mod_path, "w") as f:
                         f.write(source_code)
 
-                    test_harness = (
+                    preamble = (
                         "import sys, os, types\n"
                         f"sys.path.insert(0, r'{tmpdir}')\n"
                         f"{source_code}\n"
@@ -1382,23 +1387,29 @@ def verify_unit_test(code: str, language: str, source_code: str, execute_code: b
                         "pp_mod.StripeGateway = StripeGateway\n"
                         "pp_mod.NotificationClient = NotificationClient\n"
                         "sys.modules['payment_processor'] = pp_mod\n"
-                        f"{code}\n"
+                    )
+                    harness = (
                         "if __name__ == '__main__':\n"
                         "    import unittest\n"
                         "    unittest.main(exit=False)\n"
                     )
+                    test_harness = assemble_python_script(code, preamble=preamble, harness=harness)
                     t_file = os.path.join(tmpdir, "test_suite.py")
                     with open(t_file, "w") as f:
                         f.write(test_harness)
 
                     proc = subprocess.run([sys.executable, t_file], capture_output=True, text=True, timeout=15)
                     output = proc.stderr + proc.stdout
-                    if "OK" in output:
+                    if re.search(r"\bOK\b", output) and "FAILED" not in output:
                         tests_passed = total_tests
                     else:
                         m = re.search(r"Ran (\d+) tests in", output)
-                        if m and "FAILED" not in output:
-                            tests_passed = int(m.group(1))
+                        fails = re.search(r"failures=(\d+)", output)
+                        errs = re.search(r"errors=(\d+)", output)
+                        total_ran = int(m.group(1)) if m else 0
+                        n_failed = (int(fails.group(1)) if fails else 0) + (int(errs.group(1)) if errs else 0)
+                        if total_ran > 0:
+                            tests_passed = max(0, min(total_tests, total_ran - n_failed))
             except Exception:
                 pass
         elif syntax_valid:
@@ -1446,7 +1457,7 @@ def verify_strict_typing(code: str, language: str, execute_code: bool = True) ->
                 if isinstance(node, ast.FunctionDef):
                     total_methods += 1
                     has_return = node.returns is not None
-                    args_typed = all(arg.annotation is not None for arg in node.args.args if arg.arg != "self")
+                    args_typed = all(arg.annotation is not None for arg in node.args.args if arg.arg not in ("self", "cls"))
                     if has_return and args_typed:
                         annotated_methods += 1
 
@@ -1504,8 +1515,7 @@ def verify_refactoring(code: str, language: str, execute_code: bool = True) -> d
             pass
 
         if syntax_valid and execute_code:
-            test_harness = (
-                f"{code}\n"
+            assertions = (
                 "assert process_order_data(None) == []\n"
                 "assert process_order_data([]) == []\n"
                 "assert process_order_data([{'qty': 0, 'price': 10}]) == []\n"
@@ -1513,6 +1523,7 @@ def verify_refactoring(code: str, language: str, execute_code: bool = True) -> d
                 "assert process_order_data([{'id': '2', 'qty': 4, 'price': 25.0, 'discount': 0.1}]) == [{'id': '2', 'total': 90.0}]\n"
                 "print('INVARIANTS_OK')\n"
             )
+            test_harness = assemble_python_script(code, harness=assertions)
             try:
                 with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
                     f.write(test_harness)

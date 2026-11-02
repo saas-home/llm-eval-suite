@@ -551,12 +551,21 @@ def run_test_json_schema(client: LLMClient):
         try:
             parsed = json.loads(clean_content)
             valid_json = True
+        except Exception:
+            # Fallback: extract outermost JSON object { ... } if prose surrounds it
+            brace_match = re.search(r"\{.*\}", clean_content, re.DOTALL)
+            if brace_match:
+                try:
+                    parsed = json.loads(brace_match.group(0))
+                    valid_json = True
+                except Exception:
+                    pass
+
+        if valid_json and isinstance(parsed, dict):
             has_name = any(k in parsed for k in ["service_name", "serviceName", "name", "service"])
             has_deps = any(k in parsed for k in ["dependencies", "deps"])
             if has_name and has_deps:
                 valid_schema = True
-        except Exception:
-            pass
 
         status = "PASS" if valid_schema else ("PARTIAL" if valid_json else "FAIL")
         log(f"  -> Valid JSON Emitted: {valid_json}")
@@ -690,7 +699,7 @@ def run_test_client_abort(client: LLMClient):
         r = client.call([{"role": "user", "content": "Reply strictly with the word 'OK'."}], max_tokens=256, temperature=0.0, stream=False, timeout=15)
         rec_time = time.perf_counter() - t_rec_start
         follow_up_ok = ("OK" in r.get("content", "").upper() or len(r.get("content", "")) > 0) and not r.get("error")
-        status = "PASS" if (follow_up_ok and rec_time < 5.0) else "DEGRADED"
+        status = "PASS" if (follow_up_ok and rec_time < 5.0) else ("DEGRADED" if follow_up_ok else "FAIL")
         log(f"    -> Follow-up Response Time: {rec_time*1000:.1f} ms | Recovered: {follow_up_ok} -> {status}")
         res_dict = {
             "status": status,
@@ -2194,6 +2203,12 @@ def main():
 
     cfg_model = cfg.get("model") or cfg.get("model1")
     cfg_api_key = cfg.get("api_key") or cfg.get("api_key1")
+    cfg_max_context = cfg.get("max_context") or cfg.get("max_context1")
+    if cfg_max_context is not None:
+        try:
+            cfg_max_context = int(cfg_max_context)
+        except (ValueError, TypeError):
+            cfg_max_context = None
     api_key = args.api_key or cfg_api_key or os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY") or ""
     client = LLMClient(endpoint=endpoint, api_key=api_key)
 
@@ -2291,7 +2306,8 @@ def main():
             milestones = sorted(list(set(args.milestones)))
         else:
             milestones = [4000, 8000, 16000]
-        adv_depth = min(16000, args.adversarial_depth)
+        max_target = max(milestones) if milestones else 16000
+        adv_depth = min(max_target, args.adversarial_depth)
         log(f"Quick Mode Active: Milestones={milestones}, Adversarial Depth={adv_depth:,} tokens")
     elif args.milestones:
         milestones = sorted(list(set(args.milestones)))
@@ -2299,7 +2315,8 @@ def main():
         log(f"Context Scaling Targets (Overridden by flag): {milestones}")
     else:
         milestones = build_context_milestones(max_context, max_ratio=args.context_ratio)
-        adv_depth = args.adversarial_depth
+        max_target = max(milestones) if milestones else max_context
+        adv_depth = min(args.adversarial_depth, max_target)
         pct_label = f"{int(args.context_ratio * 100)}%"
         log(f"Adopted Context Scaling Targets (up to {pct_label} context): {milestones}")
 

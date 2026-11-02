@@ -8,6 +8,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- Model Workload Suitability & Enterprise Purpose Qualification Engine (`reporting.py`):
+  - Automatically assesses benchmark results against 6 enterprise workload domains: Autonomous Agents & Tool Execution, Deep Reasoning & Math, Long-Context Retrieval & RAG, Multimodal Vision & Document OCR, High-Throughput Serving & Real-Time APIs, and Software Engineering & Code Intelligence.
+  - Generates domain qualification ratings (`EXCELLENT`, `COMPETENT`, `MARGINAL`, `NOT RECOMMENDED`), deployment recommendations, and specific operational cautions in terminal scorecards and JSON reports.
 - Multi-arch Docker containerization (`Dockerfile`, `compose.yaml`, `.dockerignore`):
   - Zero-host-impact containerized evaluation with isolated multi-arch toolchains (Ubuntu 24.04 base for `x86_64` and `aarch64`).
   - Bundled LTS runtimes: Microsoft .NET 10 SDK (`10.0.403`), OpenJDK 21 LTS (`21.0.12.1`), Node.js 22 Active LTS (`v22.23.4`) + TypeScript (`7.0.2`), Python 3.12 LTS, Go (`1.22.2`), Rust (`1.75.0`), and Git (`2.43.0`).
@@ -48,6 +51,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Removed `changelog.d/` fragment workflow and `towncrier` dependency in favor of direct `CHANGELOG.md` maintenance.
 
 ### Fixed
+- Fixed dead code in `benchmarks/vision.py` where streaming response handling was indented inside an `except Exception:` block after `continue`.
+- Fixed single-server evaluation scoring in `judge_eval.py`: added single-mode keys (`score_10`, `score`, `total`) and tightened fallback regex to prevent literal `_10` in `score_10` coercing all scores to `10.0`.
+- Fixed `SyntaxError` in `languages.py` for unit tests and refactoring tests using `from __future__ import annotations` by hoisting via `assemble_python_script`.
+- Fixed `UnboundLocalError` in `eval.py` when `cfg_max_context` was referenced without definition.
+- Guarded `prompt_tokens_details` in `benchmarks/context.py` and `benchmarks/reasoning.py` against `NoneType` attribute errors.
+- Bounded default `adv_depth` by `max(milestones)` in `eval.py` to prevent prompt overflow on models with context limits < 32k.
+- Fixed `run_test_client_abort` status mapping to mark unrecovered follow-ups as `FAIL` rather than `DEGRADED`.
+- Added outermost balanced brace `{...}` fallback regex for `run_test_json_schema` when models output conversational prose without code fences.
+- Resolved false negatives in `verify_security_review` for phrases like "not vulnerable" or "secure".
+- Ignored `cls` alongside `self` in `verify_strict_typing` classmethod parameter inspection.
+- Captured TTFT `t_first` and incremented token counts for streaming tool call chunks without text deltas in `client.py`.
+- Parsed passing tests in `verify_unit_test` from `failures=` and `errors=` counts to accurately award partial credit instead of false zeros.
 - Fixed N-way comparison matrix formatting bug in `reporting.py` where unnested `{col_w}` inside f-strings caused literal `:<` format specifiers to be printed.
 - Fixed ANSI terminal alignment in `reporting.py`: unified `fmt_status` padding to compute whitespace based on visible character count, eliminating column drift between color TTY and `NO_COLOR` / plain-text environments.
 - Hardened `verify_git_diff` in `languages.py` to prevent false-positive PASS marks on unexpected subprocess/git execution crashes.

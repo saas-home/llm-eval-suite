@@ -94,36 +94,36 @@ def main():
                 except Exception:
                     continue
 
-                    if "error" in data:
-                        print(f"\n[ERROR from server]: {data['error']}", flush=True)
-                        break
+                if "error" in data:
+                    print(f"\n[ERROR from server]: {data['error']}", flush=True)
+                    break
 
-                    if "usage" in data and data["usage"]:
-                        completion_tokens = data["usage"].get("completion_tokens", completion_tokens)
+                if "usage" in data and data["usage"]:
+                    completion_tokens = data["usage"].get("completion_tokens", completion_tokens)
 
-                    choices = data.get("choices") or []
-                    if not choices:
-                        continue
+                choices = data.get("choices") or []
+                if not choices:
+                    continue
 
-                    if choices[0].get("finish_reason") == "error":
-                        err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
-                        print(f"\n[ERROR from model]: {err_msg}", flush=True)
-                        break
+                if choices[0].get("finish_reason") == "error":
+                    err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
+                    print(f"\n[ERROR from model]: {err_msg}", flush=True)
+                    break
 
-                    delta = choices[0].get("delta", {})
-                    content_piece = (
-                        delta.get("content")
-                        or delta.get("reasoning_content")
-                        or delta.get("reasoning")
-                        or delta.get("thought")
-                        or ""
-                    )
-                    if content_piece:
-                        if first_token_time is None:
-                            first_token_time = time.perf_counter()
-                        token_count += 1
-                        response_text.append(content_piece)
-                        print(content_piece, end="", flush=True)
+                delta = choices[0].get("delta", {})
+                content_piece = (
+                    delta.get("content")
+                    or delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                    or delta.get("thought")
+                    or ""
+                )
+                if content_piece:
+                    if first_token_time is None:
+                        first_token_time = time.perf_counter()
+                    token_count += 1
+                    response_text.append(content_piece)
+                    print(content_piece, end="", flush=True)
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         print(f"\nHTTP Error {e.code}: {e.reason} - {err_body}")

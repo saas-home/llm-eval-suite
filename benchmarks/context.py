@@ -81,7 +81,7 @@ def run_benchmark_run(api_url, prompt_text, max_tokens=64, model="default", targ
                 if "usage" in chunk and chunk["usage"]:
                     prompt_tokens = chunk["usage"].get("prompt_tokens", prompt_tokens)
                     completion_tokens = chunk["usage"].get("completion_tokens", completion_tokens)
-                    cached_tokens = chunk["usage"].get("prompt_tokens_details", {}).get("cached_tokens", cached_tokens)
+                    cached_tokens = (chunk["usage"].get("prompt_tokens_details") or {}).get("cached_tokens", cached_tokens)
                 
                 choices = chunk.get("choices") or []
                 if not choices:

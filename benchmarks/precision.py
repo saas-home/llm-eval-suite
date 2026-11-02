@@ -257,7 +257,7 @@ def main():
     print("="*80)
     for r in results:
         status = "PASSED" if r["passed"] else "FAILED"
-        
+        print(f" • {r['name']:<42} : {status}")
     out_dir = os.path.dirname(args.out)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)

@@ -220,7 +220,17 @@ def parse_judge_score_10(json_str: str, key_prefix: str) -> tuple:
                 score_10 = round(sum(vals) / len(vals), 1)
                 return score_10, data.get("detailed_rationale", "")
 
-        tot = data.get(f"{key_prefix}_total_10") or data.get(f"{key_prefix}_total") or data.get(f"total_{key_prefix}")
+        tot = (
+            data.get(f"{key_prefix}_total_10")
+            or data.get(f"{key_prefix}_total")
+            or data.get(f"total_{key_prefix}")
+            or data.get(f"{key_prefix}_10")
+            or data.get(f"{key_prefix}_score")
+            or data.get(key_prefix)
+            or (data.get("score_10") if key_prefix == "score" else None)
+            or (data.get("score") if key_prefix == "score" else None)
+            or (data.get("total") if key_prefix == "score" else None)
+        )
         if tot is not None:
             score_10 = round(float(tot) / 5.0, 1) if float(tot) > 10.0 else round(float(tot), 1)
             return min(10.0, max(0.0, score_10)), data.get("detailed_rationale", "")
@@ -228,9 +238,10 @@ def parse_judge_score_10(json_str: str, key_prefix: str) -> tuple:
     except Exception:
         pass
 
-    nums = re.findall(rf"{key_prefix}.*?(\d+(?:\.\d+)?)", json_str, re.IGNORECASE)
-    if nums:
-        val = float(nums[0])
+    pat = rf"""(?:{key_prefix}(?:_total_10|_total|_scores?|_10)?|total_{key_prefix})\s*["']?\s*[:=]\s*["']?(\d+(?:\.\d+)?)"""
+    match = re.search(pat, json_str, re.IGNORECASE)
+    if match:
+        val = float(match.group(1))
         score_10 = round(val / 5.0, 1) if val > 10.0 else round(val, 1)
         return min(10.0, max(0.0, score_10)), "Regex extracted score."
 
@@ -392,6 +403,8 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
                 {"role": "user", "content": f"Task: {task['name']}\nOutput:\n{out1}"}
             ], max_tokens=400, temp=0.0)
             s1_score, rat = parse_judge_score_10(j_txt, "score")
+            if s1_score is not None and not syn_ok1 and s1_score > 4.0:
+                s1_score = round(max(3.0, s1_score - 1.5), 1)
             s2_score = 0.0
             winner = "JUDGE ERROR" if s1_score is None else f"Server 1 ({m1[:12]})"
             syn_ok2, syn_msg2 = True, "N/A"
@@ -474,12 +487,17 @@ def run_hard_complex_benchmark(ep1: str, m1: str, k1: str, ep2: str = None, m2: 
         md_lines.append(f"| # | Complex Task | Category | Server 1 Score (`{m1}`) | Server 2 Score (`{m2}`) | Task Winner |")
         md_lines.append("|:---|:---|:---|:---:|:---:|:---|")
         for idx, r in enumerate(task_records, 1):
-            md_lines.append(f"| {idx} | {r['name']} | {r['category']} | **`{r['server1']['score_10']} / 10`** | **`{r['server2']['score_10']} / 10`** | **{r['winner']}** |")
+            s1_val = f"{r['server1']['score_10']} / 10" if r['server1']['score_10'] is not None else "ERROR"
+            s2_val = f"{r['server2']['score_10']} / 10" if r['server2']['score_10'] is not None else "ERROR"
+            md_lines.append(f"| {idx} | {r['name']} | {r['category']} | **`{s1_val}`** | **`{s2_val}`** | **{r['winner']}** |")
     else:
         md_lines.append(f"| # | Complex Task | Category | Model Score (`{m1}`) | Decode Speed | Status |")
         md_lines.append("|:---|:---|:---|:---:|:---:|:---|")
         for idx, r in enumerate(task_records, 1):
-            md_lines.append(f"| {idx} | {r['name']} | {r['category']} | **`{r['server1']['score_10']} / 10`** | `{r['server1']['tok_s']} tok/s` | PASS |")
+            sc = r['server1']['score_10']
+            s1_val = f"{sc} / 10" if sc is not None else "ERROR"
+            st_disp = "ERROR" if sc is None else ("PASS" if sc >= 7.0 else ("PARTIAL" if sc >= 5.0 else "FAIL"))
+            md_lines.append(f"| {idx} | {r['name']} | {r['category']} | **`{s1_val}`** | `{r['server1']['tok_s']} tok/s` | {st_disp} |")
 
     out_dir = os.path.dirname(md_file)
     if out_dir:
