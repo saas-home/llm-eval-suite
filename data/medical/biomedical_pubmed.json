@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pubmedqa_001",
+    "question": "Does metformin reduce cardiovascular mortality in patients with type 2 diabetes?",
+    "context": "Randomized controlled trials and landmark multi-center observational cohorts (notably UKPDS 34) evaluated metformin versus conventional diet therapy and intensive sulfonylurea regimens in overweight individuals with type 2 diabetes. Long-term follow-up demonstrated a statistically significant 39% reduction in myocardial infarction and a 36% decrease in all-cause mortality with metformin monotherapy compared with conventional therapy.",
+    "final_decision": "yes"
+  },
+  {
+    "id": "pubmedqa_002",
+    "question": "Is dexamethasone effective in reducing mortality in hospitalized patients with COVID-19 requiring respiratory support?",
+    "context": "In the RECOVERY randomized clinical trial, 2104 patients received oral or intravenous dexamethasone (6 mg once daily for up to 10 days) and 4321 received usual care. In patients receiving invasive mechanical ventilation, dexamethasone reduced 28-day mortality by approximately one-third compared to standard care (29.3% vs. 41.4%; rate ratio 0.64; 95% CI, 0.51 to 0.81). In patients receiving supplemental oxygen without mechanical ventilation, mortality was reduced by one-fifth (23.3% vs. 26.2%; rate ratio 0.82; 95% CI, 0.72 to 0.94).",
+    "final_decision": "yes"
+  },
+  {
+    "id": "pubmedqa_003",
+    "question": "Are routine prophylactic antibiotics indicated for clean, elective dermatologic excisions in immunocompetent patients?",
+    "context": "Multiple prospective randomized controlled trials and systemic Cochrane reviews examined the utility of systemic oral prophylactic antibiotics versus placebo in clean, non-infected dermatologic surgery without mucosal involvement. The baseline incidence of surgical site infections in immunocompetent patients was below 1.5% in the untreated controls, and no statistically significant difference in postoperative infection rates was observed with prophylactic cephalexin administration.",
+    "final_decision": "no"
+  },
+  {
+    "id": "pubmedqa_004",
+    "question": "Does high-dose intravenous vitamin C monotherapy improve overall survival in patients with advanced metastatic solid tumors?",
+    "context": "Double-blind, randomized, placebo-controlled clinical trials conducted at the Mayo Clinic and cooperative oncology groups evaluated high-dose ascorbic acid monotherapy versus lactose placebo in patients with advanced, non-resectable colorectal, pancreatic, and non-small cell lung carcinomas. Comparative Kaplan-Meier survival analysis demonstrated identical progression-free and overall survival curves between the vitamin C and placebo arms without objective tumor regressions.",
+    "final_decision": "no"
+  },
+  {
+    "id": "pubmedqa_005",
+    "question": "Can sodium-glucose cotransporter-2 (SGLT2) inhibitors slow the progression of chronic kidney disease in non-diabetic patients?",
+    "context": "The multinational DAPA-CKD and EMPA-KIDNEY randomized double-blind trials investigated SGLT2 inhibitors versus placebo in patients with established chronic kidney disease across both diabetic and non-diabetic etiologies. The composite primary outcome was a sustained decline in eGFR of >=50%, end-stage kidney disease, or renal death. Hazard ratios for the composite renal outcome demonstrated significant risk reductions of 37% and 28% respectively, with consistent therapeutic benefit observed regardless of baseline diabetic status.",
+    "final_decision": "yes"
+  }
+]

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "history_mmlu_001",
+    "topic": "Early Modern European History",
+    "question": "Which landmark series of peace treaties concluded in 1648 ended the Thirty Years' War in the Holy Roman Empire and effectively established the foundation of modern international state sovereignty based on territorial integrity and non-intervention?",
+    "options": {
+      "A": "Treaty of Utrecht",
+      "B": "Peace of Westphalia",
+      "C": "Treaty of Versailles",
+      "D": "Congress of Vienna"
+    },
+    "answer": "B",
+    "explanation": "The Peace of Westphalia (1648) ended the Thirty Years' War and Eighty Years' War, creating the concept of Westphalian sovereignty."
+  },
+  {
+    "id": "history_mmlu_002",
+    "topic": "American Colonial History",
+    "question": "What was the primary fiscal justification cited by the British Parliament for passing the Stamp Act of 1765 on the Thirteen American Colonies?",
+    "options": {
+      "A": "Funding the expansion of the British East India Company in Bengal",
+      "B": "Defraying the massive war debts and ongoing troop stationing costs incurred during the French and Indian War (Seven Years' War)",
+      "C": "Retaliating against colonial boycotts of the Tea Act",
+      "D": "Subsidizing textile manufacturing during the early Industrial Revolution"
+    },
+    "answer": "B",
+    "explanation": "The British incurred enormous debt defending the colonies during the French and Indian War, prompting Parliament to levy direct taxes like the Stamp Act to pay for frontier military defense."
+  },
+  {
+    "id": "history_mmlu_003",
+    "topic": "19th Century Statecraft",
+    "question": "Which Prussian statesman served as Minister President and later Chancellor, orchestrating the unification of the German Empire in 1871 through calculated diplomatic maneuvers ('Realpolitik') and consecutive conflicts with Denmark, Austria, and France?",
+    "options": {
+      "A": "Otto von Bismarck",
+      "B": "Klemens von Metternich",
+      "C": "Helmuth von Moltke the Elder",
+      "D": "Kaiser Wilhelm II"
+    },
+    "answer": "A",
+    "explanation": "Otto von Bismarck unified Germany under Prussian leadership through his 'blood and iron' speeches and three short wars."
+  },
+  {
+    "id": "history_mmlu_004",
+    "topic": "Ancient Mesopotamian Legal History",
+    "question": "Which ancient Babylonian king established one of the earliest, most famous written legal codes circa 1755 BCE, renowned for inscribing 282 edicts on an eight-foot diorite stele under the principle of lex talionis (an eye for an eye)?",
+    "options": {
+      "A": "Sargon of Akkad",
+      "B": "Hammurabi",
+      "C": "Nebuchadnezzar II",
+      "D": "Ashurbanipal"
+    },
+    "answer": "B",
+    "explanation": "The Code of Hammurabi was promulgated by King Hammurabi of the First Dynasty of Babylon."
+  },
+  {
+    "id": "history_mmlu_005",
+    "topic": "World War II Pacific Theatre",
+    "question": "Which June 1942 naval battle is widely considered the critical strategic turning point of the Pacific War during World War II, during which the United States Navy decisively sank four Japanese fleet aircraft carriers?",
+    "options": {
+      "A": "Battle of the Coral Sea",
+      "B": "Battle of Midway",
+      "C": "Battle of Leyte Gulf",
+      "D": "Battle of Guadalcanal"
+    },
+    "answer": "B",
+    "explanation": "The Battle of Midway (June 4-7, 1942) resulted in the destruction of four Japanese carriers (Akagi, Kaga, Soryu, Hiryu), halting Japan's Pacific advance permanently."
+  }
+]

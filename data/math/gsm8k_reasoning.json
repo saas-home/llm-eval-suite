@@ -1,0 +1,32 @@
+[
+  {
+    "id": "gsm8k_001",
+    "question": "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?",
+    "solution": "Natalia sold 48 / 2 = 24 clips in May. Altogether, she sold 48 + 24 = 72 clips.",
+    "answer": "72"
+  },
+  {
+    "id": "gsm8k_002",
+    "question": "Weng earns $12 an hour for babysitting. Yesterday, she just did 50 minutes of babysitting. How much did she earn in dollars?",
+    "solution": "Weng earns $12 / 60 minutes = $0.20 per minute. For 50 minutes, she earned 50 * 0.20 = $10.",
+    "answer": "10"
+  },
+  {
+    "id": "gsm8k_003",
+    "question": "Betty is saving money for a new wallet which costs $100. Betty has only half of the money she needs. Her parents decided to give her $15 for that purpose, and her grandparents twice as much as her parents. How much more money in dollars does Betty need to buy the wallet?",
+    "solution": "Betty initially has 100 / 2 = 50 dollars. Her parents give her 15 dollars. Her grandparents give her 15 * 2 = 30 dollars. Total saved so far = 50 + 15 + 30 = 95 dollars. She still needs 100 - 95 = 5 dollars.",
+    "answer": "5"
+  },
+  {
+    "id": "gsm8k_004",
+    "question": "A deep-sea vessel has 300 passengers on board. In a sudden emergency, exactly 80% of the passengers board the evacuation pods safely. How many passengers remain on the ship?",
+    "solution": "The number of passengers who boarded the evacuation pods is 300 * 0.80 = 240. The number of passengers remaining on the ship is 300 - 240 = 60.",
+    "answer": "60"
+  },
+  {
+    "id": "gsm8k_005",
+    "question": "Mark has a garden with flowers. He has 10 rows of flowers with 8 flowers in each row. If he gives away 24 flowers to his neighbors, how many flowers are left in his garden?",
+    "solution": "Total flowers = 10 rows * 8 flowers = 80 flowers. After giving away 24 flowers, remaining flowers = 80 - 24 = 56 flowers.",
+    "answer": "56"
+  }
+]

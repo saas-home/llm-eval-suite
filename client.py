@@ -231,10 +231,10 @@ class LLMClient:
         if stream:
             payload["stream_options"] = {"include_usage": True}
 
-        data = json.dumps(payload).encode("utf-8")
         retry_index = 0
         rate_limit_retries = 0
         while True:
+            data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(self.completions_url, data=data, headers=self._get_headers())
             t0 = time.perf_counter()
             try:
@@ -295,7 +295,7 @@ class LLMClient:
                     cached_tokens = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                     speed = completion_tokens / total_time if total_time > 0 else 0.0
                     return {
-                        "content": content if content else full_text,
+                        "content": content if (content or not reasoning) else "",
                         "reasoning": reasoning,
                         "text": full_text,
                         "tool_calls": tool_calls,
@@ -428,7 +428,7 @@ class LLMClient:
                     if tool_calls_acc:
                         tool_calls = [tool_calls_acc[i] for i in sorted(tool_calls_acc)]
                     return {
-                        "content": content_str if content_str else full_text,
+                        "content": content_str if (content_str or not reasoning_str) else "",
                         "reasoning": reasoning_str,
                         "text": full_text,
                         "tool_calls": tool_calls,
@@ -446,6 +446,11 @@ class LLMClient:
                 except Exception:
                     pass
                 total_time = time.perf_counter() - t0
+                if (e.code == 400 or e.code == 422) and "reasoning_effort" in payload:
+                    err_lower = err_body.lower()
+                    if any(term in err_lower for term in ["reasoning_effort", "extra fields", "unrecognized", "unexpected"]):
+                        payload.pop("reasoning_effort", None)
+                        continue
                 # Rate limits (429) draw on a separate, more patient budget and
                 # honor Retry-After; other transient server errors (5xx) use the
                 # short jittered backoff. Client errors (4xx) are final.

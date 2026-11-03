@@ -8,6 +8,43 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- Decoupled **Pure Cognitive Capability & Intelligence Grading** from hardware serving speed in `reporting.py`:
+  - `pure_capability_score_pct` strictly evaluates cognitive problem solving across all intelligence benchmarks (Tests 6-30: SWE-bench, CruxEval, AIME Olympiad, GPQA Diamond, IFEval, polyglot coding, etc.).
+  - Added enterprise cognitive tier grading (`pure_capability_grade`): `A+ (Frontier Intelligence)`, `A (High Enterprise Capability)`, `B+ (Competent Enterprise Model)`, `B (Moderate Capability / Guardrails Required)`, `C (Marginal Capability / High Supervision)`, `F (Unsuitable)`.
+  - CLI summary scorecard now prominently presents separate **`MODEL COGNITIVE CAPABILITY & INTELLIGENCE SCORECARD`** and **`HOSTING INFRASTRUCTURE & SERVING PERFORMANCE SCORECARD`**.
+- Multi-problem datasets for CruxEval and AIME Olympiad in `data/`:
+  - Added `data/reasoning/cruxeval_programs.json` for multi-item mental code execution tracing.
+  - Added `data/math/aime_olympiad.json` for multi-item competition mathematical deduction (modular arithmetic CRT, Diophantine equations, and combinatorics).
+- Cross-model head-to-head comparison (`reporting.py`):
+  - Added `adv_cap` to compare pure cognitive capability advantage alongside task effectiveness and throughput.
+
+### Fixed
+- Fixed client request payload re-serialization in `client.py`: moved `json.dumps(payload)` inside the retry loop so automatic parameter fallbacks (e.g., stripping `reasoning_effort` on 400/422 validation errors) take immediate effect on re-attempts.
+- Fixed IFEval reasoning parameter in `eval.py`: standardized on `reasoning_effort="none"` to properly suppress reasoning thought tokens during strictly constrained copywriting benchmarks on reasoning servers.
+- Fixed CruxEval program 2 ground truth in `data/reasoning/cruxeval_programs.json` (`"AnTnI"`).
+- Fixed AIME Olympiad answer extraction in `eval.py` to inspect the full model generation output (`full_text`) rather than only partial content chunks, properly capturing solutions from reasoning models.
+- Fixed regex escape syntax in `eval.py` ensuring full compatibility with Python 3.12+ and 3.14 regex parsers without `bad escape \e` PatternErrors.
+
+### Added
+- 4 enterprise benchmark tests expanding suite from 26 to 30 tests:
+  - Test 27: Google IFEval verifiable instruction following (word count bounds, markdown structure, forbidden words, starters/closers).
+  - Test 28: Clinical & Medical Research (MedQA / USMLE board vignettes and PubMedQA biomedical literature consensus).
+  - Test 29: Multi-step elementary & algebra math (OpenAI GSM8K word problems with step-by-step reasoning).
+  - Test 30: Historical causality & chronology analysis (MMLU World, European & US History).
+- Open benchmark dataset repository (`data/`):
+  - Bundled verified test banks: `data/writing/ifeval_instructions.json`, `data/medical/usmle_clinical.json`, `data/medical/biomedical_pubmed.json`, `data/math/gsm8k_reasoning.json`, and `data/history/history_causality.json`.
+  - Zero-dependency dataset downloader utility (`scripts/download_open_benchmarks.py`) for pulling full open datasets directly from official GitHub / Hugging Face sources.
+- Domain benchmark evaluation engine (`domain_benchmarks.py`):
+  - Deterministic IFEval constraint verification engine.
+  - Conclusion-prioritized multiple choice answer extractor with elimination reasoning protection.
+  - PubMedQA consensus decision extractor (`yes`/`no`/`maybe`).
+  - GSM8K numeric extractor with float equivalence tolerance.
+- Expanded Model Workload Qualification Matrix (`reporting.py`):
+  - Added Clinical & Medical Life-Sciences Research domain.
+  - Added Verifiable Instruction & Structured Writing domain.
+  - Added Historical Causality & Humanities Research domain.
+  - Updated Deep Reasoning domain to incorporate GSM8K math alongside AIME and GPQA Diamond.
+- Added test aliases for tests 27-30 (`--test ifeval`, `--test medical`, `--test gsm8k`, `--test history`).
 - Model Workload Suitability & Enterprise Purpose Qualification Engine (`reporting.py`):
   - Automatically assesses benchmark results against 6 enterprise workload domains: Autonomous Agents & Tool Execution, Deep Reasoning & Math, Long-Context Retrieval & RAG, Multimodal Vision & Document OCR, High-Throughput Serving & Real-Time APIs, and Software Engineering & Code Intelligence.
   - Generates domain qualification ratings (`EXCELLENT`, `COMPETENT`, `MARGINAL`, `NOT RECOMMENDED`), deployment recommendations, and specific operational cautions in terminal scorecards and JSON reports.
@@ -51,6 +88,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Removed `changelog.d/` fragment workflow and `towncrier` dependency in favor of direct `CHANGELOG.md` maintenance.
 
 ### Fixed
+- Fixed Unit Test Synthesis (Test 23) prompt fixture in `languages.py`: provided complete production implementation of `PaymentProcessor.process_order` in the prompt instead of stubbed ellipsis (`...`), eliminating false-positive mock argument casing mismatches (`"usd"` vs `"USD"`).
+- Fixed reasoning model scratchpad leak in IFEval (Test 27) and `client.py`:
+  - Ensured `client.py` does not fallback empty `content` to `reasoning_content` when models exhaust token limits inside reasoning blocks.
+  - Added graceful 400/422 retry when sending `reasoning_effort="off"` to non-reasoning endpoints.
+  - Stripped `<think>.*?</think>` tags in `domain_benchmarks.verify_ifeval_rules` to prevent scratchpad planning thoughts from polluting constraint evaluations.
+  - Increased IFEval `max_tokens` ceiling from 600 to 1,500 tokens.
+- Fixed Test 4 (Architecture 4-Task Suite) token ceiling and balance factor matching in `eval.py`: increased `max_tokens` to 2000 and added support for `"balance factor"` / `"balanced"`.
+- Fixed multiple-choice answer extraction in `domain_benchmarks.py`: added adverb support (`"The answer is clearly B"`) and restricted line-scanning fallbacks to avoid misidentifying option definition listings as answers.
 - Fixed dead code in `benchmarks/vision.py` where streaming response handling was indented inside an `except Exception:` block after `continue`.
 - Fixed single-server evaluation scoring in `judge_eval.py`: added single-mode keys (`score_10`, `score`, `total`) and tightened fallback regex to prevent literal `_10` in `score_10` coercing all scores to `10.0`.
 - Fixed `SyntaxError` in `languages.py` for unit tests and refactoring tests using `from __future__ import annotations` by hoisting via `assemble_python_script`.

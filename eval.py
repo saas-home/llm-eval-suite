@@ -55,6 +55,7 @@ from reporting import (
     compute_executive_summary, print_summary_table, compare_benchmark_reports,
 )
 import languages
+import domain_benchmarks
 
 # SECURITY: gate for executing LLM-generated code (tests 14, 17).
 # Disable with --no-execute or EVAL_SAFE set to a truthy value (1/true/yes)
@@ -70,7 +71,7 @@ EXECUTE_MODEL_CODE = os.getenv("EVAL_SAFE", "").strip().lower() not in ("1", "tr
 # ----------------------------------------------------------------------------
 def run_test_streaming(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 1/19] Streaming Verification & TTFT Latency", bold=True, color=CYAN)
+    log("[TEST 1/30] Streaming Verification & TTFT Latency", bold=True, color=CYAN)
     log("="*88)
     prompt = "Explain the fundamental difference between synchronous and asynchronous microservice communication in two concise sentences."
     res = client.call([{"role": "user", "content": prompt}], max_tokens=512, temperature=0.0, stream=True)
@@ -92,7 +93,7 @@ def run_test_streaming(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_vision(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 2/19] Multimodal Vision Evaluation (Invoice Document Parsing)", bold=True, color=CYAN)
+    log("[TEST 2/30] Multimodal Vision Evaluation (Invoice Document Parsing)", bold=True, color=CYAN)
     log("="*88)
     if not os.path.exists(IMAGE_PATH):
         log(f"  Skipping: Image asset not found at {IMAGE_PATH}", color=YELLOW)
@@ -163,7 +164,7 @@ def _build_concurrency_prompt(target_tokens: int, client_id: int, total_clients:
 
 def run_test_concurrency(client: LLMClient, parallel: int = 4, contexts: list = None, max_tokens: int = 64):
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 3/19] Multi-Client Concurrency & Batching Stress Suite (Max Parallel = {parallel})", bold=True, color=CYAN)
+    log(f"[TEST 3/30] Multi-Client Concurrency & Batching Stress Suite (Max Parallel = {parallel})", bold=True, color=CYAN)
     log("="*88)
 
     if parallel <= 1:
@@ -354,10 +355,10 @@ def run_test_concurrency(client: LLMClient, parallel: int = 4, contexts: list = 
 # ----------------------------------------------------------------------------
 def run_test_capabilities(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 4/19] Enterprise Architecture & Engineering 4-Task Suite", bold=True, color=CYAN)
+    log("[TEST 4/30] Enterprise Architecture & Engineering 4-Task Suite", bold=True, color=CYAN)
     log("="*88)
     tasks = [
-        ("task1_avl_tree", "AVL Tree with Rotations", "Write a complete self-balancing AVL Tree in Python with insert, delete, search, in-order iterator, and test function.", 1200),
+        ("task1_avl_tree", "AVL Tree with Rotations", "Write a complete self-balancing AVL Tree in Python with insert, delete, search, in-order iterator, and test function.", 2000),
         ("task2_concurrency_debug", "Concurrency Buffer Debug", "Analyze a buggy multi-threaded BoundedBuffer class in Python with lost wakeups and race conditions. Provide the fix.", 1000),
         ("task3_system_design", "Distributed Rate Limiter", "Design a high-throughput distributed rate limiter with sliding window counter, Redis cluster, and fallback.", 1200),
         ("task4_hidden_constraints", "Hidden Constraints Adherence", "Implement PaymentGatewayClient with exact requirements: Audit Tag format AUDIT_{uuid4}, retry formula 2^attempt * 100ms, and Error envelope.", 1000)
@@ -372,7 +373,7 @@ def run_test_capabilities(client: LLMClient):
             task_st = "FAIL"
         elif tid == "task1_avl_tree":
             has_avl = ("class AVLTree" in c_text or "class AvlTree" in c_text or "class AVLNode" in c_text or "class Node" in c_text)
-            has_rot = any(w in c_text.lower() for w in ["rotate", "rotation", "rebalance", "balance_factor"])
+            has_rot = any(w in c_text.lower() for w in ["rotate", "rotation", "rebalance", "balance_factor", "balance factor", "balanced"])
             task_st = "PASS" if (has_avl and has_rot) else ("PARTIAL" if (has_avl or has_rot) else "FAIL")
         elif tid == "task2_concurrency_debug":
             has_cond = any(w in c_text for w in ["Condition", "wait", "notify", "while"])
@@ -410,7 +411,7 @@ def run_test_capabilities(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_tool_calling(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 5/19] Multi-Turn Agent Loop & Autonomous Error Recovery Protocol", bold=True, color=CYAN)
+    log("[TEST 5/30] Multi-Turn Agent Loop & Autonomous Error Recovery Protocol", bold=True, color=CYAN)
     log("="*88)
     
     tools = [
@@ -524,7 +525,7 @@ def run_test_tool_calling(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_json_schema(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 6/19] Strict JSON Schema & Constrained Decoding (response_format)", bold=True, color=CYAN)
+    log("[TEST 6/30] Strict JSON Schema & Constrained Decoding (response_format)", bold=True, color=CYAN)
     log("="*88)
     
     prompt = (
@@ -588,7 +589,7 @@ def run_test_json_schema(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_prefix_caching(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 7/19] Prefix Caching / KV Cache Reuse Verification (Cold vs Warm)", bold=True, color=CYAN)
+    log("[TEST 7/30] Prefix Caching / KV Cache Reuse Verification (Cold vs Warm)", bold=True, color=CYAN)
     log("="*88)
     
     shared_system_spec = (
@@ -665,7 +666,7 @@ def run_test_prefix_caching(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_client_abort(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 8/19] Client Socket Abort & Slot Recovery Resilience", bold=True, color=CYAN)
+    log("[TEST 8/30] Client Socket Abort & Slot Recovery Resilience", bold=True, color=CYAN)
     log("="*88)
     
     payload = {
@@ -718,7 +719,7 @@ def run_test_client_abort(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_stop_sequences(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 9/19] Stop Sequence Compliance & Deterministic Sampling (temp=0.0)", bold=True, color=CYAN)
+    log("[TEST 9/30] Stop Sequence Compliance & Deterministic Sampling (temp=0.0)", bold=True, color=CYAN)
     log("="*88)
     
     stop_words = ["HALT_GENERATION", "###STOP###"]
@@ -778,7 +779,7 @@ def run_test_stop_sequences(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_extreme_precision(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 10/19] Extreme Precision Arithmetic & Financial Ledger Reconciliation", bold=True, color=CYAN)
+    log("[TEST 10/30] Extreme Precision Arithmetic & Financial Ledger Reconciliation", bold=True, color=CYAN)
     log("="*88)
     stages = [
         ("Stage 1", "Initial balance = 10000.00"),
@@ -828,7 +829,7 @@ def run_test_extreme_precision(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_error_handling(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 11/19] Error Envelope & Boundary API Protocol Compliance", bold=True, color=CYAN)
+    log("[TEST 11/30] Error Envelope & Boundary API Protocol Compliance", bold=True, color=CYAN)
     log("="*88)
     
     # Check 1: Missing messages field
@@ -899,7 +900,7 @@ def run_test_error_handling(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_context_scaling(client: LLMClient, milestones: list):
     log("\n" + "="*88, bold=True)
-    log("[TEST 12/19] Dynamic Long-Context Prefill, Decode & Semantic Accuracy", bold=True, color=CYAN)
+    log("[TEST 12/30] Dynamic Long-Context Prefill, Decode & Semantic Accuracy", bold=True, color=CYAN)
     log(f"Target Milestones: {milestones}")
     log("="*88)
 
@@ -1000,7 +1001,7 @@ def run_test_context_scaling(client: LLMClient, milestones: list):
 # ----------------------------------------------------------------------------
 def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 13/19] Adversarial Multi-Hop Graph Traversal with Deprecated Distractors (~{target_context//1000}k)", bold=True, color=CYAN)
+    log(f"[TEST 13/30] Adversarial Multi-Hop Graph Traversal with Deprecated Distractors (~{target_context//1000}k)", bold=True, color=CYAN)
     log("="*88)
 
     filler_chunk = (
@@ -1087,7 +1088,7 @@ def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
 # ----------------------------------------------------------------------------
 def run_test_novel_algorithmic_fuzz(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 14/19] Novel Algorithmic Synthesis & Automated 5,000-Op Property Fuzz Testing", bold=True, color=CYAN)
+    log("[TEST 14/30] Novel Algorithmic Synthesis & Automated 5,000-Op Property Fuzz Testing", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1227,7 +1228,7 @@ if __name__ == "__main__":
 # ----------------------------------------------------------------------------
 def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 32000):
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 15/19] Extreme Frontier-Depth Multi-Needle Precision ({target_context:,} Context Window)", bold=True, color=CYAN)
+    log(f"[TEST 15/30] Extreme Frontier-Depth Multi-Needle Precision ({target_context:,} Context Window)", bold=True, color=CYAN)
     log("="*88)
 
     filler_segment = (
@@ -1307,62 +1308,90 @@ def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 3200
 # ----------------------------------------------------------------------------
 def run_test_cruxeval_execution(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 16/19] CruxEval: Mental Code Execution & Program State Simulation", bold=True, color=CYAN)
+    log("[TEST 16/30] CruxEval: Mental Code Execution & Program State Simulation", bold=True, color=CYAN)
     log("="*88)
 
-    prompt = (
-        "TASK: Mentally trace the execution of the following Python function step-by-step.\n"
-        "Do NOT write replacement code. Determine the exact return value for the invocation shown below.\n\n"
-        "```python\n"
-        "def transform_stream(data, key_mask):\n"
-        "    res = []\n"
-        "    acc = 0\n"
-        "    for idx, item in enumerate(data):\n"
-        "        if (idx ^ key_mask) % 2 == 0:\n"
-        "            val = (item * 3 + idx) % 17\n"
-        "            acc = (acc + val) ^ (idx << 1)\n"
-        "            res.append(acc & 0xFF)\n"
-        "        else:\n"
-        "            res.append((item ^ acc) & 0x7F)\n"
-        "    return res\n\n"
-        "data_input = [14, 27, 8, 41, 19, 33, 5, 52]\n"
-        "mask = 5\n"
-        "result = transform_stream(data_input, mask)\n"
-        "```\n\n"
-        "Conclude your response strictly with: 'OUTPUT: <python list>'."
-    )
+    dataset = domain_benchmarks.load_benchmark_dataset("reasoning/cruxeval_programs.json")
+    if not dataset:
+        dataset = [{
+            "id": "crux_001",
+            "topic": "Bitwise State Accumulation",
+            "prompt": (
+                "TASK: Mentally trace the execution of the following Python function step-by-step.\n"
+                "Do NOT write replacement code. Determine the exact return value for the invocation shown below.\n\n"
+                "```python\n"
+                "def transform_stream(data, key_mask):\n"
+                "    res = []\n"
+                "    acc = 0\n"
+                "    for idx, item in enumerate(data):\n"
+                "        if (idx ^ key_mask) % 2 == 0:\n"
+                "            val = (item * 3 + idx) % 17\n"
+                "            acc = (acc + val) ^ (idx << 1)\n"
+                "            res.append(acc & 0xFF)\n"
+                "        else:\n"
+                "            res.append((item ^ acc) & 0x7F)\n"
+                "    return res\n\n"
+                "data_input = [14, 27, 8, 41, 19, 33, 5, 52]\n"
+                "mask = 5\n"
+                "result = transform_stream(data_input, mask)\n"
+                "```\n\n"
+                "Conclude your response strictly with: 'OUTPUT: <python list>'."
+            ),
+            "expected_output": "[14, 12, 4, 21, 6, 29, 24, 41]"
+        }]
 
-    log("  Dispatching CruxEval mental execution prompt with bitwise and stateful accumulator...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=4000, temperature=0.0, stream=True)
-    text = res.get("content", "") or res.get("text", "")
-    full_text = f"{res.get('text', '')}\n{text}"
+    total_programs = len(dataset)
+    passed_count = 0
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    details = []
 
-    expected_output = [14, 12, 4, 21, 6, 29, 24, 41]
-    expected_str = "[14, 12, 4, 21, 6, 29, 24, 41]"
+    for idx, item in enumerate(dataset, 1):
+        prompt = item["prompt"]
+        log(f"  [CruxEval Program {idx}/{total_programs}] {item.get('topic', 'Program Simulation')}...")
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=4000, temperature=0.0, stream=True)
+        text = res.get("content", "") or res.get("text", "")
+        full_text = f"{res.get('text', '')}\n{text}"
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
 
-    compact_text = re.sub(r"\s+", "", text)
-    compact_full = re.sub(r"\s+", "", full_text)
-    compact_expected = "[14,12,4,21,6,29,24,41]"
-    matched = (compact_expected in compact_text) or (compact_expected in compact_full) or ("14, 12, 4, 21, 6, 29, 24, 41" in full_text)
-    if not matched:
-        m = re.findall(r"\[\s*14\s*,\s*12\s*,\s*4\s*,\s*21\s*,\s*6\s*,\s*29\s*,\s*24\s*,\s*41\s*\]", full_text)
-        matched = bool(m)
+        expected_str = item["expected_output"].strip()
+        compact_text = re.sub(r"\s+", "", text)
+        compact_full = re.sub(r"\s+", "", full_text)
+        compact_expected = re.sub(r"\s+", "", expected_str)
+        matched = (compact_expected in compact_text) or (compact_expected in compact_full) or (expected_str in full_text)
+        if not matched:
+            m = re.search(r"OUTPUT:\s*['\"]?(" + re.escape(expected_str.strip("'\"")) + r")['\"]?", full_text, re.IGNORECASE)
+            matched = bool(m)
 
-    log(f"  - Mental Execution State Accuracy: {'PASS' if matched else 'FAIL'}")
-    log(f"  - Ground Truth Target: {expected_str}")
-    if not matched:
-        summary_lines = [l.strip() for l in text.strip().splitlines() if l.strip()]
-        response_tail = summary_lines[-1] if summary_lines else "No response"
-        log(f"  - Model Output Tail: {response_tail[:120]}")
-    log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | TTFT: {res.get('ttft', 0)*1000:.1f} ms | Status: {'PASS' if matched else 'FAIL'}")
+        if matched:
+            passed_count += 1
+            log(f"    -> State Simulation: PASS (Target: {expected_str})", color=GREEN)
+        else:
+            log(f"    -> State Simulation: FAIL (Target: {expected_str})", color=YELLOW)
+        details.append({"id": item.get("id"), "expected": expected_str, "matched": matched})
+
+    accuracy_pct = (passed_count / total_programs) * 100.0 if total_programs else 0.0
+    status = "PASS" if accuracy_pct >= 80.0 else ("PARTIAL" if accuracy_pct >= 50.0 else "FAIL")
+    avg_speed = round(statistics.mean(speeds), 2) if speeds else 0.0
+    avg_ttft = round(statistics.mean(ttfts), 1) if ttfts else 0.0
+
+    log(f"  -> CruxEval Mental Execution Accuracy: {passed_count}/{total_programs} ({accuracy_pct:.1f}%) -> {status}")
 
     return {
-        "status": "PASS" if matched else "FAIL",
-        "expected_output": expected_output,
-        "matched": matched,
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
+        "status": status,
+        "score": f"{passed_count}/{total_programs}",
+        "passed_count": passed_count,
+        "total_programs": total_programs,
+        "accuracy_pct": round(accuracy_pct, 1),
+        "details": details,
+        "completion_tokens": total_tokens,
+        "ttft_ms": avg_ttft,
+        "tok_s": avg_speed,
     }
 
 
@@ -1371,7 +1400,7 @@ def run_test_cruxeval_execution(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_swe_bench_bug_patch(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 17/19] SWE-bench: Autonomous Bug Patching from Stack Trace & Failing Tests", bold=True, color=CYAN)
+    log("[TEST 17/30] SWE-bench: Autonomous Bug Patching from Stack Trace & Failing Tests", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1492,43 +1521,79 @@ print("ALL_UNIT_TESTS_PASSED")
 # ----------------------------------------------------------------------------
 def run_test_aime_olympiad_math(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 18/19] AIME / Olympiad: Multi-Step Competition Mathematical Deduction", bold=True, color=CYAN)
+    log("[TEST 18/30] AIME / Olympiad: Multi-Step Competition Mathematical Deduction", bold=True, color=CYAN)
     log("="*88)
 
-    prompt = (
-        "Solve the following mathematical competition problem through rigorous deduction:\n\n"
-        "Find the remainder when the integer sum:\n"
-        "  S = 17^2026 + 13^2026\n"
-        "is divided by 1000.\n\n"
-        "Provide your complete mathematical reasoning.\n"
-        "Conclude your final response strictly with: 'ANSWER: <integer>'."
-    )
+    dataset = domain_benchmarks.load_benchmark_dataset("math/aime_olympiad.json")
+    if not dataset:
+        dataset = [{
+            "id": "aime_001",
+            "topic": "Modular Arithmetic & Chinese Remainder Theorem",
+            "question": "Find the remainder when the integer sum S = 17^2026 + 13^2026 is divided by 1000.",
+            "answer": "978"
+        }]
 
-    log("  Dispatching AIME modular arithmetic & Chinese Remainder Theorem problem...")
-    res = client.call([{"role": "user", "content": prompt}], max_tokens=6000, temperature=0.0, stream=True)
-    text = res.get("content", "") or res.get("text", "")
+    total_problems = len(dataset)
+    passed_count = 0
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    details = []
 
-    # Ground truth: 978 (17^2026 + 13^2026 mod 1000 = 978)
-    answer_match = re.search(r"ANSWER:\s*(?:\\boxed\{)?(\d+)\}?", text, re.IGNORECASE)
-    boxed_match = re.search(r"\\boxed\{\s*(\d+)\s*\}", text)
-    if answer_match:
-        matched = (answer_match.group(1).strip() == "978")
-    elif boxed_match:
-        matched = (boxed_match.group(1).strip() == "978")
-    else:
-        strict_concl = bool(re.search(r"(?:remainder|result|answer|sum|S\s*=\s*|S\s*\\equiv\s*|is)\s*(?:is|:|=|\\equiv)?\s*(?:\\boxed\{)?978\b", text, re.IGNORECASE))
-        matched = strict_concl or bool(re.search(r"\b978\b", text))
+    for idx, item in enumerate(dataset, 1):
+        prompt = (
+            f"Solve the following mathematical competition problem through rigorous deduction:\n\n"
+            f"{item['question']}\n\n"
+            f"Provide your complete mathematical reasoning.\n"
+            f"Conclude your final response strictly with: 'ANSWER: <integer>'."
+        )
+        log(f"  [AIME Problem {idx}/{total_problems}] {item.get('topic', 'Competition Problem')}...")
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=6000, temperature=0.0, stream=True)
+        text = res.get("content", "") or res.get("text", "")
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
 
-    log(f"  - Olympiad Modular Deduction (S mod 1000 = 978): {'PASS' if matched else 'FAIL'}")
-    log(f"  -> Speed: {res.get('decode_speed', 0):.2f} tok/s | TTFT: {res.get('ttft', 0)*1000:.1f} ms | Status: {'PASS' if matched else 'FAIL'}")
+        full_text = f"{res.get('text', '')}\n{res.get('content', '')}"
+        expected = str(item["answer"]).strip()
+        answer_match = re.search(r"ANSWER:\s*(?:\\boxed\{)?(\d+)\}?", full_text, re.IGNORECASE)
+        boxed_match = re.search(r"\\boxed\{\s*(\d+)\s*\}", full_text)
+        if answer_match:
+            matched = (answer_match.group(1).strip() == expected)
+        elif boxed_match:
+            matched = (boxed_match.group(1).strip() == expected)
+        else:
+            esc_exp = re.escape(expected)
+            pat = r"(?:remainder|result|answer|sum|S\s*=|is|n\s*=)\s*(?:is|:|=)?\s*(?:\\boxed\{)?" + esc_exp + r"\b"
+            strict_concl = bool(re.search(pat, full_text, re.IGNORECASE))
+            matched = strict_concl or bool(re.search(rf"\b{esc_exp}\b", full_text))
+
+        if matched:
+            passed_count += 1
+            log(f"    -> Result: PASS (Expected: {expected})", color=GREEN)
+        else:
+            log(f"    -> Result: FAIL (Expected: {expected})", color=YELLOW)
+        details.append({"id": item.get("id"), "expected": expected, "matched": matched})
+
+    accuracy_pct = (passed_count / total_problems) * 100.0 if total_problems else 0.0
+    status = "PASS" if accuracy_pct >= 80.0 else ("PARTIAL" if accuracy_pct >= 50.0 else "FAIL")
+    avg_speed = round(statistics.mean(speeds), 2) if speeds else 0.0
+    avg_ttft = round(statistics.mean(ttfts), 1) if ttfts else 0.0
+
+    log(f"  -> AIME Mathematical Accuracy: {passed_count}/{total_problems} ({accuracy_pct:.1f}%) -> {status}")
 
     return {
-        "status": "PASS" if matched else "FAIL",
-        "ground_truth": 978,
-        "matched": matched,
-        "completion_tokens": res.get("completion_tokens", 0),
-        "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
+        "status": status,
+        "score": f"{passed_count}/{total_problems}",
+        "passed_count": passed_count,
+        "total_problems": total_problems,
+        "accuracy_pct": round(accuracy_pct, 1),
+        "details": details,
+        "completion_tokens": total_tokens,
+        "ttft_ms": avg_ttft,
+        "tok_s": avg_speed,
     }
 
 
@@ -1537,7 +1602,7 @@ def run_test_aime_olympiad_math(client: LLMClient):
 # ----------------------------------------------------------------------------
 def run_test_gpqa_diamond(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 19/19] GPQA Diamond: Graduate-Level Google-Proof Scientific Deduction", bold=True, color=CYAN)
+    log("[TEST 19/30] GPQA Diamond: Graduate-Level Google-Proof Scientific Deduction", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1579,23 +1644,23 @@ def run_test_gpqa_diamond(client: LLMClient):
 
     log("  Dispatching GPQA Diamond graduate benchmark (Physics, Spectroscopy, Biochemistry)...")
     res = client.call([{"role": "user", "content": prompt}], max_tokens=5000, temperature=0.0, stream=True)
-    text = res.get("content", "") or res.get("text", "")
+    full_text = f"{res.get('text', '')}\n{res.get('content', '')}"
 
     # Parsing Answers
     # Q1: A (0)
-    q1_m = re.search(r"QUESTION\s*1\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q1_m = re.search(r"QUESTION\s*1\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", full_text, re.IGNORECASE)
     q1_choice = q1_m.group(1).upper() if q1_m else ""
-    q1_pass = (q1_choice == "A") or bool(re.search(r"(?:Q1|Question\s*1|first-order energy shift|Delta E\^\(1\)).*?(?:is|=|\\equiv)\s*(?:\\boxed\{)?0\b", text, re.IGNORECASE))
+    q1_pass = (q1_choice == "A") or bool(re.search(r"(?:Q1|Question\s*1|first-order energy shift|Delta E\^\(1\)).*?(?:is|=|\\\\equiv)\s*(?:\\boxed\{)?0\b", full_text, re.IGNORECASE))
 
     # Q2: A (2B/h)
-    q2_m = re.search(r"QUESTION\s*2\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q2_m = re.search(r"QUESTION\s*2\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", full_text, re.IGNORECASE)
     q2_choice = q2_m.group(1).upper() if q2_m else ""
-    q2_pass = (q2_choice == "A") or bool(re.search(r"(?:Q2|Question\s*2|frequency spacing|Delta nu).*?(?:is|=|\\equiv)\s*(?:\\boxed\{)?2\s*\*?\s*B\s*/\s*h", text, re.IGNORECASE))
+    q2_pass = (q2_choice == "A") or bool(re.search(r"(?:Q2|Question\s*2|frequency spacing|Delta nu).*?(?:is|=|\\\\equiv)\s*(?:\\boxed\{)?2\s*\*?\s*B\s*/\s*h", full_text, re.IGNORECASE))
 
     # Q3: A (1)
-    q3_m = re.search(r"QUESTION\s*3\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", text, re.IGNORECASE)
+    q3_m = re.search(r"QUESTION\s*3\s*(?:ANSWER)?\s*:\s*[\*\(]*([A-D])[\*\)]*", full_text, re.IGNORECASE)
     q3_choice = q3_m.group(1).upper() if q3_m else ""
-    q3_pass = (q3_choice == "A") or bool(re.search(r"(?:Q3|Question\s*3|Hill coefficient|n_H).*?(?:approaches|is|=|->|\\to)\s*(?:\\boxed\{)?1\b", text, re.IGNORECASE))
+    q3_pass = (q3_choice == "A") or bool(re.search(r"(?:Q3|Question\s*3|Hill coefficient|n_H).*?(?:approaches|is|=|->|\\to)\s*(?:\\boxed\{)?1\b", full_text, re.IGNORECASE))
 
     passed_count = sum([q1_pass, q2_pass, q3_pass])
     status = "PASS" if passed_count == 3 else ("PARTIAL" if passed_count >= 2 else "FAIL")
@@ -1631,7 +1696,7 @@ def run_test_surgical_git_diff(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 20/26] Surgical Unified Diff & Git Apply Verification [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 20/30] Surgical Unified Diff & Git Apply Verification [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
@@ -1668,7 +1733,7 @@ def run_test_multifile_context(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 21/26] Multi-File Cross-Reference & Dependency Injection [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 21/30] Multi-File Cross-Reference & Dependency Injection [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.0, stream=True)
@@ -1703,7 +1768,7 @@ def run_test_code_review_security(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 22/26] Security Code Review & OWASP Vulnerability Audit [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 22/30] Security Code Review & OWASP Vulnerability Audit [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
@@ -1739,7 +1804,7 @@ def run_test_unit_test_synthesis(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 23/26] Unit Test Synthesis with Mocks & Stubs [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 23/30] Unit Test Synthesis with Mocks & Stubs [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
@@ -1773,7 +1838,7 @@ def run_test_strict_typing(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 24/26] Strict Type Compliance & Static Type Checking [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 24/30] Strict Type Compliance & Static Type Checking [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
@@ -1808,7 +1873,7 @@ def run_test_refactor_invariants(client: LLMClient, language: str = "python"):
     lang_name = languages.LANGUAGE_METADATA.get(lang, {}).get("name", lang.title())
 
     log("\n" + "="*88, bold=True)
-    log(f"[TEST 25/26] Safe Refactoring & Behavioral Invariant Preservation [{lang_name}]", bold=True, color=CYAN)
+    log(f"[TEST 25/30] Safe Refactoring & Behavioral Invariant Preservation [{lang_name}]", bold=True, color=CYAN)
     log("="*88)
 
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3000, temperature=0.0, stream=True)
@@ -1837,7 +1902,7 @@ def run_test_refactor_invariants(client: LLMClient, language: str = "python"):
 # ----------------------------------------------------------------------------
 def run_test_prompt_injection_defense(client: LLMClient):
     log("\n" + "="*88, bold=True)
-    log("[TEST 26/26] Prompt Injection & Delimiter Defense Protocol", bold=True, color=CYAN)
+    log("[TEST 26/30] Prompt Injection & Delimiter Defense Protocol", bold=True, color=CYAN)
     log("="*88)
 
     prompt = (
@@ -1870,6 +1935,300 @@ def run_test_prompt_injection_defense(client: LLMClient):
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000, 1),
         "tok_s": round(res.get("decode_speed", 0), 2)
+    }
+
+
+def run_test_ifeval_writing(client: LLMClient):
+    log("\n" + "="*88, bold=True)
+    log("[TEST 27/30] Google IFEval Verifiable Instruction Following (Writing)", bold=True, color=CYAN)
+    log("="*88)
+
+    dataset = domain_benchmarks.load_benchmark_dataset("writing/ifeval_instructions.json")
+    if not dataset:
+        log("  [-] IFEval dataset not found. Skipping.", color=YELLOW)
+        return {"status": "SKIPPED", "error": "Dataset missing"}
+
+    total_prompts = len(dataset)
+    prompts_strict_passed = 0
+    total_instructions = 0
+    instructions_passed = 0
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    details = []
+
+    for idx, item in enumerate(dataset, 1):
+        prompt = item["prompt"]
+        rules = item.get("rules", {})
+        log(f"  [Prompt {idx}/{total_prompts}] Testing {len(rules)} constraints...")
+
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.0, stream=False, reasoning_effort="none")
+        text = res.get("content", "") or res.get("text", "")
+        toks = res.get("completion_tokens", 0)
+        total_tokens += toks
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
+
+        all_ok, p_cnt, t_cnt, rule_details = domain_benchmarks.verify_ifeval_rules(text, rules)
+        total_instructions += t_cnt
+        instructions_passed += p_cnt
+        if all_ok:
+            prompts_strict_passed += 1
+            log(f"    -> Strict Compliance: PASS ({p_cnt}/{t_cnt} rules)", color=GREEN)
+        else:
+            log(f"    -> Strict Compliance: FAIL ({p_cnt}/{t_cnt} rules satisfied)", color=YELLOW)
+            for d in rule_details:
+                if d.startswith("FAIL"):
+                    log(f"       * {d}", color=YELLOW)
+
+        details.append({
+            "id": item.get("id"),
+            "strict_passed": all_ok,
+            "rules_passed": p_cnt,
+            "total_rules": t_cnt,
+            "details": rule_details
+        })
+
+    strict_pct = (prompts_strict_passed / total_prompts) * 100.0 if total_prompts else 0.0
+    inst_pct = (instructions_passed / total_instructions) * 100.0 if total_instructions else 0.0
+    status = "PASS" if strict_pct >= 80.0 else ("PARTIAL" if strict_pct >= 40.0 or inst_pct >= 60.0 else "FAIL")
+
+    log(f"  -> Prompt-Level Strict Accuracy: {prompts_strict_passed}/{total_prompts} ({strict_pct:.1f}%)")
+    log(f"  -> Instruction-Level Strict Accuracy: {instructions_passed}/{total_instructions} ({inst_pct:.1f}%) -> {status}")
+
+    return {
+        "status": status,
+        "prompts_passed_count": prompts_strict_passed,
+        "total_prompts": total_prompts,
+        "strict_accuracy_pct": round(strict_pct, 1),
+        "instruction_accuracy_pct": round(inst_pct, 1),
+        "instructions_passed": instructions_passed,
+        "total_instructions": total_instructions,
+        "completion_tokens": total_tokens,
+        "tok_s": round(statistics.mean(speeds), 2) if speeds else 0.0,
+        "ttft_ms": round(statistics.mean(ttfts), 1) if ttfts else 0.0,
+        "details": details
+    }
+
+
+def run_test_medical_research(client: LLMClient):
+    log("\n" + "="*88, bold=True)
+    log("[TEST 28/30] Clinical & Medical Research (MedQA/USMLE & PubMedQA)", bold=True, color=CYAN)
+    log("="*88)
+
+    usmle_data = domain_benchmarks.load_benchmark_dataset("medical/usmle_clinical.json")
+    pubmed_data = domain_benchmarks.load_benchmark_dataset("medical/biomedical_pubmed.json")
+
+    if not usmle_data and not pubmed_data:
+        log("  [-] Medical datasets not found. Skipping.", color=YELLOW)
+        return {"status": "SKIPPED", "error": "Datasets missing"}
+
+    passed_count = 0
+    total_count = len(usmle_data) + len(pubmed_data)
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    test_log = []
+
+    # Part A: USMLE Clinical Vignettes
+    log("  --- Part A: USMLE Clinical Board Vignettes (MedQA) ---")
+    for idx, item in enumerate(usmle_data, 1):
+        opts_str = "\n".join(f"{k}: {v}" for k, v in item["options"].items())
+        prompt = (
+            f"You are a medical physician taking the USMLE board exam.\n\n"
+            f"Question:\n{item['question']}\n\n"
+            f"Options:\n{opts_str}\n\n"
+            f"State your final answer clearly on the first line as 'Answer: <letter>', followed by your clinical rationale."
+        )
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=500, temperature=0.0, stream=False)
+        text = f"{res.get('text', '')}\n{res.get('content', '')}"
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
+
+        extracted = domain_benchmarks.extract_multiple_choice_answer(text)
+        expected = item["answer"]
+        is_correct = (extracted == expected)
+        if is_correct:
+            passed_count += 1
+            log(f"    [USMLE {idx}] Correct: {expected} (Extracted: {extracted})", color=GREEN)
+        else:
+            log(f"    [USMLE {idx}] Incorrect: Expected {expected}, Got {extracted}", color=YELLOW)
+
+        test_log.append({"id": item.get("id"), "type": "USMLE", "expected": expected, "extracted": extracted, "correct": is_correct})
+
+    # Part B: PubMedQA Biomedical Research Consensus
+    log("  --- Part B: PubMedQA Biomedical Research Consensus ---")
+    for idx, item in enumerate(pubmed_data, 1):
+        prompt = (
+            f"Based on the following scientific abstract from PubMed, answer the research question with strictly 'yes', 'no', or 'maybe'.\n\n"
+            f"Abstract Context:\n{item['context']}\n\n"
+            f"Research Question:\n{item['question']}\n\n"
+            f"State your conclusion clearly as 'Conclusion: yes', 'Conclusion: no', or 'Conclusion: maybe'."
+        )
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=300, temperature=0.0, stream=False)
+        text = f"{res.get('text', '')}\n{res.get('content', '')}"
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
+
+        extracted = domain_benchmarks.extract_pubmedqa_decision(text)
+        expected = item["final_decision"].lower()
+        is_correct = (extracted == expected)
+        if is_correct:
+            passed_count += 1
+            log(f"    [PubMed {idx}] Correct: {expected} (Extracted: {extracted})", color=GREEN)
+        else:
+            log(f"    [PubMed {idx}] Incorrect: Expected {expected}, Got {extracted}", color=YELLOW)
+
+        test_log.append({"id": item.get("id"), "type": "PubMedQA", "expected": expected, "extracted": extracted, "correct": is_correct})
+
+    accuracy_pct = (passed_count / total_count) * 100.0 if total_count else 0.0
+    status = "PASS" if accuracy_pct >= 80.0 else ("PARTIAL" if accuracy_pct >= 50.0 else "FAIL")
+    log(f"  -> Overall Clinical & Biomedical Accuracy: {passed_count}/{total_count} ({accuracy_pct:.1f}%) -> {status}")
+
+    return {
+        "status": status,
+        "passed_count": passed_count,
+        "total_count": total_count,
+        "accuracy_pct": round(accuracy_pct, 1),
+        "completion_tokens": total_tokens,
+        "tok_s": round(statistics.mean(speeds), 2) if speeds else 0.0,
+        "ttft_ms": round(statistics.mean(ttfts), 1) if ttfts else 0.0,
+        "details": test_log
+    }
+
+
+def run_test_gsm8k_math(client: LLMClient):
+    log("\n" + "="*88, bold=True)
+    log("[TEST 29/30] Multi-Step Elementary & Algebra Math (OpenAI GSM8K)", bold=True, color=CYAN)
+    log("="*88)
+
+    dataset = domain_benchmarks.load_benchmark_dataset("math/gsm8k_reasoning.json")
+    if not dataset:
+        log("  [-] GSM8K dataset not found. Skipping.", color=YELLOW)
+        return {"status": "SKIPPED", "error": "Dataset missing"}
+
+    passed_count = 0
+    total_count = len(dataset)
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    test_log = []
+
+    for idx, item in enumerate(dataset, 1):
+        prompt = (
+            f"Solve the following math word problem step-by-step.\n\n"
+            f"Problem:\n{item['question']}\n\n"
+            f"End your response with '#### <final_numeric_answer>' on its own line."
+        )
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=800, temperature=0.0, stream=False)
+        text = f"{res.get('text', '')}\n{res.get('content', '')}"
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
+
+        extracted = domain_benchmarks.extract_gsm8k_numeric_answer(text)
+        expected = item["answer"].strip()
+        is_correct = False
+        if extracted is not None and expected is not None:
+            if extracted == expected:
+                is_correct = True
+            else:
+                try:
+                    is_correct = (abs(float(extracted) - float(expected)) < 1e-5)
+                except (ValueError, TypeError):
+                    is_correct = False
+        if is_correct:
+            passed_count += 1
+            log(f"    [GSM8K Problem {idx}] Correct: {expected} (Extracted: {extracted})", color=GREEN)
+        else:
+            log(f"    [GSM8K Problem {idx}] Incorrect: Expected {expected}, Got {extracted}", color=YELLOW)
+
+        test_log.append({"id": item.get("id"), "expected": expected, "extracted": extracted, "correct": is_correct})
+
+    accuracy_pct = (passed_count / total_count) * 100.0 if total_count else 0.0
+    status = "PASS" if accuracy_pct >= 80.0 else ("PARTIAL" if accuracy_pct >= 50.0 else "FAIL")
+    log(f"  -> GSM8K Mathematical Accuracy: {passed_count}/{total_count} ({accuracy_pct:.1f}%) -> {status}")
+
+    return {
+        "status": status,
+        "passed_count": passed_count,
+        "total_count": total_count,
+        "accuracy_pct": round(accuracy_pct, 1),
+        "completion_tokens": total_tokens,
+        "tok_s": round(statistics.mean(speeds), 2) if speeds else 0.0,
+        "ttft_ms": round(statistics.mean(ttfts), 1) if ttfts else 0.0,
+        "details": test_log
+    }
+
+
+def run_test_history_humanities(client: LLMClient):
+    log("\n" + "="*88, bold=True)
+    log("[TEST 30/30] Historical Causality & Humanities Analysis (MMLU History)", bold=True, color=CYAN)
+    log("="*88)
+
+    dataset = domain_benchmarks.load_benchmark_dataset("history/history_causality.json")
+    if not dataset:
+        log("  [-] History dataset not found. Skipping.", color=YELLOW)
+        return {"status": "SKIPPED", "error": "Dataset missing"}
+
+    passed_count = 0
+    total_count = len(dataset)
+    total_tokens = 0
+    speeds = []
+    ttfts = []
+    test_log = []
+
+    for idx, item in enumerate(dataset, 1):
+        opts_str = "\n".join(f"{k}: {v}" for k, v in item["options"].items())
+        prompt = (
+            f"You are a professional historian.\n\n"
+            f"Topic: {item.get('topic', 'World History')}\n"
+            f"Question:\n{item['question']}\n\n"
+            f"Options:\n{opts_str}\n\n"
+            f"State your final answer clearly on the first line as 'Answer: <letter>', followed by your explanation of the historical causality."
+        )
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=500, temperature=0.0, stream=False)
+        text = f"{res.get('text', '')}\n{res.get('content', '')}"
+        total_tokens += res.get("completion_tokens", 0)
+        if res.get("decode_speed"):
+            speeds.append(res.get("decode_speed"))
+        if res.get("ttft"):
+            ttfts.append(res.get("ttft") * 1000.0)
+
+        extracted = domain_benchmarks.extract_multiple_choice_answer(text)
+        expected = item["answer"]
+        is_correct = (extracted == expected)
+        if is_correct:
+            passed_count += 1
+            log(f"    [History Question {idx}] Correct: {expected} (Extracted: {extracted})", color=GREEN)
+        else:
+            log(f"    [History Question {idx}] Incorrect: Expected {expected}, Got {extracted}", color=YELLOW)
+
+        test_log.append({"id": item.get("id"), "expected": expected, "extracted": extracted, "correct": is_correct})
+
+    accuracy_pct = (passed_count / total_count) * 100.0 if total_count else 0.0
+    status = "PASS" if accuracy_pct >= 80.0 else ("PARTIAL" if accuracy_pct >= 50.0 else "FAIL")
+    log(f"  -> Historical Causality & Analysis Accuracy: {passed_count}/{total_count} ({accuracy_pct:.1f}%) -> {status}")
+
+    return {
+        "status": status,
+        "passed_count": passed_count,
+        "total_count": total_count,
+        "accuracy_pct": round(accuracy_pct, 1),
+        "completion_tokens": total_tokens,
+        "tok_s": round(statistics.mean(speeds), 2) if speeds else 0.0,
+        "ttft_ms": round(statistics.mean(ttfts), 1) if ttfts else 0.0,
+        "details": test_log
     }
 
 
@@ -2089,7 +2448,7 @@ def main():
     group_tests.add_argument("--suite", "-s",
                              choices=["all", "flagship", "adversarial", "frontier", "serving", "contract", "context", "swe", "reasoning"],
                              default="all",
-                             help="Benchmark suite category: 'all' (tests 1-26), 'serving' (1,2,3,7,8,11), 'contract' (5,6,9,10), 'context' (12,13,15), 'swe' (4,14,17,20-25), 'reasoning' (16,18,19,26)")
+                             help="Benchmark suite category: 'all' (tests 1-30), 'serving' (1,2,3,7,8,11), 'contract' (5,6,9,10,27), 'context' (12,13,15), 'swe' (4,14,17,20-25), 'reasoning' (16,18,19,26,28,29,30)")
     group_tests.add_argument("--test", "-t", default=None,
                              help="Run specific test(s) by number or name (e.g. 20, '1-5', 'context_scaling', '16-19', 'gpqa')")
     group_tests.add_argument("--exclude", "--exclude-test", "--skip", "--skip-test", dest="exclude", default=None,
@@ -2418,6 +2777,14 @@ def main():
             parallel_candidates.append(("refactor_invariants", lambda: _run_swe_test_with_language("refactor_invariants", run_test_refactor_invariants, client, target_language, report)))
         if 26 in selected_tests:
             parallel_candidates.append(("prompt_injection_defense", lambda: run_test_prompt_injection_defense(client)))
+        if 27 in selected_tests:
+            parallel_candidates.append(("ifeval_writing", lambda: run_test_ifeval_writing(client)))
+        if 28 in selected_tests:
+            parallel_candidates.append(("medical_research", lambda: run_test_medical_research(client)))
+        if 29 in selected_tests:
+            parallel_candidates.append(("gsm8k_math", lambda: run_test_gsm8k_math(client)))
+        if 30 in selected_tests:
+            parallel_candidates.append(("history_humanities", lambda: run_test_history_humanities(client)))
 
         with ThreadPoolExecutor(max_workers=parallel) as pool:
             futures = {pool.submit(fn): name for name, fn in parallel_candidates}
@@ -2495,6 +2862,14 @@ def main():
             report["results"]["refactor_invariants"] = _run_swe_test_with_language("refactor_invariants", run_test_refactor_invariants, client, target_language, report)
         if 26 in selected_tests:
             report["results"]["prompt_injection_defense"] = run_test_prompt_injection_defense(client)
+        if 27 in selected_tests:
+            report["results"]["ifeval_writing"] = run_test_ifeval_writing(client)
+        if 28 in selected_tests:
+            report["results"]["medical_research"] = run_test_medical_research(client)
+        if 29 in selected_tests:
+            report["results"]["gsm8k_math"] = run_test_gsm8k_math(client)
+        if 30 in selected_tests:
+            report["results"]["history_humanities"] = run_test_history_humanities(client)
 
     total_suite_time = time.perf_counter() - t_suite_start
     report["total_suite_wall_time_s"] = round(total_suite_time, 2)

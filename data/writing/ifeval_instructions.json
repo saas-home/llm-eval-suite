@@ -1,0 +1,49 @@
+[
+  {
+    "id": "ifeval_001",
+    "prompt": "Write a concise overview of the Industrial Revolution. Your response must satisfy all of the following rules:\n1. Length: Must be at least 150 words and no more than 280 words.\n2. Bullets: Must contain exactly 3 bullet points starting with the '-' symbol.\n3. Forbidden words: Do not use the word 'machine' anywhere in your response.",
+    "rules": {
+      "min_words": 150,
+      "max_words": 280,
+      "bullet_symbol": "-",
+      "bullet_count": 3,
+      "forbidden_words": ["machine", "machines"]
+    }
+  },
+  {
+    "id": "ifeval_002",
+    "prompt": "Explain how photosynthesis works for a high school science class. Your response must satisfy all of the following rules:\n1. Boundary: Must start with the exact phrase 'Sunlight powers life.'\n2. Boundary: Must end with the exact phrase 'This concludes the energy transformation cycle.'\n3. Structure: Must be organized into exactly 2 paragraphs separated by a blank line.",
+    "rules": {
+      "starts_with": "Sunlight powers life.",
+      "ends_with": "This concludes the energy transformation cycle.",
+      "paragraph_count": 2
+    }
+  },
+  {
+    "id": "ifeval_003",
+    "prompt": "Draft an email to a project manager requesting a 3-day extension on the database migration. Your response must satisfy all of the following rules:\n1. Punctuation: Do not include any commas (',') anywhere in your entire response.\n2. Frequency: Mention the word 'deliverable' at least 2 times.\n3. Tone: Professional and polite.",
+    "rules": {
+      "forbidden_chars": [","],
+      "required_keyword_counts": {
+        "deliverable": 2
+      }
+    }
+  },
+  {
+    "id": "ifeval_004",
+    "prompt": "Describe the core principles of zero-trust network architecture. Your response must satisfy all of the following rules:\n1. Headers: Must contain exactly 3 sections, each introduced with a markdown level-2 header ('## Header').\n2. Highlights: Must include at least 2 distinct words or phrases formatted in bold markdown syntax ('**bold text**').",
+    "rules": {
+      "markdown_header_level": "## ",
+      "header_count": 3,
+      "min_bold_highlights": 2
+    }
+  },
+  {
+    "id": "ifeval_005",
+    "prompt": "Summarize the key tenets of defensible cryptographic security. Your response must satisfy all of the following rules:\n1. Length: Exactly 5 complete sentences.\n2. Boundary: The final sentence must be a question ending with a question mark ('?').",
+    "rules": {
+      "sentence_count": 5,
+      "ends_with_question": true
+    }
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "gpqa_001",
+    "domain": "Quantum Mechanics & Perturbation Theory",
+    "question": "A spinless particle of mass m is confined in a one-dimensional infinite square potential well with boundaries at x = 0 and x = L. A perturbing delta-function potential H' = V0 * delta(x - L/2) is applied at the center of the well, where V0 is a constant. Calculate the first-order energy shift Delta E^(1) for the first excited state (n = 2).\nOptions:\n(A) 0\n(B) 2*V0 / L\n(C) V0 / L\n(D) 4*V0 / L",
+    "answer": "A",
+    "explanation": "The wavefunctions for an infinite square well are psi_n(x) = sqrt(2/L) * sin(n*pi*x/L). For n=2 (first excited state), psi_2(L/2) = sqrt(2/L) * sin(2*pi*(L/2)/L) = sqrt(2/L) * sin(pi) = 0. Therefore, the matrix element <psi_2| H' |psi_2> = V0 * |psi_2(L/2)|^2 = 0."
+  },
+  {
+    "id": "gpqa_002",
+    "domain": "Molecular Spectroscopy",
+    "question": "In rotational microwave spectroscopy of a rigid heteronuclear diatomic molecule with moment of inertia I, energy levels are E_J = B * J * (J + 1) where B = hbar^2 / (2*I). Under the electric-dipole selection rule Delta J = +1, what is the exact frequency spacing Delta nu between adjacent absorption lines in the rotational spectrum?\nOptions:\n(A) 2*B / h\n(B) B / h\n(C) 4*B / h\n(D) B / (2*h)",
+    "answer": "A",
+    "explanation": "Transition frequencies are nu(J -> J+1) = (E_{J+1} - E_J)/h = B/h * ((J+1)(J+2) - J(J+1)) = 2*B*(J+1)/h. The spacing between adjacent absorption lines (J -> J+1 and J+1 -> J+2) is Delta nu = 2*B/h."
+  },
+  {
+    "id": "gpqa_003",
+    "domain": "Biochemistry & Allosteric Enzyme Kinetics",
+    "question": "An allosteric enzyme following the Monod-Wyman-Changeux (MWC) model exhibits positive homotropic cooperativity with allosteric constant L = [T_0]/[R_0] >> 1 and non-exclusive substrate binding parameter c = K_R / K_T < 1. As substrate concentration [S] approaches infinity (saturation, [S] -> inf), what is the asymptotic value of the apparent Hill coefficient n_H?\nOptions:\n(A) 1\n(B) n (the total number of subunits)\n(C) 0\n(D) Infinity",
+    "answer": "A",
+    "explanation": "In the MWC model, at both extreme low substrate concentration ([S] -> 0) and saturation ([S] -> infinity), the binding curve becomes non-cooperative (hyperbolic), and the apparent Hill coefficient n_H = d(ln(Y/(1-Y))) / d(ln[S]) approaches 1. Cooperativity is observed only at intermediate substrate concentrations."
+  },
+  {
+    "id": "gpqa_004",
+    "domain": "Astrophysics & General Relativity",
+    "question": "In the Schwarzschild geometry surrounding a static, spherically symmetric black hole of mass M and Schwarzschild radius r_s = 2*G*M / c^2, what is the coordinate radius of the unstable circular orbit for massless photons (the photon sphere)?\nOptions:\n(A) 1.5 * r_s\n(B) 1.0 * r_s\n(C) 2.0 * r_s\n(D) 3.0 * r_s",
+    "answer": "A",
+    "explanation": "The effective potential for null geodesics in Schwarzschild metric has an extremum (unstable circular orbit) at r = 3*G*M / c^2 = 1.5 * r_s."
+  },
+  {
+    "id": "gpqa_005",
+    "domain": "Condensed Matter Physics",
+    "question": "For an ideal non-relativistic Fermi gas of spin-1/2 electrons in three dimensions at absolute zero temperature (T = 0 K) with Fermi energy E_F, what is the chemical potential mu(0) of the system?\nOptions:\n(A) E_F\n(B) 0\n(C) 0.5 * E_F\n(D) 1.5 * E_F",
+    "answer": "A",
+    "explanation": "By definition, the Fermi energy E_F is the chemical potential of the Fermi-Dirac distribution at T = 0 K, so mu(0) = E_F."
+  }
+]

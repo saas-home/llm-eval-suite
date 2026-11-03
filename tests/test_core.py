@@ -193,11 +193,11 @@ class TestParseSelectedTests(unittest.TestCase):
         self.assertEqual(reporting.parse_selected_tests(None, "adversarial"), set(range(13, 16)))
         self.assertEqual(reporting.parse_selected_tests(None, "frontier"), set(range(16, 20)))
         self.assertEqual(reporting.parse_selected_tests(None, "serving"), {1, 2, 3, 7, 8, 11})
-        self.assertEqual(reporting.parse_selected_tests(None, "contract"), {5, 6, 9, 10})
+        self.assertEqual(reporting.parse_selected_tests(None, "contract"), {5, 6, 9, 10, 27})
         self.assertEqual(reporting.parse_selected_tests(None, "context"), {12, 13, 15})
         self.assertEqual(reporting.parse_selected_tests(None, "swe"), {4, 14, 17, 20, 21, 22, 23, 24, 25})
-        self.assertEqual(reporting.parse_selected_tests(None, "reasoning"), {16, 18, 19, 26})
-        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(range(1, 27)))
+        self.assertEqual(reporting.parse_selected_tests(None, "reasoning"), {16, 18, 19, 26, 28, 29, 30})
+        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(range(1, reporting.TOTAL_TESTS + 1)))
 
     def test_unknown_ignored(self):
         self.assertEqual(reporting.parse_selected_tests("1,not_a_test"), {1})
@@ -210,13 +210,13 @@ class TestParseSelectedTests(unittest.TestCase):
         # Exclude from default 'all'
         all_minus_vision = reporting.parse_selected_tests(None, "all", exclude_arg="2")
         self.assertNotIn(2, all_minus_vision)
-        self.assertEqual(len(all_minus_vision), 25)
+        self.assertEqual(len(all_minus_vision), reporting.TOTAL_TESTS - 1)
 
         # Exclude multiple
         res = reporting.parse_selected_tests(None, "all", exclude_arg="2,15")
         self.assertNotIn(2, res)
         self.assertNotIn(15, res)
-        self.assertEqual(len(res), 24)
+        self.assertEqual(len(res), reporting.TOTAL_TESTS - 2)
 
     def test_exclude_range_and_alias(self):
         # Exclude range from flagship suite

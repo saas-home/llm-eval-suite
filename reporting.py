@@ -15,7 +15,7 @@ import hashlib
 
 from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, DEFAULT_RESULTS_DIR
 
-TOTAL_TESTS = 26
+TOTAL_TESTS = 30
 
 # ============================================================================
 # STANDARDIZED TEST CATALOG & METRIC EXTRACTORS
@@ -56,6 +56,10 @@ TEST_CATALOG = [
     (24, "strict_typing", "Strict Type Compliance (mypy)"),
     (25, "refactor_invariants", "Safe Refactor Invariant Check"),
     (26, "prompt_injection_defense", "Prompt Injection & Delimiter Defense"),
+    (27, "ifeval_writing", "Google IFEval Verifiable Writing"),
+    (28, "medical_research", "Medical Research (MedQA & PubMedQA)"),
+    (29, "gsm8k_math", "Multi-Step Math (OpenAI GSM8K)"),
+    (30, "history_humanities", "Historical Causality (MMLU History)"),
 ]
 
 TEST_KEY_TO_PILLAR = {
@@ -69,6 +73,7 @@ TEST_KEY_TO_PILLAR = {
     "json_schema": "contract",
     "stop_sequences": "contract",
     "extreme_precision": "contract",
+    "ifeval_writing": "contract",
     "context_scaling": "context",
     "multihop_graph": "context",
     "frontier_needle_depth": "context",
@@ -85,6 +90,9 @@ TEST_KEY_TO_PILLAR = {
     "aime_olympiad": "reasoning",
     "gpqa_diamond": "reasoning",
     "prompt_injection_defense": "reasoning",
+    "medical_research": "reasoning",
+    "gsm8k_math": "reasoning",
+    "history_humanities": "reasoning",
 }
 
 
@@ -261,11 +269,19 @@ def extract_test_metrics(test_key: str, data):
     elif test_key == "counterfactual_algebra":
         desc = "Roots [8, 17] Solved" if st == "PASS" else "Roots Missed"
     elif test_key == "cruxeval":
-        desc = "State Traversed OK" if st == "PASS" else "State Diverged"
+        if "score" in data:
+            desc = f"Score: {data['score']}"
+            score = data.get("accuracy_pct", 100.0 if st == "PASS" else 0.0) / 100.0
+        else:
+            desc = "State Traversed OK" if st == "PASS" else "State Diverged"
     elif test_key == "swe_bench_bug_patch":
         desc = "Regression Tests OK" if st == "PASS" else "Unit Tests Failed"
     elif test_key == "aime_olympiad":
-        desc = "Exact Modular Root" if st == "PASS" else "Arithmetic Missed"
+        if "score" in data:
+            desc = f"Score: {data['score']}"
+            score = data.get("accuracy_pct", 100.0 if st == "PASS" else 0.0) / 100.0
+        else:
+            desc = "Exact Modular Root" if st == "PASS" else "Arithmetic Missed"
     elif test_key == "gpqa_diamond":
         score_val = data.get("score") or f"{data.get('passed_count', 0)}/3"
         desc = f"Score: {score_val}"
@@ -298,6 +314,26 @@ def extract_test_metrics(test_key: str, data):
         desc = "Regression Suite OK" if st == "PASS" else "Behavior Diverged"
     elif test_key == "prompt_injection_defense":
         desc = "Invariants Protected" if st == "PASS" else "Security Hijacked"
+    elif test_key == "ifeval_writing":
+        passed_n = data.get("prompts_passed_count", 0)
+        tot = data.get("total_prompts", 5)
+        desc = f"{passed_n}/{tot} Prompts Strict OK"
+        score = passed_n / float(tot) if tot else 0.0
+    elif test_key == "medical_research":
+        passed_n = data.get("passed_count", 0)
+        tot = data.get("total_count", 10)
+        desc = f"{passed_n}/{tot} MedQA/PubMed OK"
+        score = passed_n / float(tot) if tot else 0.0
+    elif test_key == "gsm8k_math":
+        passed_n = data.get("passed_count", 0)
+        tot = data.get("total_count", 5)
+        desc = f"{passed_n}/{tot} GSM8K Math OK"
+        score = passed_n / float(tot) if tot else 0.0
+    elif test_key == "history_humanities":
+        passed_n = data.get("passed_count", 0)
+        tot = data.get("total_count", 5)
+        desc = f"{passed_n}/{tot} MMLU History OK"
+        score = passed_n / float(tot) if tot else 0.0
 
     return {
         "status": st,
@@ -379,6 +415,17 @@ def compute_relative_advantages(m1: dict, m2: dict) -> dict:
     """Computes relative advantages and executive verdict between two evaluated models."""
     name1 = m1.get("model", "Model A")
     name2 = m2.get("model", "Model B")
+
+    # 0. Pure Cognitive Capability
+    cap_a = m1.get("pure_capability_score_pct", m1.get("effectiveness_rate_pct", 0.0))
+    cap_b = m2.get("pure_capability_score_pct", m2.get("effectiveness_rate_pct", 0.0))
+    diff_cap = cap_a - cap_b
+    if diff_cap > 0:
+        adv_cap = f"Model A (+{diff_cap:.1f}%)"
+    elif diff_cap < 0:
+        adv_cap = f"Model B (+{-diff_cap:.1f}%)"
+    else:
+        adv_cap = "Equal"
 
     # 1. Effectiveness
     eff_a = m1.get("effectiveness_rate_pct", 0.0)
@@ -483,6 +530,8 @@ def compute_relative_advantages(m1: dict, m2: dict) -> dict:
         verdict = f"Both models achieved IDENTICAL effectiveness ({eff_a:.1f}%). Model A speed: {spd_a:.1f} tok/s vs Model B speed: {spd_b:.1f} tok/s."
 
     return {
+        "adv_cap": adv_cap,
+        "diff_cap": diff_cap,
         "adv_eff": adv_eff,
         "adv_te": adv_te,
         "adv_tot": adv_tot,
@@ -506,11 +555,29 @@ WORKLOAD_DOMAINS = {
         "recommended_for": "Autonomous agent loops, function calling workflows, structured JSON extraction, and security-critical prompt defense.",
         "caution_if_failed": "Tool invocation hallucination, schema parsing failure, or vulnerability to prompt injection.",
     },
+    "clinical_and_medical": {
+        "title": "Clinical & Medical Life-Sciences Research",
+        "tests": ["medical_research"],
+        "recommended_for": "Biomedical literature extraction, clinical trial analysis, diagnostic reasoning, and medical research synthesis.",
+        "caution_if_failed": "Medical hallucination risk; cannot be trusted for autonomous clinical or biomedical decision support.",
+    },
+    "instruction_and_writing": {
+        "title": "Verifiable Instruction & Structured Writing",
+        "tests": ["ifeval_writing", "json_schema", "stop_sequences"],
+        "recommended_for": "Strictly constrained copywriting, executive document drafting, rigid formatting compliance, and zero-deviation prompt following.",
+        "caution_if_failed": "Frequently violates word caps, negative constraints, or explicit formatting rules.",
+    },
     "deep_reasoning": {
         "title": "Deep Reasoning, Science & Math",
-        "tests": ["cruxeval", "aime_olympiad", "gpqa_diamond"],
-        "recommended_for": "Complex algorithmic deduction, mental code tracing, Olympiad-level math, and graduate science problems.",
+        "tests": ["cruxeval", "aime_olympiad", "gsm8k_math", "gpqa_diamond"],
+        "recommended_for": "Complex algorithmic deduction, mental code tracing, Olympiad & multi-step math, and graduate science problems.",
         "caution_if_failed": "Unreliable on multi-step reasoning, mathematical derivations, or state-tracking logic.",
+    },
+    "history_and_humanities": {
+        "title": "Historical Causality & Humanities Research",
+        "tests": ["history_humanities"],
+        "recommended_for": "Historical cause-and-effect analysis, policy timeline analysis, legal/treaty research, and archival synthesis.",
+        "caution_if_failed": "Chronological hallucinations, treaty misattributions, or conflated historical entities.",
     },
     "long_context_rag": {
         "title": "Long-Context Retrieval & RAG Pipelines",
@@ -667,6 +734,22 @@ def compute_task_suitability_matrix(report: dict) -> dict:
     }
 
 
+def compute_capability_grade(score_pct: float) -> str:
+    """Assigns an enterprise intelligence tier grade based strictly on cognitive capability."""
+    if score_pct >= 95.0:
+        return "A+ (Frontier Intelligence)"
+    elif score_pct >= 85.0:
+        return "A (High Enterprise Capability)"
+    elif score_pct >= 75.0:
+        return "B+ (Competent Enterprise Model)"
+    elif score_pct >= 60.0:
+        return "B (Moderate Capability / Guardrails Required)"
+    elif score_pct >= 40.0:
+        return "C (Marginal Capability / High Supervision)"
+    else:
+        return "F (Unsuitable for Autonomous Deployment)"
+
+
 def compute_executive_summary(report: dict) -> dict:
     report = normalize_report(report)
     results = report.get("results", {})
@@ -681,6 +764,19 @@ def compute_executive_summary(report: dict) -> dict:
     passed_tokens = 0
     speeds = []
     ttfts = []
+
+    serving_infra_tests = {
+        "streaming",
+        "concurrency",
+        "prefix_caching",
+        "client_abort",
+        "error_handling",
+        "stop_sequences",
+    }
+    cog_evaluated = 0
+    cog_passed = 0
+    cog_partial = 0
+    cog_failed = 0
 
     for _, test_key, _ in TEST_CATALOG:
         if test_key not in results:
@@ -707,6 +803,15 @@ def compute_executive_summary(report: dict) -> dict:
         else:
             failed += 1
 
+        if test_key not in serving_infra_tests:
+            cog_evaluated += 1
+            if "PASS" in m["status"]:
+                cog_passed += 1
+            elif "PARTIAL" in m["status"]:
+                cog_partial += 1
+            else:
+                cog_failed += 1
+
         total_tokens += m["tokens"]
         if m["tok_s"] > 0:
             speeds.append(m["tok_s"])
@@ -722,7 +827,15 @@ def compute_executive_summary(report: dict) -> dict:
     wall_time = report.get("total_suite_wall_time_s", 0.0)
 
     token_conciseness_factor = min(2.0, max(0.2, 1000.0 / (avg_tokens_per_passed if avg_tokens_per_passed > 0 else 1000.0)))
-    efficiency_index = round((pass_rate_pct * 0.6) + (min(100.0, avg_speed * 1.5) * 0.25) + (token_conciseness_factor * 15.0), 1)
+    raw_efficiency_index = round((pass_rate_pct * 0.6) + (min(100.0, avg_speed * 1.5) * 0.25) + (token_conciseness_factor * 15.0), 1)
+    efficiency_index = min(100.0, raw_efficiency_index)
+
+    pure_cap_pct = (
+        round(((cog_passed + 0.5 * cog_partial) / cog_evaluated * 100.0), 1)
+        if cog_evaluated > 0
+        else round(pass_rate_pct, 1)
+    )
+    pure_cap_grade = compute_capability_grade(pure_cap_pct)
 
     suitability = compute_task_suitability_matrix(report)
 
@@ -738,6 +851,12 @@ def compute_executive_summary(report: dict) -> dict:
         "failed": failed,
         "effectiveness_rate_pct": round(pass_rate_pct, 1),
         "completion_rate_pct": round(completion_rate_pct, 1),
+        "pure_capability_score_pct": pure_cap_pct,
+        "pure_capability_grade": pure_cap_grade,
+        "cognitive_evaluated": cog_evaluated,
+        "cognitive_passed": cog_passed,
+        "cognitive_partial": cog_partial,
+        "cognitive_failed": cog_failed,
         "star_rating": star_rating(pass_rate_pct, completion_rate_pct),
         "config_fingerprint": build_config_fingerprint(report),
         "total_tokens_emitted": total_tokens,
@@ -747,6 +866,7 @@ def compute_executive_summary(report: dict) -> dict:
         "avg_ttft_ms": round(avg_ttft, 1),
         "total_wall_time_s": round(wall_time, 2),
         "efficiency_index": efficiency_index,
+        "raw_efficiency_index": raw_efficiency_index,
         "workload_suitability": suitability.get("matrix", {}),
         "best_suited_for": suitability.get("best_suited_for", []),
         "caution_areas": suitability.get("caution_areas", []),
@@ -942,24 +1062,24 @@ def print_summary_table(report):
     # 16. CruxEval
     if "cruxeval" in res:
         cx = res.get("cruxeval", {})
-        cx_desc = "State Traversed OK" if cx.get("status") == "PASS" else "State Diverged"
-        log(f"{'16. CruxEval (Mental Code Exec)':<38} | {fmt_status(cx.get('status', 'N/A'))} | {cx_desc:<20} | {cx.get('tok_s', 0):.2f} tok/s")
+        cx_m = extract_test_metrics("cruxeval", cx)
+        log(f"{'16. CruxEval (Mental Code Exec)':<38} | {fmt_status(cx.get('status', 'N/A'))} | {cx_m['desc']:<20} | {cx.get('tok_s', 0):.2f} tok/s")
     elif 16 in sel_tests:
         log(f"{'16. CruxEval (Mental Code Exec)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
     # 17. SWE-bench Bug Patching
     if "swe_bench_bug_patch" in res:
         sw = res.get("swe_bench_bug_patch", {})
-        sw_desc = "Regression Tests OK" if sw.get("status") == "PASS" else "Unit Tests Failed"
-        log(f"{'17. SWE-bench (Traceback Fix)':<38} | {fmt_status(sw.get('status', 'N/A'))} | {sw_desc:<20} | {sw.get('tok_s', 0):.2f} tok/s")
+        sw_m = extract_test_metrics("swe_bench_bug_patch", sw)
+        log(f"{'17. SWE-bench (Traceback Fix)':<38} | {fmt_status(sw.get('status', 'N/A'))} | {sw_m['desc']:<20} | {sw.get('tok_s', 0):.2f} tok/s")
     elif 17 in sel_tests:
         log(f"{'17. SWE-bench (Traceback Fix)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
     # 18. AIME Olympiad Math
     if "aime_olympiad" in res:
         am = res.get("aime_olympiad", {})
-        am_desc = "Exact Modular Root" if am.get("status") == "PASS" else "Arithmetic Missed"
-        log(f"{'18. AIME Olympiad (Math Reasoning)':<38} | {fmt_status(am.get('status', 'N/A'))} | {am_desc:<20} | {am.get('tok_s', 0):.2f} tok/s")
+        am_m = extract_test_metrics("aime_olympiad", am)
+        log(f"{'18. AIME Olympiad (Math Reasoning)':<38} | {fmt_status(am.get('status', 'N/A'))} | {am_m['desc']:<20} | {am.get('tok_s', 0):.2f} tok/s")
     elif 18 in sel_tests:
         log(f"{'18. AIME Olympiad (Math Reasoning)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
@@ -1060,6 +1180,38 @@ def print_summary_table(report):
     elif 26 in sel_tests:
         log(f"{'26. Prompt Injection Defense':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
+    # 27. Google IFEval Verifiable Writing
+    if "ifeval_writing" in res:
+        ife = res.get("ifeval_writing", {})
+        m = extract_test_metrics("ifeval_writing", ife)
+        log(f"{'27. Google IFEval Verifiable Writing':<38} | {fmt_status(ife.get('status', 'N/A'))} | {m['desc']:<20} | {ife.get('tok_s', 0):.2f} tok/s")
+    elif 27 in sel_tests:
+        log(f"{'27. Google IFEval Verifiable Writing':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
+    # 28. Clinical & Medical Research
+    if "medical_research" in res:
+        med = res.get("medical_research", {})
+        m = extract_test_metrics("medical_research", med)
+        log(f"{'28. Clinical & Medical Research':<38} | {fmt_status(med.get('status', 'N/A'))} | {m['desc']:<20} | {med.get('tok_s', 0):.2f} tok/s")
+    elif 28 in sel_tests:
+        log(f"{'28. Clinical & Medical Research':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
+    # 29. Multi-Step Math (GSM8K)
+    if "gsm8k_math" in res:
+        gsm = res.get("gsm8k_math", {})
+        m = extract_test_metrics("gsm8k_math", gsm)
+        log(f"{'29. Multi-Step Math (GSM8K)':<38} | {fmt_status(gsm.get('status', 'N/A'))} | {m['desc']:<20} | {gsm.get('tok_s', 0):.2f} tok/s")
+    elif 29 in sel_tests:
+        log(f"{'29. Multi-Step Math (GSM8K)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
+    # 30. Historical Causality & Analysis
+    if "history_humanities" in res:
+        hist = res.get("history_humanities", {})
+        m = extract_test_metrics("history_humanities", hist)
+        log(f"{'30. Historical Causality (MMLU)':<38} | {fmt_status(hist.get('status', 'N/A'))} | {m['desc']:<20} | {hist.get('tok_s', 0):.2f} tok/s")
+    elif 30 in sel_tests:
+        log(f"{'30. Historical Causality (MMLU)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
     log("="*88 + "\n")
 
     # Polyglot SWE Benchmark Matrix (if polyglot mode was run)
@@ -1095,21 +1247,34 @@ def print_summary_table(report):
             log(f"{l_disp:<12} | {cols} | {rate}")
         log("="*88 + "\n")
 
-    # Executive Efficiency & Effectiveness Scorecard
+    # Executive Efficiency & Effectiveness Scorecards
     summary = compute_executive_summary(report)
     report["summary"] = summary
 
+    # 1. Pure Model Cognitive Capability & Intelligence Scorecard (Decoupled from hardware speed)
     log("="*88, bold=True)
-    log("             EXECUTIVE EFFICIENCY & EFFECTIVENESS SCORECARD                             ", bold=True, color=CYAN)
+    log("             MODEL COGNITIVE CAPABILITY & INTELLIGENCE SCORECARD                        ", bold=True, color=CYAN)
     log("="*88, bold=True)
     log(f"  Model Under Test        : {summary['model']}")
-    log(f"  Effectiveness (Pass@1)  : {summary['passed']}/{summary['total_evaluated']} Passed ({summary['effectiveness_rate_pct']}%)")
-    log(f"  Total Solution Tokens   : {summary['total_tokens_emitted']:,} tokens consumed")
-    log(f"  Token Economy           : {summary['token_economy_tokens_per_passed_task']:.1f} tokens/passed victory (Solution conciseness)")
+    log(f"  Intelligence Grade      : {summary['pure_capability_grade']}")
+    cog_ratio_str = f"{summary['cognitive_passed']}/{summary['cognitive_evaluated']} Tasks Solved ({summary['pure_capability_score_pct']}%)" if summary['cognitive_evaluated'] > 0 else f"{summary['passed']}/{summary['total_evaluated']} ({summary['effectiveness_rate_pct']}%)"
+    log(f"  Pure Capability Score   : {summary['pure_capability_score_pct']}%  [{cog_ratio_str}]")
+    log(f"  Overall Task Accuracy   : {summary['passed']}/{summary['total_evaluated']} Passed ({summary['effectiveness_rate_pct']}%)")
+    log(f"  Solution Conciseness    : {summary['token_economy_tokens_per_passed_task']:.1f} tokens/passed task (Token Economy)")
+    log(f"  Evaluation Methodology  : Open Benchmark Standard (GPQA / AIME / SWE / IFEval / CruxEval)")
+    log("="*88 + "\n", bold=True)
+
+    # 2. Hosting Infrastructure & Serving Performance Scorecard
+    log("="*88, bold=True)
+    log("             HOSTING INFRASTRUCTURE & SERVING PERFORMANCE SCORECARD                     ", bold=True, color=MAGENTA)
+    log("="*88, bold=True)
+    log(f"  Target Serving Endpoint : {report.get('endpoint')}")
     log(f"  Mean Decode Throughput  : {summary['avg_decode_tok_s']:.2f} tok/s")
     log(f"  Mean Prefill TTFT       : {summary['avg_ttft_ms']:.1f} ms")
-    log(f"  Total Benchmark Time    : {summary['total_wall_time_s']:.2f} s")
-    log(f"  Composite Efficiency Idx: {summary['efficiency_index']:.1f} / 100.0")
+    log(f"  Concurrent Clients      : {report.get('parallel_streams', 1)} active parallel stream(s)")
+    log(f"  Total Suite Wall Time   : {summary['total_wall_time_s']:.2f} s")
+    log(f"  Total Solution Tokens   : {summary['total_tokens_emitted']:,} tokens consumed")
+    log(f"  Serving Efficiency Idx  : {summary['efficiency_index']:.1f} / 100.0 (Throughput & conciseness rating)")
     log("="*88 + "\n", bold=True)
 
     # Workload Suitability & Purpose Qualification
@@ -1193,12 +1358,19 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
 
         adv = compute_relative_advantages(m1, m2)
 
-        # 1. Effectiveness
+        # 0. Pure Cognitive Capability
+        cap_a = m1.get('pure_capability_score_pct', m1['effectiveness_rate_pct'])
+        cap_b = m2.get('pure_capability_score_pct', m2['effectiveness_rate_pct'])
+        cap_a_str = f"{cap_a:.1f}% ({m1.get('pure_capability_grade', '-')[:2]})"
+        cap_b_str = f"{cap_b:.1f}% ({m2.get('pure_capability_grade', '-')[:2]})"
+        log(f"{'Pure Cognitive Capability':<35} | {cap_a_str:<26} | {cap_b_str:<26} | {adv['adv_cap']}")
+
+        # 1. Overall Task Effectiveness
         eff_a = m1['effectiveness_rate_pct']
         eff_b = m2['effectiveness_rate_pct']
         pass_a_str = f"{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)"
         pass_b_str = f"{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)"
-        log(f"{'Effectiveness (Pass Rate)':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv['adv_eff']}")
+        log(f"{'Overall Task Effectiveness':<35} | {pass_a_str:<26} | {pass_b_str:<26} | {adv['adv_eff']}")
 
         # 2. Token Economy
         te_a = m1['token_economy_tokens_per_passed_task']
@@ -1318,7 +1490,8 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
             "",
             "| Metric / Dimension | Model A (`" + str(m1['model']) + "`) | Model B (`" + str(m2['model']) + "`) | Relative Advantage |",
             "|:---|:---|:---|:---|",
-            f"| **Effectiveness (Accuracy)** | `{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)` | `{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)` | **{adv['adv_eff']}** |",
+            f"| **Pure Cognitive Capability** | `{cap_a:.1f}% ({m1.get('pure_capability_grade', '-')[:2]})` | `{cap_b:.1f}% ({m2.get('pure_capability_grade', '-')[:2]})` | **{adv['adv_cap']}** |",
+            f"| **Overall Task Effectiveness** | `{m1['passed']}/{m1['total_evaluated']} ({eff_a:.1f}%)` | `{m2['passed']}/{m2['total_evaluated']} ({eff_b:.1f}%)` | **{adv['adv_eff']}** |",
             f"| **Token Economy (Solution Conciseness)** | `{te_a:.1f} tokens/task` | `{te_b:.1f} tokens/task` | **{adv['adv_te']}** |",
             f"| **Total Solution Tokens Consumed** | `{tot_a:,} tokens` | `{tot_b:,} tokens` | **{adv['adv_tot']}** |",
             f"| **Mean Decode Throughput** | `{spd_a:.2f} tok/s` | `{spd_b:.2f} tok/s` | **{adv['adv_spd']}** |",
@@ -1366,7 +1539,8 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
             row = f"{metric_name:<32} | " + " | ".join(f"{str(v):<{col_w}}" for v in vals)
             log(row)
 
-        fmt_row("Effectiveness (Pass Rate)", [f"{s['passed']}/{s['total_evaluated']} ({s['effectiveness_rate_pct']}%)" for s in summaries])
+        fmt_row("Pure Cognitive Capability", [f"{s.get('pure_capability_score_pct', s['effectiveness_rate_pct']):.1f}% ({s.get('pure_capability_grade', '-')[:2]})" for s in summaries])
+        fmt_row("Overall Task Effectiveness", [f"{s['passed']}/{s['total_evaluated']} ({s['effectiveness_rate_pct']}%)" for s in summaries])
         fmt_row("Token Economy (tok/task)", [f"{s['token_economy_tokens_per_passed_task']:.1f}" for s in summaries])
         fmt_row("Total Solution Tokens", [f"{s['total_tokens_emitted']:,}" for s in summaries])
         fmt_row("Mean Decode Speed (tok/s)", [f"{s['avg_decode_tok_s']:.2f}" for s in summaries])
@@ -1523,6 +1697,25 @@ NAME_TO_TEST_NUM = {
     "injection": 26,
     "jailbreak": 26,
     "security_defense": 26,
+    "ifeval_writing": 27,
+    "ifeval": 27,
+    "writing": 27,
+    "instructions": 27,
+    "instruction_following": 27,
+    "medical_research": 28,
+    "medical": 28,
+    "medqa": 28,
+    "usmle": 28,
+    "pubmed": 28,
+    "pubmedqa": 28,
+    "gsm8k_math": 29,
+    "gsm8k": 29,
+    "math": 29,
+    "algebra": 29,
+    "history_humanities": 30,
+    "history": 30,
+    "humanities": 30,
+    "mmlu_history": 30,
 }
 
 def _parse_test_tokens(arg_str: str) -> set:
@@ -1550,13 +1743,13 @@ def _parse_test_tokens(arg_str: str) -> set:
             elif lower == "serving":
                 result.update({1, 2, 3, 7, 8, 11})
             elif lower == "contract":
-                result.update({5, 6, 9, 10})
+                result.update({5, 6, 9, 10, 27})
             elif lower == "context":
                 result.update({12, 13, 15})
             elif lower == "swe":
                 result.update({4, 14, 17, 20, 21, 22, 23, 24, 25})
             elif lower == "reasoning":
-                result.update({16, 18, 19, 26})
+                result.update({16, 18, 19, 26, 28, 29, 30})
             elif lower == "flagship":
                 result.update(range(1, 13))
             elif lower in ("adversarial", "hardened"):
@@ -1576,13 +1769,13 @@ def parse_selected_tests(test_arg: str = None, suite: str = "all", exclude_arg: 
     elif suite == "serving":
         selected = {1, 2, 3, 7, 8, 11}
     elif suite == "contract":
-        selected = {5, 6, 9, 10}
+        selected = {5, 6, 9, 10, 27}
     elif suite == "context":
         selected = {12, 13, 15}
     elif suite == "swe":
         selected = {4, 14, 17, 20, 21, 22, 23, 24, 25}
     elif suite == "reasoning":
-        selected = {16, 18, 19, 26}
+        selected = {16, 18, 19, 26, 28, 29, 30}
     elif suite == "flagship":
         selected = set(range(1, 13))
     elif suite == "adversarial":
