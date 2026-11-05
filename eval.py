@@ -2056,7 +2056,10 @@ def run_test_medical_research(client: LLMClient):
             f"Options:\n{opts_str}\n\n"
             f"State your final answer clearly on the first line as 'Answer: <letter>', followed by your clinical rationale."
         )
-        res = client.call([{"role": "user", "content": prompt}], max_tokens=500, temperature=0.0, stream=False)
+        # max_tokens must cover the full reasoning trace of thinking models plus
+        # the final 'Answer: <letter>' line; 500 truncated the reasoning and
+        # produced a false-negative null extraction.
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, temperature=0.0, stream=False)
         text = f"{res.get('text', '')}\n{res.get('content', '')}"
         total_tokens += res.get("completion_tokens", 0)
         if res.get("decode_speed"):
@@ -2084,7 +2087,8 @@ def run_test_medical_research(client: LLMClient):
             f"Research Question:\n{item['question']}\n\n"
             f"State your conclusion clearly as 'Conclusion: yes', 'Conclusion: no', or 'Conclusion: maybe'."
         )
-        res = client.call([{"role": "user", "content": prompt}], max_tokens=300, temperature=0.0, stream=False)
+        # Same reasoning-trace budget requirement as the USMLE calls above.
+        res = client.call([{"role": "user", "content": prompt}], max_tokens=2048, temperature=0.0, stream=False)
         text = f"{res.get('text', '')}\n{res.get('content', '')}"
         total_tokens += res.get("completion_tokens", 0)
         if res.get("decode_speed"):

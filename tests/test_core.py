@@ -1614,6 +1614,49 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
         self.assertTrue(res["valid_schema"])
         self.assertEqual(res["status"], "PASS")
 
+    def test_medical_research_budget_survives_thinking_models(self):
+        # Regression: partial run 20261104_031135 — USMLE items recorded
+        # extracted=null because the 500-token budget was fully consumed by the
+        # model's reasoning trace before it emitted the 'Answer: <letter>' line.
+        # The harness must give reasoning models enough budget to finish.
+        import eval as eval_module
+        import domain_benchmarks
+        from unittest.mock import MagicMock
+
+        usmle = domain_benchmarks.load_benchmark_dataset("medical/usmle_clinical.json")
+        pubmed = domain_benchmarks.load_benchmark_dataset("medical/biomedical_pubmed.json")
+        long_reasoning = "Let me analyze this clinical vignette systematically. " * 220
+
+        def fake_call(messages, **kwargs):
+            prompt = messages[0]["content"]
+            answer = None
+            for item in usmle:
+                if item["question"] in prompt:
+                    answer = f"Answer: {item['answer']}"
+                    break
+            if answer is None:
+                for item in pubmed:
+                    if item["question"] in prompt:
+                        answer = f"Conclusion: {item['final_decision'].lower()}"
+                        break
+            self.assertIsNotNone(answer, "prompt did not match any dataset item")
+            return {
+                "content": answer,
+                "reasoning": long_reasoning,
+                "text": long_reasoning + "\n\n" + answer,
+                "completion_tokens": kwargs.get("max_tokens", 0),
+                "ttft": 1.0,
+                "decode_speed": 40.0,
+            }
+
+        mock_client = MagicMock()
+        mock_client.call.side_effect = fake_call
+        res = eval_module.run_test_medical_research(mock_client)
+        self.assertEqual(res["status"], "PASS")
+        self.assertEqual(res["accuracy_pct"], 100.0)
+        for c in mock_client.call.call_args_list:
+            self.assertGreaterEqual(c.kwargs["max_tokens"], 1024)
+
     def test_streamed_tool_call_ttft_recorded(self):
         from unittest.mock import patch, MagicMock
         lines = [

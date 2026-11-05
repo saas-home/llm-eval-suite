@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- **`medical_research` (Test 28) false-negative `extracted: null` on reasoning models.** The USMLE and PubMedQA calls used `max_tokens=500`/`300`, which was fully consumed by the model's reasoning trace before it emitted the `Answer: <letter>` / `Conclusion: <word>` line. The harness recorded a null extraction and a `PARTIAL` (7/10) even though the model's clinical reasoning was correct. Raised the per-call budget to `max_tokens=2048` so reasoning models can finish thinking and emit the final answer line. Verified live: `medical_research` now scores `10/10 (100.0%) -> PASS`.
+
 ### Added
 - **Multi-Adapter Routing, Dynamic Slot Migration & Cross-Talk Isolation (Test 31)**:
   - Added Test 31 to `eval.py` and `reporting.py` for certifying multi-LoRA and multi-adapter serving runtimes (e.g. vLLM EMR Merging, S-LoRA).
