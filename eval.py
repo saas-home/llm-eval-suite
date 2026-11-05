@@ -1015,7 +1015,10 @@ def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
         "Zero-trust microsegmentation evaluates SPIFFE identity assertions and mutual TLS session keys at every ingress hop. "
     )
 
-    total_blocks = max(100, int(target_context / 60))
+    # Reserve 3,000 tokens headroom for 2,500 max_tokens completion + prompt instructions to prevent HTTP 400 overflow
+    prompt_budget = max(2000, target_context - 3000)
+    tokens_per_block = 82
+    total_blocks = max(25, int(prompt_budget / tokens_per_block))
 
     distractor_v1 = (
         "\n[ARCHITECTURAL_ROUTING_SPECIFICATION v1.0 (2024 - DEPRECATED)]\n"
@@ -1058,8 +1061,10 @@ def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
         "Conclude your response strictly with: 'ACTIVE_FAILOVER_CODE: <verification code>'."
     )
 
-    log(f"  Ingesting ~{total_blocks * 60:,}-token context with 2 temporal distractors and 1 active specification...")
+    log(f"  Ingesting ~{total_blocks * tokens_per_block:,}-token context with 2 temporal distractors and 1 active specification...")
     res = client.call([{"role": "user", "content": prompt}], max_tokens=2500, temperature=0.0, stream=True)
+    if res.get("error"):
+        log(f"    [Server Error]: {res.get('error')}", color=RED)
     text = res.get("text", "") or res.get("content", "")
 
     has_active_tokyo = ("Transit Hub Tokyo" in text or "Tokyo" in text) and ("Bridge Omega" in text or "Omega" in text)
@@ -1083,7 +1088,8 @@ def run_test_multihop_graph(client: LLMClient, target_context: int = 32000):
         "prompt_tokens": res.get("prompt_tokens", 0),
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
+        "tok_s": round(res.get("decode_speed", 0), 2),
+        "error": res.get("error")
     }
 
 
@@ -1241,7 +1247,10 @@ def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 3200
         "Analytical engines parse abstract syntax trees into vectorized SIMD instructions over columnar Apache Arrow memory layouts. "
     )
 
-    blocks = max(100, int(target_context / 45))
+    # Reserve 2,500 tokens headroom for 2,000 max_tokens completion + prompt instructions to prevent HTTP 400 overflow
+    prompt_budget = max(2000, target_context - 2500)
+    tokens_per_block = 62
+    blocks = max(25, int(prompt_budget / tokens_per_block))
     val_front = 4821
     val_middle = 7392
     val_tail = 3105
@@ -1278,8 +1287,10 @@ def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 3200
         "State the values of all three registers and the final checksum. Conclude with 'COMPOSITE_CHECKSUM = <integer>'."
     )
 
-    log(f"  Ingesting ~{target_context:,} tokens with needles at 0.5%, 50.0%, and 99.5% depth...")
+    log(f"  Ingesting ~{blocks * tokens_per_block:,} tokens with needles at 0.5%, 50.0%, and 99.5% depth...")
     res = client.call([{"role": "user", "content": prompt}], max_tokens=2000, temperature=0.0, stream=True)
+    if res.get("error"):
+        log(f"    [Server Error]: {res.get('error')}", color=RED)
     text = res.get("text", "") or res.get("content", "")
 
     m1 = str(val_front) in text
@@ -1303,7 +1314,8 @@ def run_test_frontier_needle_depth(client: LLMClient, target_context: int = 3200
         "composite_matched": m_calc,
         "completion_tokens": res.get("completion_tokens", 0),
         "ttft_ms": round(res.get("ttft", 0) * 1000.0, 1),
-        "tok_s": round(res.get("decode_speed", 0), 2)
+        "tok_s": round(res.get("decode_speed", 0), 2),
+        "error": res.get("error")
     }
 
 
