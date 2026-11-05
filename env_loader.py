@@ -155,6 +155,15 @@ def load_config(config_file=None):
             if data.get("api_key2"):
                 config["api_key2"] = data.get("api_key2")
 
+            if data.get("max_model_len") and not config.get("max_context"):
+                config["max_context"] = data.get("max_model_len")
+
+            for opt_key in ("tests", "test", "suite", "exclude", "parallel", "quick",
+                            "language", "adapters", "multi_adapter", "metrics",
+                            "timeout", "max_tokens"):
+                if opt_key in data:
+                    config[opt_key] = data[opt_key]
+
             loaded_from_file = True
         except Exception as e:
             sys.stderr.write(f"Warning: Failed to read config from {target_path}: {e}\n")

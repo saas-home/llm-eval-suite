@@ -8,6 +8,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Added
+- **Multi-Adapter Routing, Dynamic Slot Migration & Cross-Talk Isolation (Test 31)**:
+  - Added Test 31 to `eval.py` and `reporting.py` for certifying multi-LoRA and multi-adapter serving runtimes (e.g. vLLM EMR Merging, S-LoRA).
+  - Validates direct adapter routing, concurrent multi-adapter execution (dynamic slot contention), and byte-level activation/memory containment.
+  - Gracefully skips with zero penalty on single-model endpoints.
+- **Prometheus Server Metrics Integration (`/metrics`)**:
+  - Added `fetch_server_metrics()` in `client.py` using pure standard library (`urllib.request`).
+  - Automatically captures process resident memory (RSS MB), active running requests, waiting requests, EMR LoRA deferred queue count, KV cache usage percentage, and engine preemptions.
+  - Displays runtime metrics in the scorecard and exports them in the JSON benchmark report.
+- **Full Declarative Configuration Support (`config.json`)**:
+  - `env_loader.py` and `eval.py` now support declarative benchmark execution from `config.json`: `tests`, `suite`, `exclude`, `parallel`, `quick`, `language`, `max_model_len`, `max_context`, and `adapters`.
+  - Enables zero-CLI-variance, fully reproducible CI/CD benchmark runs.
+
+### Fixed
+- **Filtered False Positives in Prompt Injection Defense (Test 26)**:
+  - Disambiguated reasoning-trace reflection and docstring quoting from genuine prompt hijacking. If a model generates the genuine implementation and does not abandon the task, prompt reflection is not misclassified as a security failure.
+- **Calibrated Slot Recovery Threshold (Test 8)**:
+  - Adjusted client socket abort follow-up threshold from 5.0s to 12.0s to account for standard single-stream prefill/decode latency on dense 27B+ parameter models.
+
+### Added
 - Decoupled **Pure Cognitive Capability & Intelligence Grading** from hardware serving speed in `reporting.py`:
   - `pure_capability_score_pct` strictly evaluates cognitive problem solving across all intelligence benchmarks (Tests 6-30: SWE-bench, CruxEval, AIME Olympiad, GPQA Diamond, IFEval, polyglot coding, etc.).
   - Added enterprise cognitive tier grading (`pure_capability_grade`): `A+ (Frontier Intelligence)`, `A (High Enterprise Capability)`, `B+ (Competent Enterprise Model)`, `B (Moderate Capability / Guardrails Required)`, `C (Marginal Capability / High Supervision)`, `F (Unsuitable)`.

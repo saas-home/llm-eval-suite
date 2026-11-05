@@ -4,13 +4,13 @@
   <img src="https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+" />
   <img src="https://img.shields.io/badge/Dependencies-Zero_External-brightgreen?style=for-the-badge" alt="Zero Dependencies" />
   <img src="https://img.shields.io/badge/Docker-Multi--Arch-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Ready" />
-  <img src="https://img.shields.io/badge/Tests-30_Enterprise_Benchmarks-blueviolet?style=for-the-badge" alt="30 Benchmarks" />
+  <img src="https://img.shields.io/badge/Tests-31_Enterprise_Benchmarks-blueviolet?style=for-the-badge" alt="31 Benchmarks" />
   <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="Apache 2.0" />
 </p>
 
 An enterprise-grade evaluation suite, benchmarking tool, and cross-model comparison engine for **any OpenAI-compatible LLM inference server** ([vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [Ollama](https://github.com/ollama/ollama), [llama.cpp](https://github.com/ggerganov/llama.cpp), [TGI](https://github.com/huggingface/text-generation-inference), or commercial APIs).
 
-Evaluates **serving runtime performance** (latency, continuous batching throughput, prefix caching, socket teardown) and **frontier intelligence** across long-context scaling, multi-hop reasoning, security defense, **verifiable instruction following (Google IFEval)**, **medical diagnosis & biomedical literature (MedQA / PubMedQA)**, **multi-step mathematics (GSM8K)**, **historical analysis (MMLU History)**, and **polyglot software engineering** in 6 industry toolchains.
+Evaluates **serving runtime performance** (latency, continuous batching throughput, prefix caching, socket teardown, multi-adapter / multi-LoRA routing & memory containment) and **frontier intelligence** across long-context scaling, multi-hop reasoning, security defense, **verifiable instruction following (Google IFEval)**, **medical diagnosis & biomedical literature (MedQA / PubMedQA)**, **multi-step mathematics (GSM8K)**, **historical analysis (MMLU History)**, and **polyglot software engineering** in 6 industry toolchains.
 
 ---
 
@@ -18,26 +18,30 @@ Evaluates **serving runtime performance** (latency, continuous batching throughp
 
 - **Zero External Runtime Dependencies**: 100% Python 3.8+ standard library (`urllib`, `json`, `concurrent.futures`, `threading`, `socket`, `subprocess`). No `pip install` required.
 - **Decoupled Cognitive & Serving Scorecards**: Separates pure model intelligence & cognitive capability (independent of GPU decode speed) from hosting infrastructure throughput & serving efficiency.
+- **Multi-Adapter & Multi-LoRA Certification**: Validates dynamic adapter routing, concurrent multi-adapter execution under slot contention, and bit-level activation/memory containment (e.g. for vLLM EMR Merging or S-LoRA).
+- **Live Prometheus Server Telemetry (`/metrics`)**: Auto-harvests server resident memory (RSS MB), active running requests, waiting queue depth, KV cache utilization %, EMR LoRA deferred queues, and engine preemptions directly from server Prometheus endpoints.
+- **Declarative Configuration (`config.json`)**: Configure benchmarks declaratively via JSON or `.env` files for zero-CLI-variance CI/CD pipelines.
 - **Model Purpose Qualification**: Automatically maps benchmark performance to an enterprise **Task Suitability Matrix**, determining which production workloads (Coding, Agents, Math, Clinical, Writing, High-Throughput Serving) the model is ready for.
 - **Industry-Standard Open Datasets**: Built-in canonical test banks from **Google IFEval**, **OpenAI GSM8K**, **USMLE / MedQA**, **PubMedQA**, **CruxEval**, **AIME Olympiad**, **GPQA Diamond**, and **MMLU History**. Runs 100% offline out-of-the-box.
 - **Polyglot SWE Benchmarking**: Evaluates coding capabilities across **Python**, **TypeScript**, **Go**, **Java**, **Rust**, and **C# (.NET 10 LTS)**.
 - **Zero Host Impact (Docker)**: Pre-packaged multi-arch container (`x86_64` & `aarch64`) bundling official LTS compilers with dual persistent volume mounts (`./results` and `./logs`).
 - **Honest Scoring Architecture**: Distinguishes infrastructure failures (timeouts, 5xx, 429 rate limits) from model accuracy failures. Network flakiness is tracked under **Completion Rate** without dragging down model effectiveness.
 - **Token Economy Metric**: Measures solution conciseness (tokens spent per victory). Concise models save latency, compute, and context window budget.
-- **Head-to-Head & N-Way Analysis**: Compare 2 or more model benchmark reports offline with zero additional GPU overhead.
+- **Head-to-Head & N-Way Analysis**: Compare 2 or more model benchmark reports offline or run real-time side-by-side Live Arena benchmarks.
 
 ---
 
-## 30-Stage Benchmark Catalog
+## 31-Stage Benchmark Catalog
 
-The suite is organized into **5 core capability pillars** spanning 30 standardized tests:
+The suite is organized into **5 core capability pillars** spanning 31 standardized tests:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             LLM EVAL SUITE                                  │
 ├─────────────────────┬─────────────────────┬─────────────────────────────────┤
 │  Serving Runtime    │ API Contracts & IF  │ Long Context & Attention        │
-│  (Tests 1,2,3,7,8,11) (Tests 5,6,9,10, 27)│ (Tests 12, 13, 15)              │
+│  (Tests 1, 2, 3, 7, │ (Tests 5,6,9,10, 27)│ (Tests 12, 13, 15)              │
+│   8, 11, 31)        │                     │                                 │
 ├─────────────────────┴─────────────────────┼─────────────────────────────────┤
 │  Polyglot Software Engineering (SWE)      │ Cognitive Reasoning, STEM & Life│
 │  (Tests 4, 14, 17, 20, 21, 22, 23, 24, 25)│ (Tests 16, 18, 19, 26, 28, 29,30)│
@@ -76,6 +80,7 @@ The suite is organized into **5 core capability pillars** spanning 30 standardiz
 | **28** | **Clinical & Medical Research** | USMLE clinical board diagnosis (MedQA) & biomedical research literature consensus (PubMedQA `yes`/`no`/`maybe`). | `reasoning` |
 | **29** | **Multi-Step Math (GSM8K)** | Multi-step word problem deduction and calculation verification from OpenAI GSM8K. | `reasoning` |
 | **30** | **Historical Causality (MMLU)** | Historical cause-and-effect deduction, treaty sovereignty, and anti-hallucination analysis from MMLU History. | `reasoning` |
+| **31** | **Multi-Adapter Routing & Isolation** | Multi-LoRA concurrent execution, dynamic slot migration contention, and cross-talk activation/memory containment. | `serving` |
 
 ---
 
@@ -89,11 +94,14 @@ Requires Python 3.8+ (no `pip install` needed):
 # 1. Probe server reachability (<5s)
 python3 eval.py --probe -e http://127.0.0.1:8080/v1
 
-# 2. Run full evaluation suite (Tests 1-30)
+# 2. Run full evaluation suite (Tests 1-31)
 python3 eval.py -e http://127.0.0.1:8080/v1 -m Qwen3.8-Flash-Next-FP4
 
 # 3. Fast qualification smoke test
 python3 eval.py -e http://127.0.0.1:8080/v1 -q
+
+# 4. Declarative run with config.json
+python3 eval.py --config config.json
 ```
 
 ---
@@ -177,22 +185,52 @@ Execute specific slices of the evaluation suite to save time:
 
 ```bash
 # 1. Run a specific Pillar Suite
-python3 eval.py --suite serving    # Tests 1, 2, 3, 7, 8, 11 (Latency, Batching, Caching)
-python3 eval.py --suite contract   # Tests 5, 6, 9, 10, 27 (Tools, Schema, Stops, IFEval)
-python3 eval.py --suite swe        # Tests 4, 14, 17, 20-25 (Coding & Toolchains)
-python3 eval.py --suite reasoning  # Tests 16, 18, 19, 26, 28, 29, 30 (Math, Science, Medicine, History)
+python3 eval.py --suite serving       # Tests 1, 2, 3, 7, 8, 11 (Latency, Batching, Caching)
+python3 eval.py --suite contract      # Tests 5, 6, 9, 10, 27 (Tools, Schema, Stops, IFEval)
+python3 eval.py --suite swe           # Tests 4, 14, 17, 20-25 (Coding & Toolchains)
+python3 eval.py --suite reasoning     # Tests 16, 18, 19, 26, 28, 29, 30 (Math, Science, Medicine, History)
+python3 eval.py --suite multi_adapter # Test 31 (Multi-LoRA & multi-adapter routing & isolation)
 
 # 2. Run specific tests by number or alias
-python3 eval.py --test ifeval      # Google IFEval verifiable instruction following (Test 27)
-python3 eval.py --test medical     # MedQA (USMLE) & PubMedQA clinical reasoning (Test 28)
-python3 eval.py --test gsm8k       # OpenAI GSM8K multi-step algebra math (Test 29)
-python3 eval.py --test history     # MMLU History causal deduction (Test 30)
-python3 eval.py --test 20-25       # Full SWE polyglot series
-python3 eval.py --test gpqa,aime   # Frontier Olympiad math & science
+python3 eval.py --test multi_adapter  # Multi-adapter routing & memory isolation (Test 31)
+python3 eval.py --test ifeval         # Google IFEval verifiable instruction following (Test 27)
+python3 eval.py --test medical        # MedQA (USMLE) & PubMedQA clinical reasoning (Test 28)
+python3 eval.py --test gsm8k          # OpenAI GSM8K multi-step algebra math (Test 29)
+python3 eval.py --test history        # MMLU History causal deduction (Test 30)
+python3 eval.py --test 20-25          # Full SWE polyglot series
+python3 eval.py --test gpqa,aime      # Frontier Olympiad math & science
 
 # 3. Exclude tests
 python3 eval.py --exclude 2        # Skip vision if endpoint is text-only
 python3 eval.py --exclude 12,13,15 # Skip heavy context tests
+```
+
+---
+
+## Declarative Configuration (`config.json` & `.env`)
+
+Execute reproducible benchmark runs without CLI flag sprawl using a declarative `config.json` or `.env` file:
+
+```json
+{
+  "_comment": "llm-eval-suite enterprise certification configuration",
+  "endpoint": "http://127.0.0.1:8000/v1",
+  "model": "Qwen3.8-27B",
+  "max_context": 32768,
+  "max_model_len": 32768,
+  "parallel": 4,
+  "suite": "all",
+  "exclude": "2",
+  "adapters": ["finance-lora", "legal-lora", "medical-lora"]
+}
+```
+
+```bash
+# Execute using default config.json or custom path
+python3 eval.py --config config.json
+
+# Override any config parameter on-the-fly from the CLI
+python3 eval.py --config config.json --quick --suite serving
 ```
 
 ---
@@ -241,15 +279,21 @@ python3 scripts/download_open_benchmarks.py --all
 
 ---
 
-## Offline Cross-Model Comparison
+## Cross-Model Comparison & Live Arena
 
-Compare two or more evaluated benchmark reports with **zero GPU overhead**:
+Compare two or more evaluated benchmark reports offline with zero additional GPU overhead, or benchmark two active servers concurrently in real time:
 
 ```bash
-# Compare Model A vs Model B (outputs terminal table and Markdown scorecard)
+# 1. Live Arena Mode: concurrent side-by-side benchmark of two live servers
+python3 compare.py --live \
+  --endpoint1 http://127.0.0.1:8080/v1 --model1 Qwen3.8-Flash-Next-FP4 \
+  --endpoint2 http://10.0.0.2:8000/v1 --model2 Llama-3.3-70B-Instruct \
+  -o arena.md
+
+# 2. Offline Report Comparison: Model A vs Model B (outputs terminal table and Markdown report)
 python3 compare.py results/eval_modelA.json results/eval_modelB.json -o comparison.md
 
-# N-Way comparison matrix (3+ models)
+# 3. N-Way Comparison Matrix (3+ models)
 python3 compare.py results/run1.json results/run2.json results/run3.json -o comparison.md
 ```
 
@@ -305,6 +349,7 @@ At the conclusion of each benchmark run, distinct **Cognitive Capability** and *
   Total Suite Wall Time   : 64.20 s
   Total Solution Tokens   : 18,855 tokens consumed
   Serving Efficiency Idx  : 93.4 / 100.0 (Throughput & conciseness rating)
+  Live Engine Telemetry   : RSS Memory 18.2 GB | Running: 4 | Waiting: 0 | KV Cache: 12.4%
 ========================================================================================
 ```
 
@@ -318,6 +363,8 @@ At the conclusion of each benchmark run, distinct **Cognitive Capability** and *
 - **Mean Decode Throughput (`tok/s`)**: Average generation speed across all tasks.
 - **Mean Prefill TTFT (`ms`)**: Time-To-First-Token responsiveness across single-turn, tool-calling, and streaming prompts.
 - **Serving Efficiency Index (`0–100`)**: A hardware infrastructure index balancing **Accuracy (60%)**, **Token Economy (20%)**, **Throughput (10%)**, and **TTFT (10%)**.
+- **Live Server Telemetry**: When Prometheus `/metrics` is exposed by the server (e.g. vLLM or SGLang), resident set size (RSS MB), active running requests, waiting queue depth, KV cache utilization %, EMR LoRA deferred queue count, and engine preemptions are captured and reported.
+- **Multi-Adapter Isolation**: Evaluates bit-level activation containment and concurrent throughput without cross-adapter interference (Test 31).
 
 ---
 
@@ -343,7 +390,7 @@ When code execution is disabled, all tests safely fall back to static syntax ver
 The evaluation suite includes a standalone `unittest` suite with **zero third-party test runners required**:
 
 ```bash
-# Run complete test suite (127 unit tests)
+# Run complete test suite (132 unit tests)
 python3 -m unittest discover -s tests -v
 
 # Run syntax compilation check across all modules

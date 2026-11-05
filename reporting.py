@@ -15,7 +15,7 @@ import hashlib
 
 from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, DEFAULT_RESULTS_DIR
 
-TOTAL_TESTS = 30
+TOTAL_TESTS = 31
 
 # ============================================================================
 # STANDARDIZED TEST CATALOG & METRIC EXTRACTORS
@@ -60,6 +60,7 @@ TEST_CATALOG = [
     (28, "medical_research", "Medical Research (MedQA & PubMedQA)"),
     (29, "gsm8k_math", "Multi-Step Math (OpenAI GSM8K)"),
     (30, "history_humanities", "Historical Causality (MMLU History)"),
+    (31, "multi_adapter", "Multi-Adapter Routing & Isolation"),
 ]
 
 TEST_KEY_TO_PILLAR = {
@@ -69,6 +70,7 @@ TEST_KEY_TO_PILLAR = {
     "prefix_caching": "serving",
     "client_abort": "serving",
     "error_handling": "serving",
+    "multi_adapter": "serving",
     "tool_calling": "contract",
     "json_schema": "contract",
     "stop_sequences": "contract",
@@ -334,6 +336,18 @@ def extract_test_metrics(test_key: str, data):
         tot = data.get("total_count", 5)
         desc = f"{passed_n}/{tot} MMLU History OK"
         score = passed_n / float(tot) if tot else 0.0
+    elif test_key == "multi_adapter":
+        passed_n = data.get("passed_count", 0)
+        tot = data.get("total_count", 0)
+        if st == "SKIPPED":
+            desc = "Single-Model (Skipped)"
+            score = 1.0
+        elif passed_n and tot:
+            desc = f"{passed_n}/{tot} Adapters Isolated"
+            score = passed_n / float(tot)
+        else:
+            desc = "Multi-Adapter Verified" if st == "PASS" else "Isolation Failed"
+            score = 1.0 if st == "PASS" else 0.0
 
     return {
         "status": st,
@@ -772,6 +786,7 @@ def compute_executive_summary(report: dict) -> dict:
         "client_abort",
         "error_handling",
         "stop_sequences",
+        "multi_adapter",
     }
     cog_evaluated = 0
     cog_passed = 0
@@ -1211,6 +1226,14 @@ def print_summary_table(report):
         log(f"{'30. Historical Causality (MMLU)':<38} | {fmt_status(hist.get('status', 'N/A'))} | {m['desc']:<20} | {hist.get('tok_s', 0):.2f} tok/s")
     elif 30 in sel_tests:
         log(f"{'30. Historical Causality (MMLU)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
+    # 31. Multi-Adapter Routing & Isolation
+    if "multi_adapter" in res:
+        ma = res.get("multi_adapter", {})
+        m = extract_test_metrics("multi_adapter", ma)
+        log(f"{'31. Multi-Adapter Isolation':<38} | {fmt_status(ma.get('status', 'N/A'))} | {m['desc']:<20} | {ma.get('tok_s', 0):.2f} tok/s")
+    elif 31 in sel_tests:
+        log(f"{'31. Multi-Adapter Isolation':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
     log("="*88 + "\n")
 
@@ -1716,6 +1739,10 @@ NAME_TO_TEST_NUM = {
     "history": 30,
     "humanities": 30,
     "mmlu_history": 30,
+    "multi_adapter": 31,
+    "multi_lora": 31,
+    "adapter_routing": 31,
+    "adapters": 31,
 }
 
 def _parse_test_tokens(arg_str: str) -> set:
@@ -1776,6 +1803,8 @@ def parse_selected_tests(test_arg: str = None, suite: str = "all", exclude_arg: 
         selected = {4, 14, 17, 20, 21, 22, 23, 24, 25}
     elif suite == "reasoning":
         selected = {16, 18, 19, 26, 28, 29, 30}
+    elif suite in ("multi_lora", "multi_adapter", "adapters"):
+        selected = {31}
     elif suite == "flagship":
         selected = set(range(1, 13))
     elif suite == "adversarial":

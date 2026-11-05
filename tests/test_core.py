@@ -11,6 +11,7 @@ import sys
 import json
 import tempfile
 import unittest
+from unittest import mock
 
 # Make repository root importable regardless of CWD.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1732,6 +1733,91 @@ class TestWorkloadSuitabilityAndPurposeQualification(unittest.TestCase):
         self.assertIn("best_suited_for", summary)
         self.assertIn("caution_areas", summary)
         self.assertIn("workload_profile", summary)
+
+
+class TestMultiAdapterCatalogAndMetrics(unittest.TestCase):
+    """Verifies that Multi-Adapter Routing & Isolation (Test 31) is indexed properly."""
+
+    def test_multi_adapter_catalog_entry(self):
+        catalog_dict = {num: (key, name) for num, key, name in reporting.TEST_CATALOG}
+        self.assertIn(31, catalog_dict)
+        self.assertEqual(catalog_dict[31][0], "multi_adapter")
+
+    def test_multi_adapter_metrics_extraction(self):
+        m_pass = reporting.extract_test_metrics("multi_adapter", {
+            "status": "PASS",
+            "passed_count": 2,
+            "total_count": 2,
+            "tok_s": 4.5
+        })
+        self.assertEqual(m_pass["status"], "PASS")
+        self.assertIn("2/2", m_pass["desc"])
+
+        m_skip = reporting.extract_test_metrics("multi_adapter", {
+            "status": "SKIPPED"
+        })
+        self.assertEqual(m_skip["status"], "SKIPPED")
+        self.assertIn("Skipped", m_skip["desc"])
+
+    def test_multi_adapter_suite_parsing(self):
+        self.assertEqual(reporting.parse_selected_tests(None, "multi_adapter"), {31})
+        self.assertEqual(reporting.parse_selected_tests(None, "multi_lora"), {31})
+        self.assertIn(31, reporting.parse_selected_tests("31", "all"))
+
+
+class TestPrometheusMetricsScraper(unittest.TestCase):
+    """Verifies Prometheus metric scraping in client."""
+
+    @mock.patch("urllib.request.urlopen")
+    def test_fetch_server_metrics(self, mock_urlopen):
+        sample_metrics = (
+            "# HELP vllm:num_requests_running Number of requests running\n"
+            "vllm:num_requests_running 3.0\n"
+            "# HELP vllm:kv_cache_usage_perc KV-cache usage\n"
+            "vllm:kv_cache_usage_perc 0.42\n"
+            "vllm:num_requests_waiting_by_reason{reason=\"deferred\"} 12.0\n"
+            "process_resident_memory_bytes 2684354560.0\n"
+        )
+        mock_resp = mock.MagicMock()
+        mock_resp.read.return_value = sample_metrics.encode("utf-8")
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        c = client.LLMClient("http://localhost:8000/v1")
+        m = c.fetch_server_metrics()
+        self.assertIsNotNone(m)
+        self.assertEqual(m["requests_running"], 3)
+        self.assertEqual(m["requests_deferred"], 12)
+        self.assertEqual(m["kv_cache_usage_pct"], 42.0)
+        self.assertEqual(m["process_rss_mb"], 2560.0)
+
+
+class TestConfigDeclarativeEnhancements(unittest.TestCase):
+    """Verifies that custom benchmark options in config.json are loaded."""
+
+    def test_config_custom_options(self):
+        import tempfile
+        import env_loader
+        with tempfile.NamedTemporaryFile("w+", suffix=".json", delete=False) as f:
+            json.dump({
+                "endpoint": "http://127.0.0.1:8000/v1",
+                "max_model_len": 4608,
+                "parallel": 2,
+                "tests": [8, 11, 31],
+                "adapters": ["sim-001", "sim-009"]
+            }, f)
+            f_path = f.name
+
+        try:
+            cfg, _, loaded = env_loader.load_config(f_path)
+            self.assertTrue(loaded)
+            self.assertEqual(cfg["max_context"], 4608)
+            self.assertEqual(cfg["parallel"], 2)
+            self.assertEqual(cfg["tests"], [8, 11, 31])
+            self.assertEqual(cfg["adapters"], ["sim-001", "sim-009"])
+        finally:
+            if os.path.exists(f_path):
+                os.unlink(f_path)
 
 
 if __name__ == "__main__":

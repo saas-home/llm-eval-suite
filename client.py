@@ -157,8 +157,10 @@ class LLMClient:
         self.models_url = f"{self.base_url}/models"
         if self.base_url.endswith("/v1"):
             self.health_url = f"{self.base_url[:-3]}/health"
+            self.metrics_url = f"{self.base_url[:-3]}/metrics"
         else:
             self.health_url = f"{self.base_url}/health"
+            self.metrics_url = f"{self.base_url}/metrics"
         self.api_key = api_key
         self.model = model
 
@@ -198,17 +200,61 @@ class LLMClient:
         except Exception:
             return None
 
+    def fetch_server_metrics(self):
+        """
+        Scrapes and parses Prometheus metrics from /metrics (e.g. vLLM, TGI, SGLang).
+        Returns a dictionary of key metrics or None if not supported/available.
+        """
+        req = urllib.request.Request(self.metrics_url, headers=self._get_headers())
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                raw = resp.read().decode("utf-8")
+        except Exception:
+            return None
+
+        metrics = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            metric_key = parts[0]
+            val_str = parts[1]
+            try:
+                val = float(val_str)
+            except ValueError:
+                continue
+
+            if metric_key.startswith("vllm:num_requests_running"):
+                metrics["requests_running"] = int(val)
+            elif metric_key.startswith("vllm:num_requests_waiting_by_reason"):
+                if 'reason="deferred"' in metric_key:
+                    metrics["requests_deferred"] = int(val)
+                elif 'reason="capacity"' in metric_key:
+                    metrics["requests_capacity"] = int(val)
+            elif metric_key.startswith("vllm:num_requests_waiting"):
+                metrics["requests_waiting"] = int(val)
+            elif metric_key.startswith("vllm:kv_cache_usage_perc"):
+                metrics["kv_cache_usage_pct"] = round(val * 100.0, 2)
+            elif metric_key.startswith("vllm:num_preemptions_total"):
+                metrics["preemptions_total"] = int(val)
+            elif metric_key.startswith("process_resident_memory_bytes"):
+                metrics["process_rss_mb"] = round(val / (1024 * 1024), 2)
+        return metrics if metrics else None
+
     def call(self, messages, max_tokens=1024, temperature=0.0, stream=False,
              tools=None, tool_choice=None, response_format=None, stop=None,
              seed=None, timeout=600, chat_template_kwargs=None, reasoning_effort=None,
-             retries=2, chunk_callback=None):
+             retries=2, chunk_callback=None, model=None):
         """
         Sends a chat completion request. Retries transient failures (5xx,
         timeouts, connection errors) up to `retries` additional attempts.
         Client errors (4xx) are returned immediately without retry.
         """
         payload = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
