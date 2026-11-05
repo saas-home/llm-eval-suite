@@ -60,11 +60,11 @@ SERVER*-REPORT.md
 CROSS-REPO-REVIEW-*.md
 REVIEW-*.md
 
-# Output Results (Keep samples and .gitkeep, ignore all generated benchmark dumps to prevent leaking IPs/keys)
+# Output Results (generated benchmark dumps stay untracked; only the
+# certified latest report is committed)
 results/*
-!results/.gitkeep
-!results/samples/
-!results/samples/**
+!results/EVAL_REPORT.md
+!results/enterprise_eval_127.0.0.1_8080_20261105_141137.json
 
 # OS artifacts
 .DS_Store

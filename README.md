@@ -31,6 +31,14 @@ Evaluates **serving runtime performance** (latency, continuous batching throughp
 
 ---
 
+## 🏆 Latest Certified Result
+
+**`Qwen3.8-Flash-Next-FP4`** served by vLLM `v0.33.0rc1.dev848` on an NVIDIA DGX Spark (GB10, 128 GB) achieved a **perfect 30/30 (100%)** run — **Grade A+ (Frontier Intelligence)**, ⭐⭐⭐⭐⭐, **100% pure capability**, with all 9 enterprise workload domains rated **EXCELLENT**.
+
+👉 **[Full Certification Report →](results/EVAL_REPORT.md)** · [Machine-readable JSON →](results/enterprise_eval_127.0.0.1_8080_20261105_141137.json)
+
+---
+
 ## 31-Stage Benchmark Catalog
 
 The suite is organized into **5 core capability pillars** spanning 31 standardized tests:
@@ -333,9 +341,9 @@ At the conclusion of each benchmark run, distinct **Cognitive Capability** and *
 ========================================================================================
   Model Under Test        : Qwen3.8-Flash-Next-FP4
   Intelligence Grade      : A+ (Frontier Intelligence)
-  Pure Capability Score   : 96.0%  [24/25 Tasks Solved (96.0%)]
-  Overall Task Accuracy   : 29/30 Passed (96.7%)
-  Solution Conciseness    : 650.2 tokens/passed task (Token Economy)
+  Pure Capability Score   : 100.0%  [24/24 Tasks Solved (100.0%)]
+  Overall Task Accuracy   : 30/30 Passed (100.0%)
+  Solution Conciseness    : 1573.4 tokens/passed task (Token Economy)
   Evaluation Methodology  : Open Benchmark Standard (GPQA / AIME / SWE / IFEval / CruxEval)
 ========================================================================================
 
@@ -343,12 +351,12 @@ At the conclusion of each benchmark run, distinct **Cognitive Capability** and *
              HOSTING INFRASTRUCTURE & SERVING PERFORMANCE SCORECARD                     
 ========================================================================================
   Target Serving Endpoint : http://127.0.0.1:8080/v1
-  Mean Decode Throughput  : 92.40 tok/s
-  Mean Prefill TTFT       : 28.4 ms
+  Mean Decode Throughput  : 49.14 tok/s
+  Mean Prefill TTFT       : 5633.0 ms
   Concurrent Clients      : 4 active parallel stream(s)
-  Total Suite Wall Time   : 64.20 s
-  Total Solution Tokens   : 18,855 tokens consumed
-  Serving Efficiency Idx  : 93.4 / 100.0 (Throughput & conciseness rating)
+  Total Suite Wall Time   : 1703.92 s
+  Total Solution Tokens   : 47,203 tokens consumed
+  Serving Efficiency Idx  : 88.0 / 100.0 (Throughput & conciseness rating)
   Live Engine Telemetry   : RSS Memory 18.2 GB | Running: 4 | Waiting: 0 | KV Cache: 12.4%
 ========================================================================================
 ```
@@ -390,7 +398,7 @@ When code execution is disabled, all tests safely fall back to static syntax ver
 The evaluation suite includes a standalone `unittest` suite with **zero third-party test runners required**:
 
 ```bash
-# Run complete test suite (132 unit tests)
+# Run complete test suite (133 unit tests)
 python3 -m unittest discover -s tests -v
 
 # Run syntax compilation check across all modules
