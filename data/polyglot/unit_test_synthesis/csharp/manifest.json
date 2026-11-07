@@ -1,0 +1,31 @@
+{
+  "mode": "unit_tests",
+  "answer_file": "PaymentProcessorTests.cs",
+  "min_tests": 3,
+  "mutants": [
+    {
+      "name": "any_status_treated_as_success",
+      "file": "PaymentProcessor.cs",
+      "replace": [
+        "if (resp.Status == \"succeeded\") {",
+        "if (!string.IsNullOrEmpty(resp.Status)) {"
+      ]
+    },
+    {
+      "name": "amount_guard_removed",
+      "file": "PaymentProcessor.cs",
+      "replace": [
+        "if (amount <= 0) throw",
+        "if (amount < -1000000000m) throw"
+      ]
+    },
+    {
+      "name": "receipt_sent_with_wrong_charge_id",
+      "file": "PaymentProcessor.cs",
+      "replace": [
+        "await _notifier.SendReceiptAsync(email, resp.Id);",
+        "await _notifier.SendReceiptAsync(email, token);"
+      ]
+    }
+  ]
+}

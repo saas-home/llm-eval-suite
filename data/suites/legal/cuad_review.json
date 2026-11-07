@@ -1,0 +1,266 @@
+{
+ "source": "https://huggingface.co/datasets/theatticusproject/cuad (CUAD v1)",
+ "license": "CC-BY-4.0",
+ "seed": 20261106,
+ "note": "one clause question per contract; answers [] means the clause is absent",
+ "items": [
+  {
+   "id": "cuad_review_0",
+   "contract_id": "cuad_0",
+   "category": "Termination For Convenience",
+   "question": "Termination For Convenience: Can a party terminate this  contract without cause (solely by giving a notice and allowing a waiting  period to expire)?",
+   "answers": [
+    "NCC may terminate this Agreement by giving 60 days written notice to             the Owner and the Licensee.",
+    "The Licensee may terminate this Agreement at any time by giving             written notice to the Owner and NCC."
+   ]
+  },
+  {
+   "id": "cuad_review_1",
+   "contract_id": "cuad_1",
+   "category": "Renewal Term",
+   "question": "Renewal Term: What is the renewal term after the initial term expires? This includes automatic extensions and unilateral extensions with prior notice.",
+   "answers": [
+    "The Services Term of this Agreement shall be automatically renewed for successive two-year terms thereafter unless written notice is given by either party to the other, indicating that party's intention not to renew the Services Term of this Agreement, at least ninety (90) days prior to the end of the initial Services Term or any renewed Services Term."
+   ]
+  },
+  {
+   "id": "cuad_review_2",
+   "contract_id": "cuad_2",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "This Agreement shall be interpreted in accordance with the                   laws of the State of Indiana."
+   ]
+  },
+  {
+   "id": "cuad_review_3",
+   "contract_id": "cuad_3",
+   "category": "Anti-Assignment",
+   "question": "Anti-Assignment: Is consent or notice required of a party if the contract is assigned to a third party?",
+   "answers": [
+    "This Agreement or any rights or obligations granted hereunder may not be assigned by ABW without the prior written consent of PCQ."
+   ]
+  },
+  {
+   "id": "cuad_review_4",
+   "contract_id": "cuad_4",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "This AGREEMENT is controlled by the laws of the State of Texas, and venue for any actions brought to enforce this AGREEMENT shall be brought exclusively in a court of competent jurisdiction in Pecos County, Texas."
+   ]
+  },
+  {
+   "id": "cuad_review_5",
+   "contract_id": "cuad_5",
+   "category": "Exclusivity",
+   "question": "Exclusivity: Is there an exclusive dealing  commitment with the counterparty? This includes a commitment to procure all “requirements” from one party of certain technology, goods, or services or a prohibition on licensing or selling technology, goods or services to third parties, or a prohibition on  collaborating or working with other parties), whether during the contract or  after the contract ends (or both).",
+   "answers": [
+    "(d) the exclusive right to use and reuse the results and proceeds of       the in connection with TDA's Golf Instruction Related Products;",
+    "During the Term (the \"Exclusivity Period\"), Smith hereby represents, warrants and agrees that he will not: (i) render any services in commercials or advertisements on behalf of any computer game or videogame sports software product or service, or (ii) authorize the use of Smith's Likeness in connection with any computer game or videogame golf instruction related sports software product or service.",
+    "Smith hereby grants to TDA the following rights (the \"Rights\"):"
+   ]
+  },
+  {
+   "id": "cuad_review_6",
+   "contract_id": "cuad_6",
+   "category": "Audit Rights",
+   "question": "Audit Rights: Does a party have the right to  audit the books, records, or physical locations of the counterparty to ensure compliance with the contract?",
+   "answers": [
+    "Until one (1) year after the expiration of the Profit Participation of each Project, the books and records will be available for inspection by a certified accounting firm or CPA once per year upon reasonable advance notice."
+   ]
+  },
+  {
+   "id": "cuad_review_7",
+   "contract_id": "cuad_7",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "This Affiliate Agreement shall be governed by the laws of the State of Delaware."
+   ]
+  },
+  {
+   "id": "cuad_review_8",
+   "contract_id": "cuad_8",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "Accordingly, the parties agree that  the validity, interpretation and legal effect of this Agreement shall be governed by the internal laws of the State of New York, U.S.A., applicable to  contracts entered in and performed entirely within the State of New York, U.S.A. without regard to any conflict of law principles."
+   ]
+  },
+  {
+   "id": "cuad_review_9",
+   "contract_id": "cuad_9",
+   "category": "Cap On Liability",
+   "question": "Cap On Liability: Does the contract include a cap on liability upon the breach of a party’s obligation? This includes time limitation for the counterparty to bring claims or maximum amount for recovery.",
+   "answers": [
+    "IN NO EVENT SHALL COMPANY BE LIABLE TO CONSULTANT OR TO ANY OTHER PARTY FOR ANY INDIRECT, INCIDENTAL, SPECIAL OR CONSEQUENTIAL DAMAGES, OR DAMAGES FOR LOST PROFITS OR LOSS OF BUSINESS, HOWEVER CAUSED AND UNDER ANY THEORY OF LIABILITY, WHETHER BASED IN CONTRACT, TORT (INCLUDING NEGLIGENCE) OR OTHER THEORY OF LIABILITY, REGARDLESS OF WHETHER COMPANY WAS ADVISED OF THE POSSIBILITY OF SUCH DAMAGES AND NOTWITHSTANDING THE FAILURE OF ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.",
+    "IN NO EVENT SHALL COMPANY'S AGGREGATE LIABILITY ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT EXCEED THE AMOUNTS PAID BY COMPANY TO CONSULTANT UNDER THIS AGREEMENT FOR THE SERVICES, DELIVERABLES OR INVENTION GIVING RISE TO SUCH LIABILITY."
+   ]
+  },
+  {
+   "id": "cuad_review_10",
+   "contract_id": "cuad_10",
+   "category": "Renewal Term",
+   "question": "Renewal Term: What is the renewal term after the initial term expires? This includes automatic extensions and unilateral extensions with prior notice.",
+   "answers": [
+    "If Distributor                            complies with all of the terms of this Agreement, the                            Agreement  shall be  renewable on an annual basis for                            one (1) year terms for up to  another  ten (10) years                            on the same terms and conditions as set forth herein."
+   ]
+  },
+  {
+   "id": "cuad_review_11",
+   "contract_id": "cuad_11",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "Regardless of the place of execution hereof, this Agreement, all amendments hereto, and any and all issues or controversies arising here from or related hereto, shall be governed by and construed exclusively in accordance with the laws and decisions of the State of Michigan."
+   ]
+  },
+  {
+   "id": "cuad_review_12",
+   "contract_id": "cuad_12",
+   "category": "Anti-Assignment",
+   "question": "Anti-Assignment: Is consent or notice required of a party if the contract is assigned to a third party?",
+   "answers": [
+    "Any attempt to                           assign this Agreement other than as permitted above                           will be null and void.",
+    "Internet business assets (ii) either party's                           assignment and/or delegation of its rights and\n\n\n\n\n\n                       responsibilities hereunder to a wholly-owned                           subsidiary or affiliate or joint venture in which the                           assigning party holds an interest.",
+    "Neither party may assign this Agreement,                           in whole or in part, without the other party's                           written consent (which will not be unreasonably                           withheld or delayed), except that no such consent                           will be required in connection with (i) a merger,                           reorganization or sale of all, or substantially all,                           of such party's assets or its"
+   ]
+  },
+  {
+   "id": "cuad_review_13",
+   "contract_id": "cuad_13",
+   "category": "Change Of Control",
+   "question": "Change Of Control: Does one party have the right to terminate or is consent or notice required of the counterparty if such party undergoes a change of control, such as a merger, stock sale, transfer of all or substantially all of its assets or business, or assignment by operation of law?",
+   "answers": [
+    "Subject to Section 1.6, by Vendor (or successor to Vendor), upon written notice to Distributor of a change of control of Vendor and the election by Vendor (or successor to Vendor) to terminate this Agreement, where a \"change of control\" shall mean a change in ownership of the Vendor such that an unaffiliated third party acquires a majority of the voting power of Vendor;",
+    "This Agreement may be terminated subject to the following clauses:"
+   ]
+  },
+  {
+   "id": "cuad_review_14",
+   "contract_id": "cuad_14",
+   "category": "Cap On Liability",
+   "question": "Cap On Liability: Does the contract include a cap on liability upon the breach of a party’s obligation? This includes time limitation for the counterparty to bring claims or maximum amount for recovery.",
+   "answers": [
+    "In no event shall either party be liable for           ---------------------      any special, incidental or consequential damages arising out of or in      connection with this Agreement or the performance thereof.  FNW's liability      for any breach of this Agreement shall be strictly limited to refunding to      Sponsor that portion of any consideration paid by Sponsor for which Sponsor      has not received the rights granted to it herein."
+   ]
+  },
+  {
+   "id": "cuad_review_15",
+   "contract_id": "cuad_15",
+   "category": "Expiration Date",
+   "question": "Expiration Date: On what date will the contract's initial term expire?",
+   "answers": [
+    "This Agreement shall commence on March 15, 2018 and will expire on March 14, 2020 unless terminated earlier pursuant to Section 13 of the Agreement (the \"Term\")"
+   ]
+  },
+  {
+   "id": "cuad_review_16",
+   "contract_id": "cuad_16",
+   "category": "Audit Rights",
+   "question": "Audit Rights: Does a party have the right to  audit the books, records, or physical locations of the counterparty to ensure compliance with the contract?",
+   "answers": [
+    "WPD shall, and shall cause its respective affiliates, to permit CNS and its respective designated representatives, at reasonable times and upon reasonable prior notice to such parties, to review the books and records of WPD and any of its affiliates and to discuss the affairs, finances and condition of such party and any of its affiliates with the officers of such entities and any of their affiliates in relation to their compliance with this section, as applicable."
+   ]
+  },
+  {
+   "id": "cuad_review_17",
+   "contract_id": "cuad_17",
+   "category": "Governing Law",
+   "question": "Governing Law: Which state/country's law governs the interpretation of the contract?",
+   "answers": [
+    "This Agreement shall be governed in all respects, including validity, interpretation, and effect, by, and construed in accordance with, the laws of the State of Delaware executed and to be performed wholly within the State of Delaware, without giving effect to the choice of law or conflict of law principles thereof or of any other jurisdiction to the extent that such principles would require or permit the application of the laws of another jurisdiction."
+   ]
+  },
+  {
+   "id": "cuad_review_18",
+   "contract_id": "cuad_18",
+   "category": "Exclusivity",
+   "question": "Exclusivity: Is there an exclusive dealing  commitment with the counterparty? This includes a commitment to procure all “requirements” from one party of certain technology, goods, or services or a prohibition on licensing or selling technology, goods or services to third parties, or a prohibition on  collaborating or working with other parties), whether during the contract or  after the contract ends (or both).",
+   "answers": [
+    "In this regard, it is specifically understood and agreed that CONTENT PROVIDER will not during the Term of this Agreement take any action to exploit or otherwise use, reproduce, distribute, transmit and publicly display any of the Content via the internet to Universities and College students in the People's Republic of China except for the benefit of the COMPANY."
+   ]
+  },
+  {
+   "id": "cuad_review_19",
+   "contract_id": "cuad_19",
+   "category": "Minimum Commitment",
+   "question": "Minimum Commitment: Is there a minimum order size or minimum amount or units per-time period that one party must buy from the counterparty under the contract?",
+   "answers": [
+    "From the starting day of the project, Party B must ensure that the coking system works properly and working hours of the CDQ system must be no less than 8,000 hours/year.",
+    "Party A must ensure the waste heat power generation system of CDQ working hours no less than 7,200 hours/year."
+   ]
+  },
+  {
+   "id": "cuad_review_20",
+   "contract_id": "cuad_20",
+   "category": "Covenant Not To Sue",
+   "question": "Covenant Not To Sue: Is a party restricted from contesting the validity of the counterparty’s ownership of intellectual property or otherwise bringing a claim against the counterparty for matters unrelated to the contract?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_21",
+   "contract_id": "cuad_21",
+   "category": "Notice Period To Terminate Renewal",
+   "question": "Notice Period To Terminate Renewal: What is the notice period required to terminate renewal?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_22",
+   "contract_id": "cuad_22",
+   "category": "Ip Ownership Assignment",
+   "question": "Ip Ownership Assignment: Does intellectual property created  by one party become the property of the counterparty, either per the terms of the contract or upon the occurrence of certain events?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_23",
+   "contract_id": "cuad_23",
+   "category": "Liquidated Damages",
+   "question": "Liquidated Damages: Does the contract contain a clause that would award either party liquidated damages for breach or a fee upon the termination of a contract (termination fee)?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_24",
+   "contract_id": "cuad_24",
+   "category": "Warranty Duration",
+   "question": "Warranty Duration: What is the duration of any  warranty against defects or errors in technology, products, or services  provided under the contract?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_25",
+   "contract_id": "cuad_25",
+   "category": "Covenant Not To Sue",
+   "question": "Covenant Not To Sue: Is a party restricted from contesting the validity of the counterparty’s ownership of intellectual property or otherwise bringing a claim against the counterparty for matters unrelated to the contract?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_26",
+   "contract_id": "cuad_26",
+   "category": "Non-Disparagement",
+   "question": "Non-Disparagement: Is there a requirement on a party not to disparage the counterparty?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_27",
+   "contract_id": "cuad_27",
+   "category": "Warranty Duration",
+   "question": "Warranty Duration: What is the duration of any  warranty against defects or errors in technology, products, or services  provided under the contract?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_28",
+   "contract_id": "cuad_28",
+   "category": "Warranty Duration",
+   "question": "Warranty Duration: What is the duration of any  warranty against defects or errors in technology, products, or services  provided under the contract?",
+   "answers": []
+  },
+  {
+   "id": "cuad_review_29",
+   "contract_id": "cuad_29",
+   "category": "Post-Termination Services",
+   "question": "Post-Termination Services: Is a party subject to obligations after the termination or expiration of a contract, including any post-termination transition, payment, transfer of IP, wind-down, last-buy, or similar commitments?",
+   "answers": []
+  }
+ ]
+}

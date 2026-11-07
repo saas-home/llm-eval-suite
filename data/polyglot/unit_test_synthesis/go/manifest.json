@@ -1,0 +1,32 @@
+{
+  "mode": "unit_tests",
+  "answer_file": "payment_test.go",
+  "go_package": "payment",
+  "min_tests": 3,
+  "mutants": [
+    {
+      "name": "any_status_treated_as_success",
+      "file": "payment.go",
+      "replace": [
+        "if resp[\"status\"] == \"succeeded\" {",
+        "if resp[\"status\"] != \"\" {"
+      ]
+    },
+    {
+      "name": "amount_guard_removed",
+      "file": "payment.go",
+      "replace": [
+        "if amount <= 0 {",
+        "if amount < -1000000000 {"
+      ]
+    },
+    {
+      "name": "receipt_sent_with_wrong_charge_id",
+      "file": "payment.go",
+      "replace": [
+        "p.Notifier.SendReceipt(email, resp[\"id\"])",
+        "p.Notifier.SendReceipt(email, token)"
+      ]
+    }
+  ]
+}

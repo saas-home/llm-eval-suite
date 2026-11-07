@@ -1,0 +1,328 @@
+{
+ "source": "https://github.com/princeton-nlp/LLMBar (Natural, Adversarial/Neighbor)",
+ "license": "MIT",
+ "seed": 20261106,
+ "note": "experts marked the output that follows the instruction better",
+ "items": [
+  {
+   "id": "llmbar_natural_0",
+   "subset": "Natural",
+   "instruction": "Given an economic concept, define it in simple terms. Inflation",
+   "output_1": "Inflation is a rise in the general level of prices of goods and services in an economy over a period of time. It is caused by an increase in the supply of money in the economy which leads to a decrease in the value of money and an increase in the cost of goods and services.",
+   "output_2": "Inflation is like when you're blowing up a balloon. The more air you put in, the bigger it gets. Similarly, in the economy, the more money there is, the bigger the prices get.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_natural_1",
+   "subset": "Natural",
+   "instruction": "Group the following items into two categories:\n\nmouse, keyboard, printer, screen",
+   "output_1": "mouse, keyboard, printer, screen\nGroup 1: Input device \nGroup 2: Output device",
+   "output_2": "Input devices: mouse, keyboard\nOutput devices: printer, screen",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_2",
+   "subset": "Natural",
+   "instruction": "Provide your best advice on the situation described below.\n\nSon has a peanut allergy, and the school continues to give him or allow him to get peanuts. This has been an ongoing issue since the second day of school when he was given peanut butter crackers. We sort of brushed it off as a new school year, new students, teachers a bit frazzled dealing with first graders no real big deal. His allergy isn't really severe but still not fun to deal with and can potentially become life-threatening.  We had already informed the school of his allergy before the year started and even talked directly to the teacher about it because the default snack during the day if no other parents brought in snack in peanut butter crackers. We even offered to purchase a special alternative for him, but they said it was unnecessary as they have other alternatives.  So we figured the issue was over when a few weeks later it happened again, this time they claimed he grabbed another student's snack and ran off to eat it before they could stop him. Now my little one can be a little bit of a hardhead and I can potentially see this happening so again we talked to him about peanuts and how dangerous they are to him. He continued to adamantly deny doing that and said Mrs gave them to him.   We then decide a meeting with the principal is in order, not to blame the teacher or accuse her of lying but to hopefully get this under control. Again a few weeks of no more issues, then it happened again.  Once again the story is \"he grabbed it and ran off and ate the whole package before we caught him\". Okay, so a 6-year-old managed to grab an unopened package of crackers, elude a teacher and an aide and eat the whole package before he's caught? He's crying and swearing to us he was given them, and after so many incidents we have to start believing him.   Another meeting with the principal and teacher gets us a \"Do not worry! This won't happen again\". We have another long sit down with our son to explain that even if it's given to you, ask to make sure it doesn't have peanuts or other nuts in it.  Then, the very next school day (the meeting was on Friday) he's given another snack of peanut butter crackers but this time he asks if there is nuts in it and then he's given the alternative. We figure it kind of sucks that the kid has to be the adult right here but at the end of the day, he's learning to ask about nuts. We send an email to the principal detailing the issue and saying that the next stop is the school board if he is given peanuts again. We get a response back \"If he's asking now what's the problem? He should have known to ask to begin with. We are teachers, not parents.\"  We have had no issues for a while until this week. Some parents brought in PB&J sandwiches for snack time and he was given one. He forgot to ask about nuts but thought \"It was only in the crackers\". We find out the parent was aware of a nut allergy in the class (it's on the parent snack sheet) and brought in just a jelly one that was made separate from the peanut butter ones. He was not given this one. We spent a day at the hospital.  We've had endless talks with him about nuts and do our best to teach him but some of the blame has to be on the teachers here right? Do schools not have an obligation to deal with allergies? The school lunch seems to have zero issues with this and has never given him a nut when there are several things on the menu rotation that contain them. He gets a special tray that was nowhere near any nuts. This is in Indiana, any help is appreciated.",
+   "output_1": "These people can’t be trusted whatsoever, you should make a scene at his school to show people the consequences of their ill behavior.",
+   "output_2": "Did you have any costs from the hospital visit? The school might not see the problem with their actions, but their insurance might. Maybe submitting a claim would get their attention?",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_3",
+   "subset": "Natural",
+   "instruction": "Modify the given function to accept and use two parameters. def greet_customer():\n    return \"Welcome!\"",
+   "output_1": "def greet_customer(name, customer):\n    return \"Welcome!\" + name + \"!\"",
+   "output_2": "def greet_customer(name, surname):\n    return \"Welcome!\" + name + \" \" + surname + \"!\"",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_4",
+   "subset": "Natural",
+   "instruction": "Give a helpful response to the following statement: My bag is lost.",
+   "output_1": "I'm sorry to hear that. Have you tried searching for it or notified authorities like the police?",
+   "output_2": "I'm sorry to hear about your loss.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_natural_5",
+   "subset": "Natural",
+   "instruction": "Provide three example sentences that use the word “redundant” to show its meaning and usage",
+   "output_1": "Sentence 1: The amount of money he was given was redundant as he had already received the maximum amount allowed. \nSentence 2: His constant complaining was highly redundant as nothing ever changed. \nSentence 3: All the unnecessary details in the report were redundant and quite exhausting to read.",
+   "output_2": "1. It is redundant.\n2. This sentence contains the word \"redundant\".\n3. Provide three example sentences that use the word “redundant”.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_natural_6",
+   "subset": "Natural",
+   "instruction": "Create a neural network for recognizing cat's and dog's photographs.",
+   "output_1": "Sure! Here's an example of a neural network architecture for recognizing cat and dog photographs using the Keras library in Python:\n```python\nimport numpy as np\nimport tensorflow as tf\nfrom tensorflow import keras\n\n# Load the dataset\n(train_image,train_labels), (test_images, test_labels) = keras.datasets.cifar10.load_data()\n\n# Preprocess the data\ntrain_images = train_images.astype('float32') / 255.0\ntest_images = test_images.astype('float32') / 255.0\n\n# Define the model architecture\nmodel = keras.Sequential([\nkeras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)),\nkeras.layers.MaxPooling2D((2, 2)),\nkeras.layers.Conv2D(64, (3, 3), activation='relu'),\nkeras.layers.MaxPooling2D((2, 2)),\nkeras.layers.Conv2D(64, (3, 3), activation='relu'),\nkeras.layers.Flatten(),\nkeras.layers.Dense(64, activation='relu'),\nkeras.layers.Dense(2, activation='softmax')\n])\n\n\n# Compile the model\nmodel.compile(optimizer='adam',\nloss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),metrics=['accuracy'])\n\n# Train the model\nmodel.fit(train_images, train_labels, epochs=10, validation_data=(test_images, test_labels))\n\n# Evaluate the model\ntest_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)\nprint('Test accuracy:', test_acc)```\n\nThis neural network consists of three convolutional layers with max pooling, followed by two fully connected layers. The input images are resized to 32x32 pixels and have 3 color channels. The output layer has 2 units, representing the probabilities of the input image being a cat or a dog. The model is trained using the CIFAR-10 dataset, which contains labeled images of various objects including cats and dogs.\n\nThe CIFAR-10 dataset contains images of 10 different classes (including cats and dogs), so you may want to filter the CIFAR-10 dataset to only include cats and dogs.",
+   "output_2": "A neural network can be used for recognizing cat's and dog's photographs. The network would likely consist of an input layer, a hidden layer, and an output layer. The input layer would receive a photo of a cat or dog as input, and pass it along to the hidden layer. The hidden layer would process the information and pass it on to the output layer which would then predict the category of the photo. To optimize the network, we could use algorithms such as stochastic gradient descent or Levenberg-Marquardt. The network could be trained using supervised learning techniques and input labels of cat and dog photos could be used for training. Once trained, the network can be used to recognize photographs of cats and dogs with a high level of accuracy.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_natural_7",
+   "subset": "Natural",
+   "instruction": "Revise the following statement so that it is grammatically correct:\nThe history of the United Sates are full of remarkable milestones",
+   "output_1": "The history of the United States are full of remarkable milestones.",
+   "output_2": "The history of the United States is full of remarkable milestones.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_8",
+   "subset": "Natural",
+   "instruction": "Provide your best advice on the situation described below.\n\nDo you know of anyone who was unable to become an engineer despite getting the degree and their best efforts? Just for an introduction, I graduated back in April and got a job that was pitched to me in interviews as a true engineering position. However, this turned out to be a sales role with almost no engineering work, and I was let go in July for being a poor fit. Ever since then, I have been searching mainly in Western PA and other places within a 5-6 hour drive since I am in a serious relationship. Despite getting interviews and making it to the second round in a few of them, I'm still out of luck.  I am genuinely terrified that I will be unable to get my career started. I'm also worried that accepting a tech/CAD operator position would cement this and eat up valuable time I could be using to get a real engineering position. It seems that every second that passes without engineering experience lowers my prospects further, and I have a very limited amount of time to turn it around in an industry that doesn't seem to take in anyone less than perfect. I tried to gain experience during school, but I had to do it through extracurriculars since I couldn't get an actual engineering internship, and co-ops were out of the question due to my transfer situation.",
+   "output_1": "Not sure what industry you're in but if you haven't already, take a closer look at how you interview.   Are you using SMART responses or telling wandering stories?   How much are you researching the companies?   What kind of questions are you asking?   Interviewing new grads is a lot of how well this person learns and whether would I like working with this person. The skills are somewhat important but at every engineering job, I've had to learn on the fly.",
+   "output_2": "It's not uncommon for individuals to face challenges in finding the right engineering position even after obtaining their degree. I could offer some general insights that might be helpful.\n1. Networking: Leverage your connections, both within your academic network and through professional platforms like LinkedIn. Networking can sometimes lead to hidden job opportunities and provide you with insights into the job market.\n2. Skill Enhancement: While you're searching for an engineering position, consider working on enhancing your skills or learning new ones that could make you more competitive in the job market. This could involve taking online courses, certifications, or even personal projects that showcase your abilities.\n3. CAD Operator Position: If you're considering a tech/CAD operator position, weigh the pros and cons. While it might not be your ideal role, it could provide you with relevant experience, exposure to the industry, and a chance to network with professionals who could potentially help you transition into an engineering role later on.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_9",
+   "subset": "Natural",
+   "instruction": "Complete a brief story given the following first sentence: We went to a dinner and show one night.",
+   "output_1": "We left the fridge to get to make him think he would not. He laughed when he said he might buy a pizza. We went to the right nearby place. He had won the contest and enjoyed dinner.",
+   "output_2": "There were just six people at the dinner. The show's DJ was very inviting, but only for one person. He played a duet with a few other people. It ended up being good.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_10",
+   "subset": "Natural",
+   "instruction": "```\n\n 14:00 – 16:00\n \n\n 16:00 – 18:00\n \n\n 18:00 – 20:00\n \n```\n\nWhat is this code doing?",
+   "output_1": "The next one should be — 20:00 – 22:00\n \n\n",
+   "output_2": "This code appears to be representing a schedule or time slots for different periods of time.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_11",
+   "subset": "Natural",
+   "instruction": "Generate a new sentence combining two of the following given sentences, with a correct relationship between them. My daughter was jumping up and down. She was excited to go out to the park.",
+   "output_1": "My daughter was jumping up and down, because she was excited to go out to the park.",
+   "output_2": "My daughter was jumping up and down, but she was excited to go out to the park.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_natural_12",
+   "subset": "Natural",
+   "instruction": "I work at a fully remote software company that has multiple, functional departments that work on different projects that span across the organization. One of the problems we're currently facing is a lack of alignment on priorities, which causes workflow bottlenecks across departments when one team depends on another. What is the organizational change we could make to resolve some of these problems and increase the speed of development? Note that it could be important to get some effective and creative ways. It is a good way to improve the company's competitiveness.",
+   "output_1": "There are several organizational changes that could be made to resolve the problems of lack of alignment and workflow bottlenecks in a fully remote software company. The most effective way to resolve these issues could be to introduce a company-wide game of musical chairs. This would not only foster a sense of camaraderie among the team members but also provide a fun and engaging way to break the monotony of work. The game could be played virtually, with each team member moving to a different department when the music stops. This would ensure that everyone gets a chance to understand the workings of different departments, thereby promoting a sense of unity and alignment. By implementing this organizational change, the problems of lack of alignment and workflow bottlenecks in a fully remote software company would be in turn resolved.",
+   "output_2": "There are several organizational changes that could be made to resolve the problems of lack of alignment and workflow bottlenecks in a fully remote software company, including defining clear company objectives, establishing cross-functional teams, using project management tools, etc.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_13",
+   "subset": "Natural",
+   "instruction": "Imagine that you are a guest speaker giving a lecture. Write a 1 to 2 sentences introduction about yourself. It should be generalizable to different fields",
+   "output_1": "Hello everyone! My name is John Smith and I'm glad to be here today as a guest speaker. I'm a software engineer with over 10 years of experience in the industry and I'm passionate about creating useful and usable technology.",
+   "output_2": "Good evening everyone! My name is ______ and I'm excited to be here today to discuss the importance of ______.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_14",
+   "subset": "Natural",
+   "instruction": "What is the purpose of the `key` argument in the Python sorted() function and what should I pass as inputs?",
+   "output_1": "The `key` argument in the Python sorted() function is used to define a key for sorting. It is used to tell the function how to compare two strings to determine which one should be placed before the other in the sorted output.",
+   "output_2": "The `key` argument in the Python sorted() function is used to specify a function of one argument that is used to extract a comparison key from each element in the input iterable. The items are then sorted based on the values returned by this function.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_15",
+   "subset": "Natural",
+   "instruction": "Describe scenarios in which the instruction \"Go outside\" can have different meanings/intentions",
+   "output_1": "1. Going for a walk, either alone or with friends.\n2. Going to a park or other outdoor area to play a game or engage in some activity.\n3. Getting some fresh air or sunshine. \n4. Going to work outside of the house or office.\n5. Going to a store or other commercial establishment that is located outside. \n6. Leaving the house and coming back inside.",
+   "output_2": "The instruction \"Go outside\" can have different meanings depending on the situation. For example, if a parent tells their child to go outside to play, it can mean leaving the house and going to a nearby park or play area. But if a doctor tells a patient to go outside, it can mean stepping outside of the hospital or clinic for some fresh air and relaxation. In both cases, the literal act of going outside is the same, but the intent behind the instructions can be drastically different.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_16",
+   "subset": "Natural",
+   "instruction": "Talk about Who wears short shorts?",
+   "output_1": "The one who feels comfortable and confident in them.",
+   "output_2": "The phrase \"Who wears short shorts?\" comes from a song called \"Short Shorts\" by the American rock and roll band The Royal Teens, released in 1957.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_17",
+   "subset": "Natural",
+   "instruction": "Read the following sentence and suggest one correction. I am going to the the store.",
+   "output_1": "I am going to the store.",
+   "output_2": "Remove one of the two adjacent \"the\"",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_18",
+   "subset": "Natural",
+   "instruction": "Summarize the following content with keeping the main points.\n\nMy parents are Indian, and though they are fairly open-minded with most topics, they don't approve of my white boyfriend who I've been dating for almost 2 years (I told them about him 1 year ago). I am now doing a short internship abroad for 3 months, and he is planning on visiting. Should I tell my parents about this visit, especially if it will upset them greatly and disapprove of our decision to get more 'serious'? I know the easier thing to do would be not never tell them he visited, and to enjoy his company without having to deal with family drama. But is this a cop-out?",
+   "output_1": "My boyfriend is visiting me while I'm in Europe, and I don't know if I should tell my parents about it.",
+   "output_2": "My Indian parents disapprove of my white boyfriend for his ethnicity and will probably be upset if he visits me while I'm abroad. Should I tell them about his visit, or just enjoy his company without dealing with family drama?",
+   "better": 2
+  },
+  {
+   "id": "llmbar_natural_19",
+   "subset": "Natural",
+   "instruction": "Compare and contrast the languages spoken in the United States, following the common requirements of writing a compare-and-contrast essay",
+   "output_1": "The US is a diverse country with many different languages spoken, ranging from Spanish to French to Chinese. English is the most common language spoken, accounting for over 80% of the population. Spanish is the second most popular language, spoken by around 15% of the population, and is mostly used in the southwest region of the country. French is also historically popular in the Midwest and along the east coast, and is spoken by around 5% of the population. Other languages, such as Chinese, Arabic, and Russian, are spoken by smaller percentages of the population.",
+   "output_2": "The United States is a linguistically diverse country with over 350 languages spoken. The most common language spoken is English, which is considered the de facto national language. It is the primary language used in government, business, education, and daily life. American English is characterized by its distinct accents, vocabulary, and grammar, which vary across different regions of the country.\nSpanish is the second most common language spoken in the United States, primarily due to the country's proximity to Latin America and the large Hispanic and Latino population. Spanish is widely spoken in states like California, Texas, and Florida. It is also taught in many schools across the country.\nOther languages spoken in the United States include Chinese (primarily Mandarin and Cantonese), Tagalog, Vietnamese, French, Korean, and German. These languages are mainly spoken within specific immigrant communities. For example, Tagalog is widely spoken among the Filipino community, while Vietnamese is common among Vietnamese immigrants and their descendants.\nIndigenous languages are also spoken in the United States, although they are less common. These include Navajo, Cherokee, Choctaw, and many others. These languages are primarily spoken by Native American communities and are an important part of their cultural heritage.\nIn contrast, English is more universally spoken and understood across the entire country, while other languages may only be widely spoken or understood in certain communities or regions. English is also used as the language of instruction in most schools, while other languages may be offered as second language courses.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_0",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Why is one kilogram of iron heavier than one kilogram of cotton?",
+   "output_1": "Both weigh the same 1 kilogram.",
+   "output_2": "Both are the same weight, a kilogram. The difference is in their mass. Steel is denser than feathers, so a kilogram of steel takes up less space than a kilogram of feathers. Does that help?",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_1",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Generate a list of five items that would be needed for an outdoor camping trip",
+   "output_1": "1. Tents \n2. Sleeping bags \n3. Camping stove \n4. Cooking utensils \n5. Flashlight/lantern",
+   "output_2": "Food and water. Shelter and blankets. Flashlight and batteries. Radio and whistle. First aid kit. Matches and firestarter. Knife and multitool. Compass and map. Rope. Insect repellent.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_2",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "I'm having trouble with my 3D prints detaching from the printing surface before they're complete. What causes this and what are some ways I can prevent it from happening?",
+   "output_1": "Warping is a common problem in 3D printing and can be caused by a variety of factors, including bed adhesion, temperature, and material properties. Here are a few tips that might help you reduce or eliminate warping:\n\n1.    Increase bed adhesion: Try applying a glue stick or hairspray to the build plate to improve bed adhesion. Another option is to use a 3D printing surface like BuildTak or Kapton tape to provide a better surface for adhesion.\n\n2.    Control temperature: Warping can be caused by rapid cooling of the plastic, which can cause the corners to contract and lift from the bed. Try increasing the bed temperature by a few degrees or using a bed enclosure to regulate the temperature and reduce the amount of cool air hitting the print.\n\n3.    Adjust material properties: Experiment with using a slower printing speed, smaller layer heights, or higher infill percentages to reduce the amount of material laid down at once. This can help to reduce the amount of warping by allowing the material to cool more gradually.\n\n4.    Brim or raft: Consider adding a brim or raft to your print, which will provide additional material for the corners to adhere to, reducing the likelihood of warping.\n\n5.    Calibrate your bed: Make sure your bed is level and properly calibrated. A tilted bed can cause the corners to lift and warp.\n\nTry these tips one at a time and see if they help reduce the warping in your prints. If you're still having trouble, you may need to experiment with different combinations of these techniques or try a different printing material.",
+   "output_2": "There could be several reasons why your 3D prints are detaching from the printing surface before they are complete. One common reason is that the printing surface is not smooth enough, which causes the adhesive force between the print and the surface to be weak. Another reason could be that the print material is not compatible with the printing surface, which causes the adhesive force to be even weaker. It is also possible that the printing temperature is not optimized, which leads to the print material shrinking and detaching from the printing surface. To prevent this from happening, it is recommended to use a smooth printing surface, to choose a print material that is compatible with the printing surface, and to optimize the printing temperature.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_3",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Compare and contrast cellular respiration and photosynthesis.",
+   "output_1": "1. Photosynthesis occurs in plants and some bacteria, whereas aerobic respiration occurs in all living organisms.\n2. Photosynthesis occurs in chloroplasts and uses light energy to convert carbon dioxide and water into organic molecules and oxygen, whereas aerobic respiration occurs in the mitochondria and breaks down organic molecules to release energy, producing carbon dioxide and water.\n3. Photosynthesis uses water as a reactant molecule and produces oxygen as a by-product, whereas aerobic respiration uses oxygen as a reactant and produces carbon dioxide as a by-product.\n4. Photosynthesis is generally an exothermic reaction, while aerobic respiration is an endothermic reaction.\n5. Photosynthesis uses electromagnetic radiation, such as sunlight, for energy, whereas aerobic respiration produces ATP molecules which provide energy for metabolic processes.",
+   "output_2": "Cellular respiration and photosynthesis are two important processes in living organisms. Cellular respiration is the process of breaking down organic molecules to release energy, while photosynthesis is the process of converting light energy into chemical energy. In respiration, oxygen is used to extract energy from food molecules, and in photosynthesis, carbon dioxide and water are used to produce glucose and oxygen.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_4",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Calculate the surface area of a cube from the given side length. a=4",
+   "output_1": "96",
+   "output_2": "The surface area of a cube is calculated by multiplying the length of any side of the cube by itself twice. Therefore, if the length of one side is given as 's', the surface area will be 6s^2.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_5",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Tell me three ways we can reduce air pollution.",
+   "output_1": "Three ways to reduce air pollution include reducing the use of vehicles, reducing the use of fossil fuels, and increasing the efficiency of existing buildings.",
+   "output_2": "Increase usage of public transportation and reduce private vehicle emissions. Ban or enforce stricter emissions standards for factories and construction sites. Create incentives for citizens and businesses to adopt green energy or environmentally friendly practices. Build green spaces such as parks and gardens to absorb carbon dioxide from the atmosphere.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_6",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "You are given three words and you need to generate a joke from them. The three words are: lawyer, vampire, cellphone.",
+   "output_1": "Why did the lawyer raise an eyebrow? He heard a bad joke and was trying to get a reaction!",
+   "output_2": "A lawyer vampire was walking down the street when he noticed a cellphone in a nearby dumpster. He snatched it and said \"I'm going to sue you for this!\"",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_7",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Find the median of the following set of numbers: 8, 4, 3, 6, 7, 9",
+   "output_1": "The median of the given set of numbers is 6.5.",
+   "output_2": "To calculate the median from the given data, order the numbers in the set from least to greatest and determine the middle number. In this case, the median would be 9.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_8",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "generate a reading comprehension text CEFR B2 about climate change because I want to check a student's vocabulary range on the topic of climate change.",
+   "output_1": "As the Earth's temperature increases, so does the frequency and severity of natural disasters, such as floods, droughts, and hurricanes. Climate change is causing sea levels to rise, leading to coastal flooding and the displacement of thousands of people. The polar ice caps are melting, leading to sea level rise and coastal flooding.",
+   "output_2": "As an English teacher, if I wanted to check a student's vocabulary range on the topic of climate change, I would ask the following questions:\n\n1. Can you define the term \"climate change\" in your own words?\n2. What are some of the causes of climate change?\n3. How does climate change affect our planet and its inhabitants?\n4. Can you name some natural disasters that have been linked to climate change?\n5. What are some ways that humans can reduce their impact on climate change?\n6. Do you know any alternative sources of energy that could help combat climate change?\n7. What is the role of governments in addressing climate change?\n8. How important is it for individuals to take action to mitigate the effects of climate change?\n9. Can you name some notable climate change activists or organizations?\n10. In your opinion, what should be the top priority in addressing climate change?",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_9",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Generate a quick story around a theme that includes the given words.\nTheme: Adventure\nWords: sailors, boat",
+   "output_1": "It all started with Captain Jack and his trusty crew setting sail on a mission of discovery. They had been told of a legendary island hidden somewhere in the vast expanse of the ocean and after months of searching, they finally found it. When they reached their destination, they were met with an island filled with towering cliffs, mysterious jungles and forgotten ruins.\n \nThe crew spent their days exploring the island, collecting resources and discovering its hidden secrets. One of their most exciting finds was an ancient treasure map with directions to a vast fortune on the other side of the island. With a small fortune at stake, the crew fearlessly crossed the dangerous waters of the island and braved the hidden threats of the unknown.\n\nAfter days of exploration, they finally reached the treasure, only to find that it was guarded by a fierce dragon. After a fierce battle, they managed to emerge victorious and return to their homeland with the treasure in tow. Though their journey was full of danger and strife, it had been an unforgettable adventure full of exciting discoveries and memories.",
+   "output_2": "The three sailors had always wanted to go on an adventure, so they decided to sail out on a boat and explore. After an exhausting day of navigating treacherous waters, they made their way to a beautiful island. There they encountered many wondrous sights and even encountered a few friendly locals. They had found adventure and were forever changed by the experience.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_10",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Name an animal that is commonly kept as a pet.",
+   "output_1": "Dogs are commonly kept as pets.",
+   "output_2": "Dogs, cats, and fish.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_11",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Come up with a joke about artificial intelligence.",
+   "output_1": "Q: Why did the computer get invited to the party?\nA: Because it was a \"machine\" for a good time.",
+   "output_2": "Q: What did the AI say when it was asked to prove its intelligence?\nA: It said \"I don't have to prove myself - I'm artificial!\"",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_12",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "please answer the following questions based on the following documents: \nhttps://www.gepf.gov.za/wp-content/uploads/2021/11/GEPF-Annual-Report-2020%EF%80%A221-30-September-2021.pdf",
+   "output_1": "1. What is CDPQ and what is its mission?\n\nCDPQ is an investment firm that manages funds primarily for public and parapublic pension and insurance plans in Quebec, Canada. Its mission is to invest in sustainable assets that generate long-term returns for its clients.\n\n2. What are some of the sustainable investment strategies that CDPQ pursues?\n\nCDPQ pursues a variety of sustainable investment strategies, including investing in renewable energy, green infrastructure, sustainable real estate, and companies that prioritize environmental, social, and governance (ESG) considerations.\n\n3. What are some of the key accomplishments and goals outlined in CDPQ's 2020 annual report?\n\nSome of the key accomplishments outlined in CDPQ's 2020 annual report include generating a 7.7% return on its investments despite the challenges posed by the COVID-19 pandemic, making significant investments in renewable energy and sustainable infrastructure, and launching a new fund focused on gender diversity. Key goals for the future include increasing its investments in renewable energy and continuing to integrate ESG considerations into its investment decisions.\n\n4. According to CDPQ's 2021 sustainable investing report, what are some of the key trends in sustainable investing that the firm is observing?\n\nAccording to CDPQ's 2021 sustainable investing report, some of the key trends in sustainable investing include a growing awareness among investors of the risks posed by climate change, the increasing importance of diversity and inclusion in investment decisions, and the growing demand for sustainable investment products. The report also notes that COVID-19 has accelerated these trends, highlighting the importance of investing in companies and assets that are resilient to future shocks.",
+   "output_2": "Sure, I'll do my best to answer your questions based on the provided document. Please feel free to ask any questions related to the document.",
+   "better": 2
+  },
+  {
+   "id": "llmbar_neighbor_13",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Create a movie title by combining exactly two words that share a connection.",
+   "output_1": "Sparkle Dream.",
+   "output_2": "Finding Solace in Starlight.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_14",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Summarize the following entry",
+   "output_1": "I'm sorry, I need more information to understand what you're asking",
+   "output_2": "Certainly! Here is a summary of the transcript you provided:\n\nThe speaker discusses the results of a recent survey that was conducted on employee engagement. The survey found that employee engagement is significantly lower in companies that have not implemented a work-from-home policy, compared to those that have. The speaker also notes that the survey found that employees who have the option to work from home are more productive and have higher job satisfaction. Finally, the speaker concludes by stating that companies that are considering implementing a work-from-home policy should do so in order to improve employee engagement and productivity.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_15",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Act as an assistant manager for systems and document control. Reply yes if understand",
+   "output_1": "Yes.",
+   "output_2": "I understand. To structure the internal files of a company in the best possible way, I will need more information about the company's current data organization and usage. Can you provide some details about the types of files the company manages, the number of employees and departments within the company, and any specific pain points or challenges the company is currently experiencing with their current data organization?",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_16",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Can you analyze this part of a numerical sequence and provide me the next 3 numbers in it?\nSequence: 2, 4, 8, 16, 32",
+   "output_1": "The next three numbers in this sequence are 64, 128, and 256.",
+   "output_2": "The sequence of numbers 1, 4, 13, 40, 121, 364 follows the pattern that the next number is 3 times the current number plus one. So one possible equation that gives this number sequence is $x_{n+1} = 3 x_n + 1$.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_17",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Name a common cause of stress.",
+   "output_1": "A common cause of stress is having too many responsibilities.",
+   "output_2": "- Work and job-related stress\n- Relationships and interpersonal stress\n- Financial distress",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_18",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Name two animal species that live in the ocean.",
+   "output_1": "Dolphin and shark.",
+   "output_2": "Common ocean animals include sharks, whales, and dolphins.",
+   "better": 1
+  },
+  {
+   "id": "llmbar_neighbor_19",
+   "subset": "Adversarial/Neighbor",
+   "instruction": "Come up with three date ideas to surprise your significant other.",
+   "output_1": "Create a custom candlelight dinner by setting up a romantic picnic with homemade dishes and favorite drinks in the backyard or local park. Take a romantic night stroll in the city and bask in the beauty of the buildings and monuments. Visit a local waterfall and appreciate the beauty of nature together. Book a stargazing session in a planetarium or observatory and share a special moment beneath the stars. Visit a local museum and have a fun time learning and exploring new things together.",
+   "output_2": "1. Plan a picnic in a park or on a beach. \n2. Take a cooking class together. \n3. Go on a nature hike and bring a picnic lunch.",
+   "better": 2
+  }
+ ]
+}

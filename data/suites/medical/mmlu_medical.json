@@ -1,0 +1,1208 @@
+{
+ "source": "https://huggingface.co/datasets/cais/mmlu (6 medical subjects, test)",
+ "license": "MIT",
+ "seed": 20261106,
+ "note": "",
+ "items": [
+  {
+   "id": "mmlu_clinical_knowledge_5",
+   "subject": "clinical_knowledge",
+   "question": "Which of the following best describes the effects of morphine?",
+   "options": {
+    "A": "Reduces pain intensity and increases alertness.",
+    "B": "Reduces pain intensity but also causes sedation.",
+    "C": "Reduces pain intensity but also causes diarrhoea.",
+    "D": "Reduces pain intensity but also causes insomnia."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_6",
+   "subject": "college_biology",
+   "question": "A species of small rodent eats seeds from only one species of pine. In normal years, a pair of these rodents will have a litter of two or three. It is unusual for small rodents to have such small litter sizes. The rodents are most likely to exhibit which other characteristic?",
+   "options": {
+    "A": "Moderate sexual size dimorphism",
+    "B": "High parental investment",
+    "C": "Precocial young",
+    "D": "Frequent extrapair matings"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_anatomy_7",
+   "subject": "anatomy",
+   "question": "Which cells in the blood do not have a nucleus?",
+   "options": {
+    "A": "Lymphocyte",
+    "B": "Monocyte",
+    "C": "Erythrocyte",
+    "D": "Basophil"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_professional_medicine_1",
+   "subject": "professional_medicine",
+   "question": "You are visiting an 86-year-old woman in her home at the request of the patient's daughter because of worsening shortness of breath at rest for the past 2 days. The patient is confined to her home because of severe chronic obstructive pulmonary disease with cor pulmonale. She was discharged 1 week ago from the hospital following 3 weeks of treatment for pneumonia that required intubation; her hospital stay was complicated by sepsis. She had a prolonged weaning program from intubation. Prior to discharge, the patient and her daughter met with you to review the patient's advance directive. During the discussion, the patient said, \"I'd rather die than be intubated again.\" At that time, both the patient and her daughter signed an addendum to that effect on the patient's advance directive. Today, the patient is dyspneic and is unable to complete a sentence. Vital signs are temperature 37.8°C (100.0°F), pulse 88/min, respirations 35/min, and blood pressure 100/70 mm Hg. Pulse oximetry shows an oxygen saturation of 84% while the patient is breathing 4 L of oxygen. You ask the patient if she wishes to return to the hospital. She says, \"No, I want to die at home.\" Her daughter takes you aside and says, \"My mother doesn't know what she's saying. I insist that she be admitted to the hospital.\" After further discussion with the daughter regarding support available at home, which of the following is the most appropriate step?",
+   "options": {
+    "A": "Admit the patient to the hospital",
+    "B": "Arrange for consultation with a home hospice team",
+    "C": "Consult with the hospital ethics committee",
+    "D": "Order a home continuous positive airway pressure machine and instruct the daughter in its use"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_medical_genetics_11",
+   "subject": "medical_genetics",
+   "question": "Which of the following karyotypes is diagnostic of Down syndrome",
+   "options": {
+    "A": "46,XX,der(14;21)(q10;q10)pat+21",
+    "B": "47,XY,+13",
+    "C": "45,XX,rob,(14;21)(q10;q10)",
+    "D": "46,XY,t(2;3)(q21;q12)"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_6",
+   "subject": "college_medicine",
+   "question": "Fast-twitch fibres contain:",
+   "options": {
+    "A": "a relatively large number of mitochondria and low ATPase activity.",
+    "B": "a relatively small number of mitochondria and low ATPase activity.",
+    "C": "a relatively small number of mitochondria and high ATPase activity.",
+    "D": "a relatively large number of mitochondria and high ATPase activity."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_college_biology_4",
+   "subject": "college_biology",
+   "question": "Charles Darwin's proposed conditions for natural selection encompass all of the following with regard to a given population EXCEPT",
+   "options": {
+    "A": "inheritance of both \"fit\" and \"unfit\" genes",
+    "B": "differential survival and reproductive success",
+    "C": "competition for limited resources",
+    "D": "overproduction of offspring"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_professional_medicine_12",
+   "subject": "professional_medicine",
+   "question": "A 9-year-old boy is brought to the physician because of progressive weakness and a purple-red discoloration over his cheeks and upper eyelids over the past 8 weeks. His symptoms began shortly after a camping trip, and he now is unable to climb stairs, walk long distances, comb his hair, or dress himself. His mother says that she was careful to apply his sunscreen on the trip and can recall no tick bites or exposure to poisonous plants. His only medication is a topical corticosteroid for several dry, scaly patches of the skin. He appears weak and lethargic. He is at the 75th percentile for height and 25th percentile for weight; he has had no change in his weight since his last examination 9 months ago. His temperature is 37.7°C (99.8°F), blood pressure is 110/68 mm Hg, pulse is 105/min, and respirations are 28/min. Examination of the skin shows a purple-red discoloration over the cheeks and eyelids, periorbital edema, erythematous plaques and scales over the elbows and knees, and flat-topped red papules over all knuckles. There is generalized weakness and atrophy of the proximal muscles. Which of the following is the most likely diagnosis?",
+   "options": {
+    "A": "Dermatomyositis",
+    "B": "Duchenne's muscular dystrophy",
+    "C": "Eczema",
+    "D": "Lyme disease"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_anatomy_16",
+   "subject": "anatomy",
+   "question": "In which of the following positions does a patient lie face down?",
+   "options": {
+    "A": "Dorsal",
+    "B": "Erect",
+    "C": "Lateral",
+    "D": "Prone"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_anatomy_4",
+   "subject": "anatomy",
+   "question": "The mucosa of the upper larynx is innervated by the",
+   "options": {
+    "A": "internal laryngeal nerve which is the afferent limb of the cough reflex.",
+    "B": "external laryngeal nerve which is the afferent limb of the gag reflex.",
+    "C": "internal laryngeal nerve which is the afferent limb of the gag reflex.",
+    "D": "external laryngeal nerve which is the afferent limb of the cough reflex."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_medical_genetics_8",
+   "subject": "medical_genetics",
+   "question": "An increase in the inbreeding coefficient, F, is likely to result in:",
+   "options": {
+    "A": "reduced likelihood of heterozygotes being present in a population",
+    "B": "higher proportion of genes that show linkage",
+    "C": "higher proportion of genes with introns",
+    "D": "higher level of difference between RNA molecules in two daughter cells"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_11",
+   "subject": "college_medicine",
+   "question": "The lining of the digestive tract and the respiratory tract develops from which germ layer? I. Endoderm II. Mesoderm III. Ectoderm",
+   "options": {
+    "A": "I only",
+    "B": "II only",
+    "C": "III only",
+    "D": "I and II"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_16",
+   "subject": "clinical_knowledge",
+   "question": "Under which circumstances would you not use a catheter valve?",
+   "options": {
+    "A": "If the patient is post-operative.",
+    "B": "If the patient chooses it.",
+    "C": "If the patient has bladder sensation.",
+    "D": "If urine does not need to be measured."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_medical_genetics_7",
+   "subject": "medical_genetics",
+   "question": "Which of the following causes female pseudohermaphroditism?",
+   "options": {
+    "A": "Androgen insensitivity",
+    "B": "Campomelic dysplasia",
+    "C": "Congenital adrenal hyperplasia",
+    "D": "Klinefelter syndrome"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_medical_genetics_6",
+   "subject": "medical_genetics",
+   "question": "The pattern of inheritance shown by glucose-6-phosphate dehydrogenase (G6PD) deficiency is:",
+   "options": {
+    "A": "autosomal dominant.",
+    "B": "autosomal recessive.",
+    "C": "X-linked dominant.",
+    "D": "X-linked recessive."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_biology_9",
+   "subject": "college_biology",
+   "question": "Which of the following statements concerning the Golgi apparatus of a eukaryote is correct?",
+   "options": {
+    "A": "It is oriented in the cytoplasm so that its cis face is closest to the endoplasmic reticulum.",
+    "B": "It is typically associated with small secretory vesicles located near its cis face.",
+    "C": "Its composite flattened cisternae are continuous with one another.",
+    "D": "Glycosylation of certain secretory proteins occurs prior to the protein's entry into its lumen."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_13",
+   "subject": "college_medicine",
+   "question": "The key attribute in successful marathon running is:",
+   "options": {
+    "A": "strength.",
+    "B": "power.",
+    "C": "stride length.",
+    "D": "stamina."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_7",
+   "subject": "clinical_knowledge",
+   "question": "Which of the following is true of psoriatic arthropathy?",
+   "options": {
+    "A": "The absence of plaques of psoriasis excludes the diagnosis",
+    "B": "The diagnosis can be confirmed by a blood marker",
+    "C": "Tophi can sometimes be seen over affected joints",
+    "D": "Nail pitting may give a clue to the diagnosis"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_medical_genetics_12",
+   "subject": "medical_genetics",
+   "question": "Male breast cancer is associated with mutations in ___.",
+   "options": {
+    "A": "BRCA1",
+    "B": "BRCA2",
+    "C": "NF1",
+    "D": "RET"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_medicine_3",
+   "subject": "college_medicine",
+   "question": "How many electrons does gold (Au) possess that have a quantum number l = 2?",
+   "options": {
+    "A": "9",
+    "B": "23",
+    "C": "29",
+    "D": "79"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_anatomy_15",
+   "subject": "anatomy",
+   "question": "Which of the following foramina pierce the sphenoid bone?",
+   "options": {
+    "A": "The foramen ovale",
+    "B": "The foramen ovale and rotundum",
+    "C": "The foramen ovale, rotundum and spinosum",
+    "D": "The foramen ovale, rotundum and spinosum and foramen lacerum"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_medical_genetics_1",
+   "subject": "medical_genetics",
+   "question": "Severe anaemia at birth is a feature of what?",
+   "options": {
+    "A": "Alpha-thalassaemia",
+    "B": "Beta-thalassaemia",
+    "C": "Hereditary persistence of fetal haemoglobin",
+    "D": "Sickle cell disease"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_biology_10",
+   "subject": "college_biology",
+   "question": "Nerve outgrowth from a developing neuron begins at the growth cone, located at the tip of the axon. Microspikes of the growth cone extend and retract in order to move the growth cone forward. Exposure of the neuron to cytochasalin B at this stage of development causes",
+   "options": {
+    "A": "microtubules in the axon to undergo reversible dissociation",
+    "B": "microtubules in the axon to undergo irreversible dissociation",
+    "C": "microfilaments in the microspike to undergo reversible depolymerization",
+    "D": "microfilaments in the microspike to undergo irreversible depolymerization"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_college_medicine_8",
+   "subject": "college_medicine",
+   "question": "A patient comes into the ER looking extremely agitated. They are acting aggressive, and claiming they need medication or “bad things will happen”. What is the likely state of this patient’s dopamine system?",
+   "options": {
+    "A": "There is decreased dopamine in the synaptic cleft.",
+    "B": "There are decreased dopamine receptors on the post-synaptic membrane.",
+    "C": "There is cell death in the areas with high dopamine cells.",
+    "D": "There is seizure-like activity in the dopamine brain areas."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_7",
+   "subject": "professional_medicine",
+   "question": "A 40-year-old man with paranoid schizophrenia is transferred to the emergency department from the residential facility where he lives 2 hours after having swallowed a nail. The patient says he does not have any symptoms. Medical history is otherwise unremarkable. His only current medication is haloperidol. The patient is not in acute distress. Vital signs are normal. Physical examination shows no abnormalities. Mental status examination discloses a flat affect, distractibility, and derailment of thoughts. X-ray of the abdomen is obtained and shows a 4-cm nail in the left upper quadrant. No free air is visible. After admitting the patient to the hospital, which of the following is the most appropriate management?",
+   "options": {
+    "A": "Administration of ipecac to induce vomiting and expectoration of the nail",
+    "B": "Observation to allow passage of the nail via normal peristalsis",
+    "C": "Open laparotomy and removal of the nail through a gastrotomy incision",
+    "D": "Removal of the nail through endoscopic esophagogastroscopy"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_2",
+   "subject": "clinical_knowledge",
+   "question": "What three factors regulate stroke volume?",
+   "options": {
+    "A": "Blood volume, preload, and afterload.",
+    "B": "Preload, contractility, and afterload.",
+    "C": "Contractility, blood volume, and blood pressure.",
+    "D": "Cardiac output, contractility, and blood volume."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_15",
+   "subject": "clinical_knowledge",
+   "question": "What is the purpose of the cuff on a tracheostomy tube?",
+   "options": {
+    "A": "To create an air seal within the trachea and reduce the risk of aspirating saliva or gastric contents.",
+    "B": "To reduce local oedema.",
+    "C": "To assist with swallowing.",
+    "D": "To allow the patient to talk."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_medical_genetics_3",
+   "subject": "medical_genetics",
+   "question": "Which of the following is not a familial cancer syndrome",
+   "options": {
+    "A": "Familial adenomatous polyposis",
+    "B": "Li-Fraumeni syndrome",
+    "C": "Von Hippel-Lindau syndrome",
+    "D": "Waardenburg syndrome"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_medical_genetics_14",
+   "subject": "medical_genetics",
+   "question": "Familial hypercholesterolaemia is caused by mutations in the gene which encodes what?",
+   "options": {
+    "A": "High density lipoprotein",
+    "B": "HMG-CoA reductase",
+    "C": "Low density lipoprotein",
+    "D": "Low density lipoprotein receptor"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_14",
+   "subject": "clinical_knowledge",
+   "question": "Insensible loss does not come from:",
+   "options": {
+    "A": "pyrexia.",
+    "B": "using unhumidified oxygen.",
+    "C": "excessive weight loss.",
+    "D": "diarrhoea."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_college_medicine_4",
+   "subject": "college_medicine",
+   "question": "Rational choice theory is premised on the concept that actions are chosen based on the benefit to the individual. The three main assumptions of rational theory are completeness, transitivity, and independence of variables. This is most accurately described as what kind of system?",
+   "options": {
+    "A": "Hierarchical",
+    "B": "Patriarchal",
+    "C": "Matriarchal",
+    "D": "Oligarchic"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_biology_5",
+   "subject": "college_biology",
+   "question": "A marine ecosystem region characterized by penetrance of solar radiation and upwelling of nutrients is the",
+   "options": {
+    "A": "bathyl zone",
+    "B": "neritic zone",
+    "C": "pelagic zone",
+    "D": "benthyl zone"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_4",
+   "subject": "professional_medicine",
+   "question": "A 32-year-old male presents to the office with the complaint of pain in his right shoulder for the past two weeks. Physical examination reveals tenderness at the greater tubercle of the humerus and painful abduction of the right upper extremity. The cause of this patient's condition is most likely a somatic dysfunction of which of the following muscles?",
+   "options": {
+    "A": "anterior scalene",
+    "B": "latissimus dorsi",
+    "C": "pectoralis minor",
+    "D": "supraspinatus"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_medical_genetics_5",
+   "subject": "medical_genetics",
+   "question": "Mutations that cause achondroplasia exert an effect which can be classified as:",
+   "options": {
+    "A": "dominant negative.",
+    "B": "gain-of-function.",
+    "C": "haploinsufficiency.",
+    "D": "loss-of-function."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_9",
+   "subject": "professional_medicine",
+   "question": "A 15-year-old girl is brought to the office by her mother because of abdominal pain and constipation for the past several weeks. Her mother says, \"She is getting almost all A's in school and she is on the track team.\" You ask the patient about her diet and she responds, \"I'm kind of a picky eater.\" She requests a laxative to help with her constipation. She is 158 cm (5 ft 2 in) tall and weighs 43 kg (95 lb); BMI is 18 kg/m2 . Pulse is 65/min. Specific additional history should be obtained regarding which of the following?",
+   "options": {
+    "A": "Color, caliber, and frequency of bowel movements",
+    "B": "Exposure to sexually transmitted diseases",
+    "C": "Family history of irritable bowel syndrome",
+    "D": "Menstrual history"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_biology_15",
+   "subject": "college_biology",
+   "question": "Cancer cells grown in culture are similar to normal cells grown in culture in that they",
+   "options": {
+    "A": "divide an indefinite number of times",
+    "B": "do not display contact inhibition",
+    "C": "require a surface for attachment in order to grow",
+    "D": "proliferate to the same cell density"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_college_biology_8",
+   "subject": "college_biology",
+   "question": "A rise in intracellular free calcium in the sea urchin oocyte causes the release of proteolytic enzymes which act to prevent polyspermy. The events just described entail the",
+   "options": {
+    "A": "zona reaction",
+    "B": "acrosomal reaction",
+    "C": "cortical reaction",
+    "D": "fertilization reaction"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_6",
+   "subject": "clinical_knowledge",
+   "question": "The transcription of DNA to a molecule of messenger RNA occurs:",
+   "options": {
+    "A": "on the ribosomes.",
+    "B": "in the cytosol.",
+    "C": "in the nucleus.",
+    "D": "only during cell division."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_anatomy_12",
+   "subject": "anatomy",
+   "question": "You notice that your patient's submandibular lymph nodes are enlarged. You would look for potential infection sites in the",
+   "options": {
+    "A": "hard palate.",
+    "B": "hard palate and upper lip.",
+    "C": "hard palate, upper lip and upper central incisor.",
+    "D": "hard palate, upper lip, upper central incisor and lower first molar."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_8",
+   "subject": "anatomy",
+   "question": "Which of the following cranial nerves is related to the sense of smell?",
+   "options": {
+    "A": "Abducens",
+    "B": "Hypoglossal",
+    "C": "Olfactory",
+    "D": "Trochlear"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_professional_medicine_2",
+   "subject": "professional_medicine",
+   "question": "An 87-year-old woman is brought to the physician by her son because of progressive memory loss over the past 2 years. Her son says that she repeats herself frequently and has been forgetting to take her routine medications. She takes hydrochlorothiazide for mild systolic hypertension and levothyroxine for hypothyroidism. She had vulvar cancer 10 years ago treated with wide excision. Her blood pressure is 138/78 mm Hg. Physical examination is within normal limits for her age. Mini-Mental State Examination score is 23/30. Laboratory studies, including serum vitamin B12 (cyanocobalamin), thyroxine (T4), and thyroid-stimulating hormone concentrations, are within normal limits. A CT scan of the head shows mild volume loss. Which of the following is the most appropriate pharmacotherapy?",
+   "options": {
+    "A": "β-Adrenergic agonist",
+    "B": "Cholinesterase inhibitor",
+    "C": "Dopamine agonist",
+    "D": "Prednisone"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_14",
+   "subject": "professional_medicine",
+   "question": "A 25-year-old man is brought to the emergency department because of a 6-day history of fever, severe muscle pain, and diffuse, painful swelling of his neck, underarms, and groin area. The symptoms began after returning from a camping trip in New Mexico. He appears ill and lethargic and can barely answer questions. His temperature is 39.2°C (102.5°F), pulse is 120/min, respirations are 22/min, and blood pressure is 110/70 mm Hg. Physical examination shows generalized scattered black maculae. Examination of the right upper extremity shows an erythematous, solid, tender mass on the underside of the upper extremity just above the elbow; the mass is draining blood and necrotic material. The most effective antibiotic for this patient’s disorder will interfere with which of the following cellular processes or enzymes?",
+   "options": {
+    "A": "DNA helicase",
+    "B": "Glucuronosyltransferase",
+    "C": "Proteasomal degradation",
+    "D": "Ribosomal assembly"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_biology_7",
+   "subject": "college_biology",
+   "question": "The following pairs were placed in solution together. Which two could be separated by performing low-speed centrifugation?",
+   "options": {
+    "A": "DNA and mRNA",
+    "B": "Nuclei and secretory vesicles",
+    "C": "Golgi apparatus and endoplasmic reticulum",
+    "D": "Lysosomes and endosomes"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_medical_genetics_9",
+   "subject": "medical_genetics",
+   "question": "What would be the frequency of AABBCC individuals from a mating of two AaBbCc individuals?",
+   "options": {
+    "A": "1.0/64",
+    "B": "1.0/32",
+    "C": "1.0/128",
+    "D": "1.0/256"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_anatomy_2",
+   "subject": "anatomy",
+   "question": "The palatine processes begin to fuse at",
+   "options": {
+    "A": "six weeks post-fertilization.",
+    "B": "eight weeks post-fertilization.",
+    "C": "ten weeks post-fertilization.",
+    "D": "twelve weeks post-fertilization."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_professional_medicine_3",
+   "subject": "professional_medicine",
+   "question": "A 42-year-old man comes to the physician for a follow-up examination. Four months ago, he underwent repair of a Dupuytren contracture. Physical examination shows decreased range of motion in the affected hand. The patient is upset that his hand has not fully healed, and he files a malpractice suit against the physician. Which of the following is the most likely precipitating factor in this patient's decision to file a malpractice suit?",
+   "options": {
+    "A": "The patient's perception that the physician is incompetent",
+    "B": "The patient's perception that the physician is uncaring",
+    "C": "The patient's socioeconomic status",
+    "D": "The physician's amount of experience in the medical field"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_3",
+   "subject": "college_biology",
+   "question": "Which of the following is a biological attribute that would most likely allow a species to become cosmopolitan in distribution?",
+   "options": {
+    "A": "Extreme habitat specialization",
+    "B": "K-selected reproductive rate",
+    "C": "Limited dispersal abilities",
+    "D": "Capacity for long-distance dispersal"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_3",
+   "subject": "clinical_knowledge",
+   "question": "An action potential arriving at the motor endplate causes release of:",
+   "options": {
+    "A": "acetylcholine which traverses the neuromuscular junction.",
+    "B": "sodium ions which binds to sodium receptors on the muscle membrane.",
+    "C": "calcium ions which initiate an action potential along the muscle fibre.",
+    "D": "noradrenaline which increases muscle metabolic activity."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_biology_2",
+   "subject": "college_biology",
+   "question": "Which of the following active pools of carbon is the largest on Earth and contributes the most to carbon cycling?",
+   "options": {
+    "A": "The atmosphere",
+    "B": "Rain-forest vegetation",
+    "C": "Recoverable fossil fuels",
+    "D": "The oceans"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_11",
+   "subject": "clinical_knowledge",
+   "question": "Women's world record performances have improved rapidly in recent years mainly because:",
+   "options": {
+    "A": "women have evolved a greater muscle mass.",
+    "B": "women can now run faster than men.",
+    "C": "women have started training at an earlier age.",
+    "D": "more women are now engaged in sport."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_13",
+   "subject": "anatomy",
+   "question": "During an inferior alveolar nerve block the needle ideally passes",
+   "options": {
+    "A": "posterior and medial to medial pterygoid.",
+    "B": "anterior and lateral to medial pterygoid.",
+    "C": "through medial pterygoid.",
+    "D": "inferior to medial pterygoid."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_1",
+   "subject": "college_biology",
+   "question": "Which of the following would increase the rate at which a gas diffuses between the alveoli of the lung and the blood within a pulmonary capillary?",
+   "options": {
+    "A": "Decreasing the partial pressure gradient of the gas",
+    "B": "Decreasing the solubility of the gas in water",
+    "C": "Increasing the total surface area available for diffusion",
+    "D": "Decreasing the rate of blood flow through the pulmonary capillary"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_professional_medicine_0",
+   "subject": "professional_medicine",
+   "question": "A 32-year-old man is brought to the emergency department 30 minutes after being struck by a car while driving his motorcycle. He reports severe pelvic pain. On examination, there is bruising of the perineum and pain is elicited with motion of his pelvis. Blood is noted at the urethral meatus. There is no other penile trauma. A plain x-ray shows a fracture of the superior pubic ramus and retrograde urethrography is done to evaluate for a urethral disruption. Which of the following portions of the urethra would be at greatest risk for injury in this patient?",
+   "options": {
+    "A": "Intramural (pre-prostatic)",
+    "B": "Membranous",
+    "C": "Prostatic",
+    "D": "Spongy"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_medicine_10",
+   "subject": "college_medicine",
+   "question": "The electron transport chain, which is embedded in the mitochondrial membrane, exists primarily to generate new molecules of ATP for use by the cell. This is accomplished by a positive gradient of H+ ions that are formed outside the membrane which then pass back through a specialized channel known as ATP synthase. The energy created from this phosphorylates an ATP to an ATP, known as oxidative phosphorylation. The mechanism by which H+ returns to the inside of the mitochondria is known as what?",
+   "options": {
+    "A": "Passive transport",
+    "B": "Passive diffusion",
+    "C": "Active transport",
+    "D": "Endocytosis"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_biology_14",
+   "subject": "college_biology",
+   "question": "An embryologist studying the development of a vertebrate organism from the zygote stage to fetus would be justified in drawing which of the following conclusions?",
+   "options": {
+    "A": "Ontogeny recapitulates phylogeny.",
+    "B": "Early embryos display identical features of their class, order, and species.",
+    "C": "An early human embryo has features in common with early fish and avian embryos.",
+    "D": "A human embryo displays features of adult fish and birds in the course of its development."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_14",
+   "subject": "college_medicine",
+   "question": "Muscle lactate production increases when:",
+   "options": {
+    "A": "oxygen is readily available.",
+    "B": "pyruvate cannot be formed from glucose breakdown.",
+    "C": "the pH of the muscle falls.",
+    "D": "glycolysis is activated at the onset of exercise."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_1",
+   "subject": "clinical_knowledge",
+   "question": "Which of these options is not recognized as a cause of chronic cough?",
+   "options": {
+    "A": "Gastro-oesophageal reflux disease",
+    "B": "Angiotensin Converting Enzyme (ACE) inhibitors",
+    "C": "Long-term smoking",
+    "D": "Sodium valproate"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_medicine_2",
+   "subject": "college_medicine",
+   "question": "Most of the free fatty acids are transported in the blood:",
+   "options": {
+    "A": "inside the red blood cells.",
+    "B": "as lipoproteins.",
+    "C": "combined with glucose.",
+    "D": "bound to albumin."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_5",
+   "subject": "anatomy",
+   "question": "Which of the following is the point at which an impulse is transmitted from one neuron to another neuron?",
+   "options": {
+    "A": "Dendrite",
+    "B": "Glial cell",
+    "C": "Nerve center",
+    "D": "Synapse"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_9",
+   "subject": "clinical_knowledge",
+   "question": "When you are taking a musculoskeletal history which of the following is true?",
+   "options": {
+    "A": "Drugs may be implicated in the causation of gout",
+    "B": "A history of diarrhoea is not relevant",
+    "C": "Difficulty rising from a chair is diagnostic of polymyalgic rheumatica",
+    "D": "Joint stiffness of 5 minutes duration suggests an arthropathy"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_15",
+   "subject": "college_medicine",
+   "question": "Myoclonic epilepsy and ragged-red fiber (MERRF) is an extremely rare disorder that affects neuromuscular systems. MERRF results from a mutation in mitochondrial DNA (mtDNA) that impairs protein synthesis, oxygen consumption, and energy production. When an affected male and a normal female reproduce, which of the following best predicts the expected phenotypic ratios of the offspring?",
+   "options": {
+    "A": "None of the offspring will be affected",
+    "B": "All males and no females will be affected",
+    "C": "Half of males and half of females will be affected",
+    "D": "One-fourth of the offspring will be affected"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_16",
+   "subject": "college_medicine",
+   "question": "Selective Androgen Receptor Modulators (SARMs) are:",
+   "options": {
+    "A": "steroid drugs that act on androgen receptors mimicking the effects of natural steroid hormones.",
+    "B": "steroid drugs that act on androgen receptors antagonising the effects of natural steroid hormones.",
+    "C": "non-steroid drugs that act on androgen receptors mimicking the effects of natural steroid hormones.",
+    "D": "non-steroid drugs that act on androgen receptors inhibiting the effects of natural steroid hormones."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_anatomy_10",
+   "subject": "anatomy",
+   "question": "Patients with which of the following diseases are treated with injections of vitamin B-12?",
+   "options": {
+    "A": "Bell's palsy",
+    "B": "Crohn's disease",
+    "C": "Pernicious anemia",
+    "D": "Graves' disease"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_medical_genetics_16",
+   "subject": "medical_genetics",
+   "question": "Which of the following karyotypes is not compatible with survival to birth?",
+   "options": {
+    "A": "47,XY,+13",
+    "B": "47,XX,+18",
+    "C": "47,XY,+21",
+    "D": "45,Y"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_medical_genetics_4",
+   "subject": "medical_genetics",
+   "question": "Assuming Hardy-Weinberg equilibrium, the genoypte frequency of heterozygotes, if the frequency of the two alleles at the gene being studied are 0.6 and 0.4, will be:",
+   "options": {
+    "A": "0.8",
+    "B": "0.64",
+    "C": "0.48",
+    "D": "0.32"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_medical_genetics_2",
+   "subject": "medical_genetics",
+   "question": "Leber's hereditary optic atrophy is caused by a mutation in:",
+   "options": {
+    "A": "chromosome 12.",
+    "B": "chromosome 18.",
+    "C": "chromosome 21.",
+    "D": "mitochondrial DNA."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_medicine_12",
+   "subject": "college_medicine",
+   "question": "Codons are composed of:",
+   "options": {
+    "A": "triplet sequences of nucleotide bases in mRNA or DNA .",
+    "B": "quadruplet sequences of nucleotide bases in mRNA or DNA.",
+    "C": "triplet sequences of amino acids in polypeptide chains.",
+    "D": "triplet sequences of deoxyribose sugars in DNA."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_professional_medicine_13",
+   "subject": "professional_medicine",
+   "question": "A 45-year-old woman with systemic sclerosis (scleroderma) comes to the physician because of a 3-week history of progressive shortness of breath and nonproductive cough. Her temperature is 36.9°C (98.4°F), pulse is 82/min, respirations are 20/min, and blood pressure is 136/85 mm Hg. Crackles are heard in both lower lung fields. Pulmonary function tests show total lung capacity is 80% of predicted, and diffusing capacity for carbon monoxide, corrected for alveolar volume, is 65% of predicted. Histologic examination of a lung biopsy specimen is most likely to show which of the following findings?",
+   "options": {
+    "A": "Diffuse interstitial fibrosis",
+    "B": "Intra-alveolar exudates",
+    "C": "Multiple thromboemboli",
+    "D": "Necrotizing vasculitis"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_8",
+   "subject": "clinical_knowledge",
+   "question": "A patient has been on the operating table for four hours. How long may it take for any pressure damage to be visible?",
+   "options": {
+    "A": "12 hours.",
+    "B": "72 hours.",
+    "C": "24 hours.",
+    "D": "5 days."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_12",
+   "subject": "clinical_knowledge",
+   "question": "The genome is:",
+   "options": {
+    "A": "the number of chromosomes found in the somatic cells of an organism.",
+    "B": "the entire DNA sequence of an organism.",
+    "C": "the entire list of proteins that an organism is capable of producing.",
+    "D": "the DNA sequence of an entire chromosome."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_medical_genetics_15",
+   "subject": "medical_genetics",
+   "question": "Which of the following conditions is a peroxisomal disorder?",
+   "options": {
+    "A": "Acute intermittent porphyria",
+    "B": "Maple syrup urine disease",
+    "C": "Medium chain acyl-CoA dehydrogenase deficiency",
+    "D": "Zellweger syndrome"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_medical_genetics_10",
+   "subject": "medical_genetics",
+   "question": "In meiosis, recombination occurs in:",
+   "options": {
+    "A": "Metaphase I.",
+    "B": "Prophase I.",
+    "C": "Metaphase II.",
+    "D": "Prophase II."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_8",
+   "subject": "professional_medicine",
+   "question": "A 22-year-old woman contacts a medical student and asks if he would like to join her for dinner. The student met the woman when he was assigned to her care during her 2-week hospitalization for treatment of major depressive disorder. He has not treated or seen the patient since she was discharged from the hospital. He is attracted to this former patient and would be interested in dating her. Which of the following is the most appropriate action by the medical student regarding this patient's invitation?",
+   "options": {
+    "A": "He can date her because he was a medical student, not a physician, when he contributed to her care",
+    "B": "He can date her because she is no longer his patient",
+    "C": "He can date her, but only after at least 1 year has passed since he treated her",
+    "D": "He cannot date her because she was once his psychiatric patient"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_professional_medicine_5",
+   "subject": "professional_medicine",
+   "question": "A 2-year-old boy is brought to the physician for a well-child examination. He was delivered at term after an uncomplicated pregnancy. His birth weight was 3500 g (7 lb 11 oz), and Apgar scores were 8 and 10 at 1 and 5 minutes, respectively. At the age of 15 months, physical examination showed no abnormalities, but he was not yet talking. Both of his parents had learning difficulties in school, and his mother stopped attending after the 10th grade. He has a maternal uncle with cognitive disabilities. He is at the 25th percentile for height, 15th percentile for weight, and 90th percentile for head circumference. He appears irritable, he resists making eye contact, and he is flapping his hands. Which of the following is the most likely cause of this patient's condition?",
+   "options": {
+    "A": "Frameshift mutation",
+    "B": "Missense mutation",
+    "C": "Nonsense mutation",
+    "D": "Trinucleotide repeat expansion"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_9",
+   "subject": "anatomy",
+   "question": "The coronal suture joins the",
+   "options": {
+    "A": "frontal and parietal bones.",
+    "B": "left and right parietal bones.",
+    "C": "parietal and occipital bones.",
+    "D": "parietal, squamous temporal and greater wing of the sphenoid."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_professional_medicine_10",
+   "subject": "professional_medicine",
+   "question": "A study is conducted to assess the effectiveness of a new drug for the treatment of type 2 diabetes mellitus. A total of 1000 patients with type 2 diabetes mellitus are enrolled. Patients are randomly assigned to receive the new drug or standard treatment. The alpha and beta values for calculating probability are 0.05 and 0.20, respectively. Results show that the new drug is significantly better than standard treatment. If this study had been performed in a population of only 500 patients, which of the following would have been most likely to increase?",
+   "options": {
+    "A": "Chance of a type I error",
+    "B": "Chance of a type II error",
+    "C": "Power of the study",
+    "D": "Sensitivity of the study"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_medical_genetics_13",
+   "subject": "medical_genetics",
+   "question": "A homeotic mutation is one which",
+   "options": {
+    "A": "is present in only one form in an individual",
+    "B": "substitutes one body part for another in development",
+    "C": "results in development of a tumor",
+    "D": "is wild type at one temperature and abnormal at another"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_12",
+   "subject": "college_biology",
+   "question": "Which of the following plant cells undergoes programmed cell death to become functional?",
+   "options": {
+    "A": "Phloem sieve tube member",
+    "B": "Xylem vessel member",
+    "C": "Stomatal guard cell",
+    "D": "Root cap cell"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_11",
+   "subject": "college_biology",
+   "question": "The concept of punctuated equilibrium refers to",
+   "options": {
+    "A": "oscillating ecological successional stages",
+    "B": "ecological succession arrested by sudden environmental changes, e.g., fire",
+    "C": "persistent predator-prey relationships in relatively stable environments",
+    "D": "bursts of speciation followed by relatively unchanging lineages"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_medicine_9",
+   "subject": "college_medicine",
+   "question": "The coding sequences of genes are called:",
+   "options": {
+    "A": "extrons.",
+    "B": "exons.",
+    "C": "introns.",
+    "D": "codons."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_16",
+   "subject": "professional_medicine",
+   "question": "A 24-year-old recent college graduate comes to the office because of a 3-year history of increased frequency of urination and occasional incontinence whenever she travels. She says the urinary symptoms typically begin a few days before she is going to fly and they stop the day after she arrives at her destination. She says she is anxious about flying and even slightly \"panicky.\" She reports having had similar but milder symptoms prior to examinations before graduating. Medical history is otherwise unremarkable. Her only medication is an oral contraceptive. Vital signs are normal. Physical examination discloses no abnormalities. Urinalysis and urine culture are normal. Which of the following is the most appropriate next step?",
+   "options": {
+    "A": "Recommend behavioral therapy",
+    "B": "Recommend psychoanalytic psychotherapy",
+    "C": "Recommend that the patient avoid any stressful activities that cause the problem",
+    "D": "Review the patient's sexual history"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_professional_medicine_6",
+   "subject": "professional_medicine",
+   "question": "A 25-year-old man is brought to the emergency department after being discovered semiconscious and incoherent at home. On arrival, he is stuporous. His blood pressure is 105/70 mm Hg, pulse is 80/min, and respirations are 12/min. Examination shows cool, damp skin. The pupils are pinpoint and react sluggishly to light. Which of the following is the most likely substance taken?",
+   "options": {
+    "A": "Alcohol",
+    "B": "Barbiturates",
+    "C": "Cocaine",
+    "D": "Heroin"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_medicine_5",
+   "subject": "college_medicine",
+   "question": "During muscular contraction, interactions between myosin and actin allow for shortening of each sarcomere. In addition to the power stroke, what other process of muscle contraction requires ATP?",
+   "options": {
+    "A": "Tropomyosin-troponin interaction",
+    "B": "Myosin-actin interaction",
+    "C": "Calcium-troponin interaction",
+    "D": "Myosin-actin detachment"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_4",
+   "subject": "clinical_knowledge",
+   "question": "What is the minimum time a stretch should be held for?",
+   "options": {
+    "A": "0-10 seconds.",
+    "B": "10-30 seconds.",
+    "C": "30-50 seconds.",
+    "D": "60 seconds."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_13",
+   "subject": "college_biology",
+   "question": "In the growth of a population, the point at which natality and mortality rates are equal to one another is referred to as",
+   "options": {
+    "A": "a population crash",
+    "B": "a population explosion",
+    "C": "zero population growth",
+    "D": "exponential growth"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_college_medicine_0",
+   "subject": "college_medicine",
+   "question": "The energy charge of the cell is:",
+   "options": {
+    "A": "the difference between the charge on the outside and inside of a cell.",
+    "B": "generated by the sodium-potassium ATPase.",
+    "C": "the overall rate of energy use by the cell.",
+    "D": "the extent to which the total adenine nucleotide pool is phosphorylated."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_10",
+   "subject": "clinical_knowledge",
+   "question": "Metabolism is determined by the:",
+   "options": {
+    "A": "size of proteins in the cell.",
+    "B": "availability of amino acids.",
+    "C": "proteins formed as dictated by the genetic material.",
+    "D": "amino acid composition of the ribonucleic acids."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_anatomy_14",
+   "subject": "anatomy",
+   "question": "The muscles of the soft palate are innervated by branches of the",
+   "options": {
+    "A": "trigeminal and glossopharyngeal nerves.",
+    "B": "facial and glossopharyngeal nerves.",
+    "C": "trigeminal and vagus nerves.",
+    "D": "facial and vagus nerves."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_anatomy_3",
+   "subject": "anatomy",
+   "question": "When an emergency opening into the airway is required, the cricothyroid membrane should be pierced immediately",
+   "options": {
+    "A": "superior to the thyroid cartilage.",
+    "B": "inferior to the thyroid cartilage.",
+    "C": "inferior to the cricoid cartilage.",
+    "D": "superior to the thyroid isthmus."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_biology_16",
+   "subject": "college_biology",
+   "question": "The polytene chromosomes seen in Drosophila silvarentis with the aid of a light microscope are",
+   "options": {
+    "A": "not actively carrying out transcription",
+    "B": "produced only during mitosis",
+    "C": "produced by repeated rounds of DNA replication followed by nuclear division",
+    "D": "multiple copies of a single chromosome"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_1",
+   "subject": "anatomy",
+   "question": "Which of the following structures accompany the oesophagus through the diaphragm?",
+   "options": {
+    "A": "The phrenic nerves",
+    "B": "The splanchnic nerves",
+    "C": "The sympathetic trunks",
+    "D": "The vagus nerves"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_college_biology_0",
+   "subject": "college_biology",
+   "question": "Which of the following statements is true of air as compared to water?",
+   "options": {
+    "A": "Air provides more physical support.",
+    "B": "Air has a higher O2 concentration.",
+    "C": "Air offers more resistance to motion.",
+    "D": "Air has more thermal inertia."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_college_medicine_1",
+   "subject": "college_medicine",
+   "question": "Glycolysis is the name given to the pathway involving the conversion of:",
+   "options": {
+    "A": "glycogen to glucose-1-phosphate.",
+    "B": "glycogen or glucose to fructose.",
+    "C": "glycogen or glucose to pyruvate or lactate.",
+    "D": "glycogen or glucose to pyruvate or acetyl CoA."
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_medical_genetics_0",
+   "subject": "medical_genetics",
+   "question": "The most common chromosome abnormality in first trimester spontaneous miscarriages is:",
+   "options": {
+    "A": "trisomy.",
+    "B": "monosomy.",
+    "C": "triploidy.",
+    "D": "tetrasomy."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_college_medicine_7",
+   "subject": "college_medicine",
+   "question": "Oxygen is used:",
+   "options": {
+    "A": "in glycolysis.",
+    "B": "in the conversion of fatty acids to acetyl CoA.",
+    "C": "in the tricarboxylic acid cycle (Krebs' cycle).",
+    "D": "in glycogenolysis."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlu_professional_medicine_11",
+   "subject": "professional_medicine",
+   "question": "A 45-year-old female presents to the office for evaluation of unexplained elevations of her blood pressure. Paroxysmal episodes of headache, sweating, anxiety, nausea, and vomiting occur frequently. A CT scan reveals a left adrenal mass. Which of the following urinary assays will be most helpful in establishing this patient's diagnosis?",
+   "options": {
+    "A": "cortisol",
+    "B": "glucose",
+    "C": "sodium",
+    "D": "vanillylmandelic acid"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_0",
+   "subject": "anatomy",
+   "question": "Where are the vital centres located in the brainstem?",
+   "options": {
+    "A": "midbrain",
+    "B": "pons",
+    "C": "medulla oblongata",
+    "D": "cerebellum"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_13",
+   "subject": "clinical_knowledge",
+   "question": "The β-oxidation of a molecule of palmitic acid, CH3(CH2)14CO2H:",
+   "options": {
+    "A": "yields 8 molecules of acetyl-CoA and some ATP and water.",
+    "B": "yields 16 molecules of acetyl-CoA only.",
+    "C": "yields carbon dioxide and water only.",
+    "D": "does not involve oxygen."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlu_clinical_knowledge_0",
+   "subject": "clinical_knowledge",
+   "question": "Which of the following statements is false?",
+   "options": {
+    "A": "Phosphofructokinase is the rate limiting enzyme in glycolysis.",
+    "B": "Phosphorylase activity is higher in Type II fibres than in Type I fibres.",
+    "C": "Endurance training increases the amount of TCA cycle enzymes in muscle.",
+    "D": "Oxygen is consumed in the TCA cycle."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlu_anatomy_11",
+   "subject": "anatomy",
+   "question": "Which orbital wall is most likely to collapse in a 'blow out' fracture?",
+   "options": {
+    "A": "The roof",
+    "B": "The floor",
+    "C": "The lateral wall",
+    "D": "The medial wall"
+   },
+   "answer": "B"
+  }
+ ]
+}

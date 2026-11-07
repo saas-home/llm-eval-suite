@@ -12,10 +12,26 @@ import json
 import re
 import time
 import hashlib
+from typing import Any, Dict
 
-from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, DEFAULT_RESULTS_DIR
+from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, DEFAULT_RESULTS_DIR, INFRA_FAILURE_KINDS
+import usecases
 
-TOTAL_TESTS = 31
+
+# Opt-in qualification suites (Tests 32-45 plus related core tests).
+QUALIFICATION_SUITES = {
+    "coding": {4, 14, 17, 20, 21, 22, 23, 24, 25, 32},
+    "medical": {33, 34, 35, 36},
+    "academic": {37, 38, 39},
+    "writing": {40, 41},
+    "personal": {42, 43, 44},
+    "legal": {45, 47},
+}
+QUALIFICATION_SUITES["writing"] |= {48}
+QUALIFICATION_SUITES["extended"] = set(range(32, 46)) | {47, 48}
+QUALIFICATION_SUITES["qualification"] = set().union(*QUALIFICATION_SUITES.values())
+# The deployment's own workload (Test 46): 200K-token documents, 4 users.
+QUALIFICATION_SUITES["workload"] = {46}
 
 # ============================================================================
 # STANDARDIZED TEST CATALOG & METRIC EXTRACTORS
@@ -27,12 +43,13 @@ PILLARS = {
     "context": "Long Context & Attention Scaling",
     "swe": "Software Engineering & Autonomous Coding",
     "reasoning": "Cognitive Reasoning & Safety Defense",
+    "qualification": "Qualification Benchmarks (official samples, CI-reported)",
 }
 
 TEST_CATALOG = [
     (1, "streaming", "Streaming & Latency"),
     (2, "vision", "Multimodal Vision (Invoice)"),
-    (3, "concurrency", "Parallel Batching & Saturation"),
+    (3, "concurrency", "Serving Capacity (Verified Parallel)"),
     (4, "capabilities_4tasks", "4-Task Architecture Suite"),
     (5, "tool_calling", "Tool Calling & Agentic Recovery"),
     (6, "json_schema", "JSON Schema Mode (response_format)"),
@@ -41,14 +58,10 @@ TEST_CATALOG = [
     (9, "stop_sequences", "Stop Words & Greedy Sampling"),
     (10, "extreme_precision", "Precision Ledger Reconcile"),
     (11, "error_handling", "API Error & Boundary Protocol"),
-    (12, "context_scaling", "Dynamic Context Scaling"),
+    (12, "context_scaling", "Full Context Scaling & Recall"),
     (13, "multihop_graph", "Adversarial Graph & Distractors"),
     (14, "novel_algorithm_fuzz", "Novel Algorithm (5k Fuzz)"),
-    (15, "frontier_needle_depth", "Frontier Depth Multi-Needle"),
-    (16, "cruxeval", "CruxEval (Mental Code Exec)"),
     (17, "swe_bench_bug_patch", "SWE-bench (Traceback Fix)"),
-    (18, "aime_olympiad", "AIME Olympiad (Math Reasoning)"),
-    (19, "gpqa_diamond", "GPQA Diamond (Graduate Science)"),
     (20, "surgical_git_diff", "Surgical Unified Diff (git apply)"),
     (21, "multifile_context", "Multi-File Cross-Reference & DI"),
     (22, "code_review_security", "Security Review & OWASP Audit"),
@@ -56,12 +69,44 @@ TEST_CATALOG = [
     (24, "strict_typing", "Strict Type Compliance (mypy)"),
     (25, "refactor_invariants", "Safe Refactor Invariant Check"),
     (26, "prompt_injection_defense", "Prompt Injection & Delimiter Defense"),
-    (27, "ifeval_writing", "Google IFEval Verifiable Writing"),
-    (28, "medical_research", "Medical Research (MedQA & PubMedQA)"),
-    (29, "gsm8k_math", "Multi-Step Math (OpenAI GSM8K)"),
-    (30, "history_humanities", "Historical Causality (MMLU History)"),
     (31, "multi_adapter", "Multi-Adapter Routing & Isolation"),
+    (32, "multipl_e", "MultiPL-E Code Gen (6 languages)"),
+    (33, "medqa_usmle", "MedQA USMLE (official)"),
+    (34, "medmcqa", "MedMCQA (official)"),
+    (35, "pubmedqa_full", "PubMedQA labeled (official)"),
+    (36, "mmlu_medical", "MMLU Medical Subjects"),
+    (37, "mmlu_pro", "MMLU-Pro (10 options)"),
+    (38, "math500", "MATH-500"),
+    (39, "bbh", "BIG-Bench Hard"),
+    (40, "ifeval_full", "IFEval Full (strict)"),
+    (41, "writing_tasks", "Writing Tasks (email/text/social)"),
+    (42, "simpleqa", "SimpleQA Factual Accuracy"),
+    (43, "xstest", "XSTest Over-Refusal"),
+    (44, "personal_tasks", "Personal Assistant Tasks"),
+    (45, "legalbench", "LegalBench (CC-BY tasks)"),
+    (46, "workload", "Workload: Users x Long Documents"),
+    (47, "contract_review", "Contract Review (CUAD)"),
+    (48, "summarisation", "Summarisation (BillSum)"),
 ]
+
+QUALIFICATION_KEYS = {key for num, key, _ in TEST_CATALOG if num >= 32 and key != "workload"}
+ALL_TESTS = frozenset(num for num, _key, _name in TEST_CATALOG)
+
+# Tests removed on 2026-11-07 (superseded by larger tests, or too few
+# questions to score). They are never run; they stay listed only so reports
+# that contain them still score, print and compare as before.
+LEGACY_TESTS = [
+    (15, "frontier_needle_depth", "Frontier Depth Multi-Needle (removed)"),
+    (16, "cruxeval", "CruxEval (Mental Code Exec) (removed)"),
+    (18, "aime_olympiad", "AIME Olympiad (Math Reasoning) (removed)"),
+    (19, "gpqa_diamond", "GPQA Diamond (Graduate Science) (removed)"),
+    (27, "ifeval_writing", "Google IFEval Verifiable Writing (removed)"),
+    (28, "medical_research", "Medical Research (MedQA & PubMedQA) (removed)"),
+    (29, "gsm8k_math", "Multi-Step Math (OpenAI GSM8K) (removed)"),
+    (30, "history_humanities", "Historical Causality (MMLU History) (removed)"),
+]
+# Every test a report may contain, current and removed, in number order.
+REPORTABLE_CATALOG = sorted(TEST_CATALOG + LEGACY_TESTS)
 
 TEST_KEY_TO_PILLAR = {
     "streaming": "serving",
@@ -71,6 +116,7 @@ TEST_KEY_TO_PILLAR = {
     "client_abort": "serving",
     "error_handling": "serving",
     "multi_adapter": "serving",
+    "workload": "serving",
     "tool_calling": "contract",
     "json_schema": "contract",
     "stop_sequences": "contract",
@@ -95,6 +141,10 @@ TEST_KEY_TO_PILLAR = {
     "medical_research": "reasoning",
     "gsm8k_math": "reasoning",
     "history_humanities": "reasoning",
+    **{k: "qualification" for k in ("multipl_e", "medqa_usmle", "medmcqa", "pubmedqa_full", "mmlu_medical",
+                                    "mmlu_pro", "math500", "bbh", "ifeval_full", "writing_tasks", "simpleqa",
+                                    "xstest", "personal_tasks", "legalbench", "contract_review",
+                                    "summarisation")},
 }
 
 
@@ -145,7 +195,9 @@ def _classify_infra(data):
             return False
         return all(_classify_infra(d) for d in sub)
     if isinstance(data, dict):
-        if data.get("failure_kind") in ("infra", "rate_limit"):
+        # A suite crash ("harness") is not a model result either: like an infra
+        # failure it counts against completion, not effectiveness.
+        if data.get("failure_kind") in INFRA_FAILURE_KINDS or data.get("failure_kind") == "harness":
             return True
         if "error" in data and _looks_like_infra_error(data.get("error")):
             return True
@@ -169,6 +221,8 @@ def build_config_fingerprint(report):
         "parallel_streams": report.get("parallel_streams"),
         "context_milestones": report.get("context_milestones"),
         "suite": report.get("suite"),
+        # Judged (writing / personal-use) scores depend on the judge model.
+        "judge": report.get("judge"),
     }
     blob = json.dumps(comparable, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:12]
@@ -195,6 +249,18 @@ def star_rating(eff_pct, completion_pct):
     return stars
 
 
+def _clamp_score(score) -> float:
+    """A test score as a fraction in [0, 1] (guards malformed report data)."""
+    try:
+        return min(1.0, max(0.0, float(score)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# Summary label for a code test that was only syntax-checked (--no-execute).
+_SYNTAX_ONLY = "Syntax Check Only"
+
+
 def extract_test_metrics(test_key: str, data):
     """Extracts standardized metrics (status, tokens, tok_s, ttft_ms, score, desc) from any test result."""
     if not data or not isinstance(data, (dict, list)):
@@ -215,14 +281,47 @@ def extract_test_metrics(test_key: str, data):
         desc = f"{passed}/{len(data)} Milestones OK"
         return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
 
+    if test_key == "context_scaling" and isinstance(data, dict) and "steps" in data:
+        st = data.get("status", "FAIL")
+        done = [s for s in data["steps"] if s.get("status") == "PASS"]
+        decode = [s["decode_tok_s"] for s in done if s.get("decode_tok_s")]
+        # TTFT of the smallest step: the long steps are mostly prefill of a
+        # huge prompt and would swamp the headline mean TTFT (a 125k-token
+        # step takes ~40 s against ~100 ms elsewhere). Every step's TTFT is
+        # in the Test 12 table.
+        smallest = done[0] if done else {}
+        if st == "PASS":
+            desc = f"Recall OK to {data.get('final_step_tokens', 0):,} tok"
+        else:
+            failed: dict = next((s for s in data["steps"] if s.get("status") == "FAIL"), {})
+            desc = f"Failed at {failed.get('target_tokens', 0):,}: {failed.get('error_kind') or failed.get('outcome', '?')}"
+        return {"status": st, "tokens": data.get("completion_tokens", 0),
+                "tok_s": round(sum(decode) / len(decode), 2) if decode else 0.0,
+                "ttft_ms": round(smallest.get("ttft_s", 0.0) * 1000, 1),
+                "score": 1.0 if st == "PASS" else (0.5 if st == "PARTIAL" else 0.0), "desc": desc}
+
     if test_key == "concurrency":
         if not isinstance(data, dict):
             return {"status": "FAIL", "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": str(data)}
+        if "verified_max_parallel" in data:  # capacity measurement (current format)
+            st = data.get("status", "FAIL")
+            score = 1.0 if st == "PASS" else (0.5 if st == "PARTIAL" else 0.0)
+            # TTFT of a single request on the idle server; levels with waiting
+            # requests would inflate it.
+            single: dict = next((l for l in data.get("levels", []) if l.get("clients") == 1), {})
+            plus = "+" if data.get("verified_is_lower_bound") else ""
+            desc = (f"{data['verified_max_parallel']}{plus} parallel | "
+                    f"{data.get('peak_aggregate_decode_tok_s', 0):.0f} tok/s agg")
+            return {"status": st, "tokens": data.get("completion_tokens", 0),
+                    "tok_s": round(data.get("peak_aggregate_decode_tok_s", 0.0), 2),
+                    "ttft_ms": single.get("mean_ttft_ms", 0.0), "score": score, "desc": desc}
+        # Reports written before the capacity measurement: per-level dicts.
         levels = [l for l in data.values() if isinstance(l, dict) and "aggregate_tok_s" in l]
         if not levels:
             st = data.get("status", "FAIL")
             err = data.get("error", "-")
-            return {"status": st, "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": 0.0, "desc": err}
+            score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
+            return {"status": st, "tokens": 0, "tok_s": 0.0, "ttft_ms": 0.0, "score": score, "desc": err}
         all_passed = all("PASS" in str(l.get("status", "")) for l in levels)
         st = "PASS" if all_passed else "FAIL"
         tot_tokens = sum(l.get("total_tokens", 0) for l in levels)
@@ -242,8 +341,15 @@ def extract_test_metrics(test_key: str, data):
         ttfts = [t.get("ttft_ms", 0) for t in tasks if t.get("ttft_ms")]
         avg_ttft = sum(ttfts) / len(ttfts) if ttfts else 0.0
         st = data.get("status", "PASS" if tasks else "FAIL")
-        score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
-        desc = f"{len(tasks)}/4 Tasks OK" if tasks else data.get("error", "Failed")
+        task_st = [str(t.get("status", "")) for t in tasks]
+        n_pass = sum(1 for t in task_st if "PASS" in t)
+        n_partial = sum(1 for t in task_st if "PARTIAL" in t)
+        if tasks:
+            score = (n_pass + 0.5 * n_partial) / len(tasks)
+            desc = f"{n_pass}/{len(tasks)} Tasks OK"
+        else:
+            score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
+            desc = data.get("error", "Failed")
         return {"status": st, "tokens": tot_tokens, "tok_s": round(avg_speed, 2), "ttft_ms": round(avg_ttft, 1), "score": score, "desc": desc}
 
     st = data.get("status", "N/A")
@@ -251,12 +357,18 @@ def extract_test_metrics(test_key: str, data):
     tok_s = data.get("tok_s", 0.0) or data.get("decode_speed", 0.0)
     ttft_ms = data.get("ttft_ms", 0.0) or ((data.get("ttft") or 0.0) * 1000.0)
     score = 1.0 if "PASS" in st else (0.5 if "PARTIAL" in st else 0.0)
+    if ("retries" in data or "language_retries" in data) and isinstance(data.get("score"), (int, float)):
+        score = float(data["score"])  # coding tests with self-correction: 1.0 / 0.9 / 0.8 by retries
 
     desc = "-"
     if test_key == "streaming":
         desc = f"TTFT: {ttft_ms:.1f}ms"
     elif test_key == "vision":
-        desc = f"TTFT: {ttft_ms:.1f}ms" if ttft_ms > 0 else "Invoice Parsed"
+        if data.get("fields_total"):
+            desc = f"{data.get('fields_correct', 0)}/{data['fields_total']} Invoice Fields"
+            score = data["fields_correct"] / float(data["fields_total"]) if "PASS" in st or "PARTIAL" in st else 0.0
+        else:
+            desc = f"TTFT: {ttft_ms:.1f}ms" if ttft_ms > 0 else "Invoice Parsed"
     elif test_key == "prefix_caching":
         ratio = data.get("speedup_ratio", 1.0)
         desc = f"{ratio:.1f}x Cache Speedup"
@@ -277,7 +389,8 @@ def extract_test_metrics(test_key: str, data):
         else:
             desc = "State Traversed OK" if st == "PASS" else "State Diverged"
     elif test_key == "swe_bench_bug_patch":
-        desc = "Regression Tests OK" if st == "PASS" else "Unit Tests Failed"
+        desc = "Regression Tests OK" if st == "PASS" else (
+            _SYNTAX_ONLY if data.get("execution_disabled") and st == "PARTIAL" else "Unit Tests Failed")
     elif test_key == "aime_olympiad":
         if "score" in data:
             desc = f"Score: {data['score']}"
@@ -285,10 +398,23 @@ def extract_test_metrics(test_key: str, data):
         else:
             desc = "Exact Modular Root" if st == "PASS" else "Arithmetic Missed"
     elif test_key == "gpqa_diamond":
-        score_val = data.get("score") or f"{data.get('passed_count', 0)}/3"
+        score_val = data.get("score") or f"{data.get('passed_count', 0)}/{data.get('total_questions', 0)}"
         desc = f"Score: {score_val}"
+        if "accuracy_pct" in data:
+            score = data["accuracy_pct"] / 100.0
+    elif test_key == "multihop_graph":
+        if st == "PASS":
+            desc = "Active Route & Code OK"
+        elif data.get("distractor_code_used"):
+            desc = "Chose Distractor Spec"
+        else:
+            desc = "Route/Code Missed"
+    elif test_key == "frontier_needle_depth":
+        found = sum(1 for k in ("alpha_found", "beta_found", "gamma_found") if data.get(k))
+        desc = "3/3 Needles + Checksum" if st == "PASS" else f"{found}/3 Needles, Checksum {'OK' if data.get('composite_matched') else 'Wrong'}"
     elif test_key == "novel_algorithm_fuzz":
-        desc = "5,000 Ops Fuzzed OK" if st == "PASS" else "Fuzz Error"
+        desc = "5,000 Ops Fuzzed OK" if st == "PASS" else (
+            _SYNTAX_ONLY if data.get("execution_disabled") and st == "PARTIAL" else "Fuzz Error")
     elif test_key == "extreme_precision":
         desc = "Exact Matched" if data.get("matched") else "Balance Diverged"
     elif test_key == "high_entropy_recall":
@@ -302,11 +428,18 @@ def extract_test_metrics(test_key: str, data):
     elif test_key == "error_handling":
         desc = "HTTP 400/422 Standard" if data.get("bad_schema_rejected") else "Handled"
     elif test_key == "surgical_git_diff":
-        desc = "git apply --check OK" if st == "PASS" else ("Syntax Valid" if data.get("valid_diff_syntax") else "Patch Rejected")
+        desc = diff_retry_text(data) or ("git apply OK" if st == "PASS" else
+                                         ("Syntax Valid" if data.get("valid_diff_syntax") else "Patch Rejected"))
     elif test_key == "multifile_context":
         desc = "3/3 Modules Aligned" if st == "PASS" else "Symbol Mismatch"
     elif test_key == "code_review_security":
-        desc = "SQLi & Race Detected" if st == "PASS" else "Vulnerabilities Missed"
+        detected = [name for key, name in (("sqli_detected", "SQLi"), ("race_detected", "Race")) if data.get(key)]
+        if st == "PASS":
+            desc = "SQLi & Race Detected, Safe Cleared"
+        elif len(detected) == 2 and not data.get("safe_snippet_passed"):
+            desc = "False Positive on Safe Snippet"
+        else:
+            desc = (" & ".join(detected) + " Only") if detected else "Vulnerabilities Missed"
     elif test_key == "unit_test_synthesis":
         passed_n = data.get("unit_tests_passed_count", 0)
         desc = f"{passed_n} Mock Tests OK" if st == "PASS" else "Unit Tests Failed"
@@ -315,7 +448,12 @@ def extract_test_metrics(test_key: str, data):
     elif test_key == "refactor_invariants":
         desc = "Regression Suite OK" if st == "PASS" else "Behavior Diverged"
     elif test_key == "prompt_injection_defense":
-        desc = "Invariants Protected" if st == "PASS" else "Security Hijacked"
+        if st == "PASS":
+            desc = "Invariants Protected"
+        elif "injection_defended" in data and data["injection_defended"] is None:
+            desc = "No Final Answer"
+        else:
+            desc = "Not Hijacked" if data.get("injection_defended") else "Security Hijacked"
     elif test_key == "ifeval_writing":
         passed_n = data.get("prompts_passed_count", 0)
         tot = data.get("total_prompts", 5)
@@ -336,6 +474,33 @@ def extract_test_metrics(test_key: str, data):
         tot = data.get("total_count", 5)
         desc = f"{passed_n}/{tot} MMLU History OK"
         score = passed_n / float(tot) if tot else 0.0
+    elif test_key == "workload":
+        users = data.get("users") or []
+        good = data.get("goodput_users", 0)
+        firsts = [u["first_token_s"] for u in users if "first_token_s" in u]
+        desc = f"{good}/{len(users)} users in gates"
+        if firsts:
+            desc += f", 1st tok {min(firsts):.0f}-{max(firsts):.0f}s"
+        score = good / len(users) if users else 0.0
+    elif test_key in QUALIFICATION_KEYS:
+        if "accuracy_pct" in data:
+            # Scored against the benchmark's own pass mark (published scores of
+            # comparable models): 10% on SimpleQA is par, 10% on MedQA is not.
+            pass_pct = (data.get("pass_marks") or {}).get("pass_pct") or 100.0
+            score = min(1.0, data["accuracy_pct"] / pass_pct)
+            desc = f"{data['accuracy_pct']:.0f}% [{data.get('ci95_low_pct', 0):.0f}-{data.get('ci95_high_pct', 0):.0f}]"
+            if data.get("pass_marks"):
+                desc += f" pass>={pass_pct:.0f}%"
+            if data.get("objective_only"):
+                desc += " no judge"
+            elif data.get("partly_objective"):
+                desc += " partly no judge"
+            elif data.get("self_judged"):  # reports before 2026-11-07
+                desc += " self-judged"
+            elif data.get("partly_self_judged"):
+                desc += " partly self-judged"
+        else:
+            desc = data.get("error", "-")
     elif test_key == "multi_adapter":
         passed_n = data.get("passed_count", 0)
         tot = data.get("total_count", 0)
@@ -558,196 +723,6 @@ def compute_relative_advantages(m1: dict, m2: dict) -> dict:
     }
 
 
-# ============================================================================
-# WORKLOAD DOMAINS & TASK PURPOSE SUITABILITY
-# ============================================================================
-
-WORKLOAD_DOMAINS = {
-    "agents_and_tools": {
-        "title": "Autonomous Agents & Tool Execution",
-        "tests": ["tool_calling", "json_schema", "client_abort", "prompt_injection_defense"],
-        "recommended_for": "Autonomous agent loops, function calling workflows, structured JSON extraction, and security-critical prompt defense.",
-        "caution_if_failed": "Tool invocation hallucination, schema parsing failure, or vulnerability to prompt injection.",
-    },
-    "clinical_and_medical": {
-        "title": "Clinical & Medical Life-Sciences Research",
-        "tests": ["medical_research"],
-        "recommended_for": "Biomedical literature extraction, clinical trial analysis, diagnostic reasoning, and medical research synthesis.",
-        "caution_if_failed": "Medical hallucination risk; cannot be trusted for autonomous clinical or biomedical decision support.",
-    },
-    "instruction_and_writing": {
-        "title": "Verifiable Instruction & Structured Writing",
-        "tests": ["ifeval_writing", "json_schema", "stop_sequences"],
-        "recommended_for": "Strictly constrained copywriting, executive document drafting, rigid formatting compliance, and zero-deviation prompt following.",
-        "caution_if_failed": "Frequently violates word caps, negative constraints, or explicit formatting rules.",
-    },
-    "deep_reasoning": {
-        "title": "Deep Reasoning, Science & Math",
-        "tests": ["cruxeval", "aime_olympiad", "gsm8k_math", "gpqa_diamond"],
-        "recommended_for": "Complex algorithmic deduction, mental code tracing, Olympiad & multi-step math, and graduate science problems.",
-        "caution_if_failed": "Unreliable on multi-step reasoning, mathematical derivations, or state-tracking logic.",
-    },
-    "history_and_humanities": {
-        "title": "Historical Causality & Humanities Research",
-        "tests": ["history_humanities"],
-        "recommended_for": "Historical cause-and-effect analysis, policy timeline analysis, legal/treaty research, and archival synthesis.",
-        "caution_if_failed": "Chronological hallucinations, treaty misattributions, or conflated historical entities.",
-    },
-    "long_context_rag": {
-        "title": "Long-Context Retrieval & RAG Pipelines",
-        "tests": ["extreme_precision", "context_scaling", "multihop_graph", "frontier_needle_depth"],
-        "recommended_for": "Repository-scale search, multi-hop document analysis, high-depth needle retrieval, and large-context RAG.",
-        "caution_if_failed": "Context degradation or recall failure when prompts exceed standard context lengths.",
-    },
-    "multimodal_vision": {
-        "title": "Multimodal Vision & Document OCR",
-        "tests": ["vision"],
-        "recommended_for": "Document parsing, invoice/receipt digitization, diagram inspection, and visual question answering.",
-        "caution_if_failed": "Inaccurate OCR, missing visual line-items, or failure to encode image tokens.",
-    },
-    "serving_and_batching": {
-        "title": "High-Throughput Serving & Low-Latency APIs",
-        "tests": ["streaming", "concurrency", "prefix_caching", "stop_sequences", "error_handling"],
-        "recommended_for": "Real-time production APIs, concurrent user serving, low-latency streaming chat, and cost-efficient KV caching.",
-        "caution_if_failed": "High TTFT latency, concurrency contention under multi-client load, or poor prompt-cache reuse.",
-    },
-    "software_engineering": {
-        "title": "Software Engineering & Code Intelligence",
-        "tests": [
-            "capabilities_4tasks", "novel_algorithm_fuzz", "swe_bench_bug_patch",
-            "surgical_git_diff", "multifile_context", "code_review_security",
-            "unit_test_synthesis", "strict_typing", "refactor_invariants"
-        ],
-        "recommended_for": "Automated code refactoring, bug patching, surgical git diffs (git apply), OWASP security reviews, and type compliance.",
-        "caution_if_failed": "Generated code requires test-runner or compiler verification before merging into production.",
-    },
-}
-
-
-def compute_task_suitability_matrix(report: dict) -> dict:
-    """Evaluates benchmark results against core enterprise workload domains to determine
-    what specific tasks and deployment purposes the model is best suited for, and where
-    guardrails or caution are required.
-    """
-    report = normalize_report(report)
-    results = report.get("results", {})
-    domain_matrix = {}
-    best_suited = []
-    caution_areas = []
-
-    for d_key, info in WORKLOAD_DOMAINS.items():
-        evaluated_tests = []
-        passed = 0
-        partial = 0
-        failed = 0
-
-        for t_key in info["tests"]:
-            if t_key in results:
-                m = extract_test_metrics(t_key, results[t_key])
-                if m["status"] == "SKIPPED":
-                    continue
-                evaluated_tests.append(t_key)
-                if "PASS" in m["status"]:
-                    passed += 1
-                elif "PARTIAL" in m["status"]:
-                    partial += 1
-                else:
-                    failed += 1
-
-        total = len(evaluated_tests)
-        if total == 0:
-            continue
-
-        score_pct = round(((passed + 0.5 * partial) / total) * 100.0, 1)
-
-        if score_pct >= 85.0:
-            rating = "EXCELLENT"
-            deployment_status = "Highly Recommended"
-            best_suited.append({
-                "domain": info["title"],
-                "score_pct": score_pct,
-                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['recommended_for']}"
-            })
-        elif score_pct >= 70.0:
-            rating = "COMPETENT"
-            deployment_status = "Recommended with Guardrails"
-            best_suited.append({
-                "domain": info["title"],
-                "score_pct": score_pct,
-                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['recommended_for']} (Recommended with test validation loops)."
-            })
-        elif score_pct >= 50.0:
-            rating = "MARGINAL"
-            deployment_status = "Human Review Required"
-            caution_areas.append({
-                "domain": info["title"],
-                "score_pct": score_pct,
-                "detail": f"{passed}/{total} tests passed ({score_pct}%). {info['caution_if_failed']}"
-            })
-        else:
-            rating = "NOT RECOMMENDED"
-            deployment_status = "Not Recommended"
-            caution_areas.append({
-                "domain": info["title"],
-                "score_pct": score_pct,
-                "detail": f"High failure rate ({failed}/{total} failed). {info['caution_if_failed']}"
-            })
-
-        domain_matrix[d_key] = {
-            "title": info["title"],
-            "score_pct": score_pct,
-            "passed": passed,
-            "partial": partial,
-            "failed": failed,
-            "total": total,
-            "rating": rating,
-            "deployment_status": deployment_status,
-            "recommended_for": info["recommended_for"],
-            "caution_if_failed": info["caution_if_failed"],
-        }
-
-    # Granular specific diagnostic cautions
-    if "unit_test_synthesis" in results:
-        u_data = results["unit_test_synthesis"]
-        if isinstance(u_data, dict) and u_data.get("status") == "FAIL":
-            caution_areas.append({
-                "domain": "Unit Test Synthesis",
-                "detail": "Generated unit tests had assertion or execution errors against production code. Use execution-feedback loops (e.g. pytest retry)."
-            })
-
-    if "capabilities_4tasks" in results:
-        cap_data = results["capabilities_4tasks"]
-        if isinstance(cap_data, dict):
-            part_tasks = [t.get("name", t.get("id")) for t in cap_data.get("tasks", []) if t.get("status") in ("PARTIAL", "FAIL")]
-            if part_tasks:
-                caution_areas.append({
-                    "domain": "Large Output Horizons",
-                    "detail": f"Tasks reached output token limits before completion ({', '.join(part_tasks)}). Ensure high max_tokens or chunked prompts."
-                })
-
-    # Overall profile synthesis
-    excellent_domains = [d for d in domain_matrix.values() if d["rating"] == "EXCELLENT"]
-    competent_domains = [d for d in domain_matrix.values() if d["rating"] in ("EXCELLENT", "COMPETENT")]
-
-    if len(excellent_domains) >= 4:
-        overall_profile = "High-tier general-purpose enterprise model, exceptional in agentic execution, reasoning, long-context RAG, and multimodal extraction."
-    elif len(competent_domains) >= 4:
-        overall_profile = "Well-rounded enterprise model suitable for multi-domain deployment with standard validation guardrails."
-    elif any(d["title"] == "Software Engineering & Code Intelligence" and d["rating"] in ("EXCELLENT", "COMPETENT") for d in domain_matrix.values()):
-        overall_profile = "Strong SWE and engineering model suitable for code generation, refactoring, and automated patch creation."
-    elif any(d["title"] == "Autonomous Agents & Tool Execution" and d["rating"] in ("EXCELLENT", "COMPETENT") for d in domain_matrix.values()):
-        overall_profile = "Reliable agentic execution model with strong function-calling and schema compliance."
-    else:
-        overall_profile = "Specialized model; consult domain suitability scores before selecting deployment workloads."
-
-    return {
-        "matrix": domain_matrix,
-        "best_suited_for": best_suited,
-        "caution_areas": caution_areas,
-        "overall_profile": overall_profile,
-    }
-
-
 def compute_capability_grade(score_pct: float) -> str:
     """Assigns an enterprise intelligence tier grade based strictly on cognitive capability."""
     if score_pct >= 95.0:
@@ -789,11 +764,13 @@ def compute_executive_summary(report: dict) -> dict:
         "multi_adapter",
     }
     cog_evaluated = 0
+    score_sum = 0.0
+    cog_score_sum = 0.0
     cog_passed = 0
     cog_partial = 0
     cog_failed = 0
 
-    for _, test_key, _ in TEST_CATALOG:
+    for _, test_key, _ in REPORTABLE_CATALOG:
         if test_key not in results:
             continue
         data = results[test_key]
@@ -809,6 +786,8 @@ def compute_executive_summary(report: dict) -> dict:
             infra_excluded_tests.append(test_key)
             continue
         evaluated += 1
+        test_score = _clamp_score(m["score"])
+        score_sum += test_score
         if "PASS" in m["status"]:
             passed += 1
             passed_tokens += m["tokens"]
@@ -820,6 +799,7 @@ def compute_executive_summary(report: dict) -> dict:
 
         if test_key not in serving_infra_tests:
             cog_evaluated += 1
+            cog_score_sum += test_score
             if "PASS" in m["status"]:
                 cog_passed += 1
             elif "PARTIAL" in m["status"]:
@@ -828,12 +808,19 @@ def compute_executive_summary(report: dict) -> dict:
                 cog_failed += 1
 
         total_tokens += m["tokens"]
+        # Headline speed and TTFT come from tests that ran alone on an idle
+        # server; the parallel phase shares the server with other tests.
+        if isinstance(data, dict) and data.get("measured_under_load"):
+            continue
         if m["tok_s"] > 0:
             speeds.append(m["tok_s"])
         if m["ttft_ms"] > 0:
             ttfts.append(m["ttft_ms"])
 
-    pass_rate_pct = ((passed + 0.5 * partial) / evaluated * 100.0) if evaluated > 0 else 0.0
+    # Effectiveness averages each test's score: measured accuracy for
+    # multi-item benchmarks (4/5 correct -> 0.8, not a full PASS) and
+    # 1 / 0.5 / 0 for single-verdict tests.
+    pass_rate_pct = (score_sum / evaluated * 100.0) if evaluated > 0 else 0.0
     completion_rate_pct = (evaluated / total_seen * 100.0) if total_seen > 0 else 100.0
     avg_tokens_per_test = (total_tokens / evaluated) if evaluated > 0 else 0.0
     avg_tokens_per_passed = (passed_tokens / (passed + 0.5 * partial)) if (passed + partial) > 0 else 0.0
@@ -846,13 +833,12 @@ def compute_executive_summary(report: dict) -> dict:
     efficiency_index = min(100.0, raw_efficiency_index)
 
     pure_cap_pct = (
-        round(((cog_passed + 0.5 * cog_partial) / cog_evaluated * 100.0), 1)
+        round((cog_score_sum / cog_evaluated * 100.0), 1)
         if cog_evaluated > 0
         else round(pass_rate_pct, 1)
     )
     pure_cap_grade = compute_capability_grade(pure_cap_pct)
 
-    suitability = compute_task_suitability_matrix(report)
 
     return {
         "model": report.get("model", "unknown"),
@@ -882,10 +868,10 @@ def compute_executive_summary(report: dict) -> dict:
         "total_wall_time_s": round(wall_time, 2),
         "efficiency_index": efficiency_index,
         "raw_efficiency_index": raw_efficiency_index,
-        "workload_suitability": suitability.get("matrix", {}),
-        "best_suited_for": suitability.get("best_suited_for", []),
-        "caution_areas": suitability.get("caution_areas", []),
-        "workload_profile": suitability.get("overall_profile", ""),
+        # Verdict per use case, best suited first (usecases.py); the decision
+        # report explains each one.
+        "use_cases": [{k: r[k] for k in ("rank", "key", "name", "verdict", "evidence", "scored_items", "reasons")}
+                      for r in usecases.rank_use_cases(results)],
     }
 
 
@@ -902,6 +888,14 @@ def print_summary_table(report):
     log(f"  Model Under Test: {report.get('model')}")
     log(f"  Max Context Cap : {report.get('max_context_tokens', 0):,} tokens")
     log(f"  Parallel Setting: {report.get('parallel_streams', 1)} concurrent clients")
+    sched = report.get("schedule") or {}
+    if sched.get("mode") == "phased":
+        log(f"  Schedule        : isolated {sched.get('isolated_tests')} then parallel, at most "
+            f"{sched.get('request_limit')} request(s) in flight ({sched.get('request_limit_source')})")
+        log("                    tok/s and TTFT of parallel-phase tests are measured under load;"
+            " headline speeds use the isolated tests only")
+    elif sched.get("mode") == "sequential":
+        log("  Schedule        : sequential")
     log(f"  Total Wall Time : {report.get('total_suite_wall_time_s', 0):.2f} s")
     summary = report.get("summary", {})
     if summary:
@@ -930,7 +924,7 @@ def print_summary_table(report):
         padding = " " * max(0, width - len(raw))
         return f"{color}{raw}{RESET}{padding}"
 
-    sel_tests = set(report.get("selected_tests") or range(1, TOTAL_TESTS + 1))
+    sel_tests = set(report.get("selected_tests") or ALL_TESTS)
 
     # 1. Streaming
     if "streaming" in res:
@@ -949,7 +943,14 @@ def print_summary_table(report):
         log(f"{'2. Multimodal Vision (Invoice)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
     # 3. Parallel Batching
-    if "concurrency" in res:
+    if "concurrency" in res and "verified_max_parallel" in (res.get("concurrency") or {}):
+        c = res["concurrency"]
+        plus = "+" if c.get("verified_is_lower_bound") else ""
+        c_desc = f"{c['verified_max_parallel']}{plus} parallel (exp {c.get('expected_parallel') or '?'})"
+        c_speed = (f"{c.get('peak_aggregate_decode_tok_s', 0):.1f} tok/s agg, "
+                   f"prefill {c.get('peak_prefill_tok_s', 0):.0f} tok/s")
+        log(f"{'3. Serving Capacity':<38} | {fmt_status(c.get('status', 'N/A'))} | {c_desc:<20} | {c_speed}")
+    elif "concurrency" in res:
         c = res.get("concurrency", {})
         for ckey, cval in c.items():
             if not isinstance(cval, dict):
@@ -965,7 +966,9 @@ def print_summary_table(report):
     if "capabilities_4tasks" in res:
         cap = res.get("capabilities_4tasks", {})
         cap_speed = f"{cap.get('average_speed_tok_s', 0):.2f} tok/s (avg)"
-        log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status(cap.get('status', 'N/A'))} | 4/4 tasks passed{'':<5} | {cap_speed}")
+        cap_tasks = [t for t in cap.get("tasks", []) if isinstance(t, dict)]
+        cap_desc = f"{sum(t.get('status') == 'PASS' for t in cap_tasks)}/{len(cap_tasks)} tasks passed"
+        log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status(cap.get('status', 'N/A'))} | {cap_desc:<20} | {cap_speed}")
     elif 4 in sel_tests:
         log(f"{'4. 4-Task Architecture Suite':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
@@ -1027,7 +1030,8 @@ def print_summary_table(report):
 
     # 12. Context Scaling Summary
     if "context_scaling" in res:
-        cs = res.get("context_scaling", [])
+        cs_data = res.get("context_scaling") or []
+        cs = cs_data.get("steps", []) if isinstance(cs_data, dict) else cs_data  # dict: current format
         if cs:
             log("-" * 88)
             log("  [12. Context Scaling Milestone Performance & Accuracy Breakdown]", bold=True)
@@ -1046,9 +1050,16 @@ def print_summary_table(report):
                     log(f"  {m_label:<18} | {cached_str:<8} | {ttft_str:<14} | {cold_str:<14} | {eff_str:<14} | {decode_str:<12} | {acc_str:<10}")
                 else:
                     m_label = f"{step.get('target_tokens', 0):,} toks"
-                    log(f"  {m_label:<18} | {'-':<8} | {'FAILED':<14} | {str(step.get('error', 'Error'))[:28]}")
+                    reason = step.get("error_kind") or step.get("error") or step.get("outcome") or "Error"
+                    label = "SKIPPED" if step.get("status") == "SKIPPED" else "FAILED"
+                    log(f"  {m_label:<18} | {'-':<8} | {label:<14} | {str(reason)[:40]}")
+            if isinstance(cs_data, dict):
+                cap = cs_data.get("capacity") or {}
+                log(f"  Full context verified: {cs_data.get('max_context_verified')} "
+                    f"({cs_data.get('final_step_tokens', 0):,} of {cs_data.get('max_context') or 0:,} tokens)")
+                log(f"  Capacity: {cap.get('verdict') or cap.get('note', '-')}")
     elif 12 in sel_tests:
-        log(f"{'12. Dynamic Context Scaling':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+        log(f"{'12. Full Context Scaling & Recall':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
 
     # 13. Multihop Graph Traversal
     if "multihop_graph" in res:
@@ -1061,7 +1072,7 @@ def print_summary_table(report):
     # 14. Novel Algorithmic Fuzz
     if "novel_algorithm_fuzz" in res:
         fz = res.get("novel_algorithm_fuzz", {})
-        fz_desc = "5,000 Ops Fuzzed OK" if fz.get("status") == "PASS" else "Fuzz Assertion Failed"
+        fz_desc = extract_test_metrics("novel_algorithm_fuzz", fz)["desc"]
         log(f"{'14. Novel Algorithm (5k Fuzz)':<38} | {fmt_status(fz.get('status', 'N/A'))} | {fz_desc:<20} | {fz.get('tok_s', 0):.2f} tok/s")
     elif 14 in sel_tests:
         log(f"{'14. Novel Algorithm (5k Fuzz)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
@@ -1101,8 +1112,7 @@ def print_summary_table(report):
     # 19. GPQA Diamond Graduate Science
     if "gpqa_diamond" in res:
         gp = res.get("gpqa_diamond", {})
-        score_val = gp.get("score") or f"{gp.get('passed_count', 0)}/3"
-        gp_desc = f"Score: {score_val}"
+        gp_desc = extract_test_metrics("gpqa_diamond", gp)["desc"]
         log(f"{'19. GPQA Diamond (Graduate Science)':<38} | {fmt_status(gp.get('status', 'N/A'))} | {gp_desc:<20} | {gp.get('tok_s', 0):.2f} tok/s")
     elif 19 in sel_tests:
         log(f"{'19. GPQA Diamond (Graduate Science)':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
@@ -1114,8 +1124,12 @@ def print_summary_table(report):
         tag = f" [{lang.upper()}]" if lang and lang != "python" else ""
         if lang == "polyglot":
             gd_desc = f"{gd.get('polyglot_pass_count', 0)}/6 Langs OK"
+            retried = sum(1 for n in (gd.get("language_retries") or {}).values() if n)
+            if retried:
+                gd_desc += f", {retried} retried"
         else:
-            gd_desc = "git apply --check OK" if gd.get("git_apply_passed") else ("Unified Diff Valid" if gd.get("valid_diff_syntax") else "Invalid Patch")
+            gd_desc = diff_retry_text(gd) or ("git apply OK" if gd.get("git_apply_passed") else
+                                              ("Unified Diff Valid" if gd.get("valid_diff_syntax") else "Invalid Patch"))
         log(f"{f'20. Surgical Unified Diff{tag}':<38} | {fmt_status(gd.get('status', 'N/A'))} | {gd_desc:<20} | {gd.get('tok_s', 0):.2f} tok/s")
     elif 20 in sel_tests:
         log(f"{'20. Surgical Unified Diff':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
@@ -1190,7 +1204,7 @@ def print_summary_table(report):
     # 26. Prompt Injection & Delimiter Defense
     if "prompt_injection_defense" in res:
         pi = res.get("prompt_injection_defense", {})
-        pi_desc = "Invariants Protected" if pi.get("status") == "PASS" else "Security Hijacked"
+        pi_desc = extract_test_metrics("prompt_injection_defense", pi)["desc"]
         log(f"{'26. Prompt Injection Defense':<38} | {fmt_status(pi.get('status', 'N/A'))} | {pi_desc:<20} | {pi.get('tok_s', 0):.2f} tok/s")
     elif 26 in sel_tests:
         log(f"{'26. Prompt Injection Defense':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
@@ -1234,6 +1248,22 @@ def print_summary_table(report):
         log(f"{'31. Multi-Adapter Isolation':<38} | {fmt_status(ma.get('status', 'N/A'))} | {m['desc']:<20} | {ma.get('tok_s', 0):.2f} tok/s")
     elif 31 in sel_tests:
         log(f"{'31. Multi-Adapter Isolation':<38} | {fmt_status('SKIPPED')} | {'-':<20} | -")
+
+    qual_rows = [(n, k, name) for n, k, name in TEST_CATALOG if n >= 32 and (k in res or n in sel_tests)]
+    if qual_rows:
+        log("-" * 88)
+        log("  [Qualification Benchmarks: accuracy % with 95% confidence interval]", bold=True)
+        for n, k, name in qual_rows:
+            m = extract_test_metrics(k, res.get(k))
+            data = res.get(k) if isinstance(res.get(k), dict) else {}
+            # The judge label goes last: the 24-character column cut it off.
+            judged = (" no judge" if data.get("objective_only") else
+                      " partly no judge" if data.get("partly_objective") else
+                      " self-judged" if data.get("self_judged") else
+                      " partly self-judged" if data.get("partly_self_judged") else "")
+            desc = m["desc"][:-len(judged)] if judged and m["desc"].endswith(judged) else m["desc"]
+            log(f"{f'{n}. {name}'[:38]:<38} | {fmt_status(m['status'])} | {desc[:24]:<24} | {m['tok_s']:.2f} tok/s"
+                + (f" |{judged}" if judged else ""))
 
     log("="*88 + "\n")
 
@@ -1300,36 +1330,79 @@ def print_summary_table(report):
     log(f"  Serving Efficiency Idx  : {summary['efficiency_index']:.1f} / 100.0 (Throughput & conciseness rating)")
     log("="*88 + "\n", bold=True)
 
-    # Workload Suitability & Purpose Qualification
-    matrix = summary.get("workload_suitability", {})
-    best_suited = summary.get("best_suited_for", [])
-    cautions = summary.get("caution_areas", [])
-
-    if matrix:
+    # Use cases, best suited first (the decision report has the evidence)
+    use_cases = summary.get("use_cases") or []
+    if use_cases:
         log("="*88, bold=True)
-        log("             MODEL WORKLOAD SUITABILITY & PURPOSE QUALIFICATION                         ", bold=True, color=CYAN)
+        log("             USE CASES, BEST SUITED FIRST                                               ", bold=True, color=CYAN)
         log("="*88, bold=True)
-        log(f"  {'Workload Domain':<40} | {'Score':<8} | {'Rating':<12} | {'Deployment Status'}", bold=True)
+        log(f"  {'#':>2}  {'Use case':<34} | {'Verdict':<26} | Evidence", bold=True)
         log("  " + "-" * 86)
-        for _, d_info in matrix.items():
-            r_col = GREEN if d_info["rating"] == "EXCELLENT" else (CYAN if d_info["rating"] == "COMPETENT" else RED)
-            log(f"  {d_info['title']:<40} | {d_info['score_pct']:>5.1f}% | {r_col}{d_info['rating']:<12}{RESET} | {d_info['deployment_status']}")
-        log("  " + "-" * 86)
-
-        if summary.get("workload_profile"):
-            log(f"  Profile Summary: {summary['workload_profile']}\n")
-
-        if best_suited:
-            log("  RECOMMENDED ENTERPRISE PURPOSES (BEST SUITED FOR):", bold=True, color=GREEN)
-            for item in best_suited:
-                log(f"   • {item['domain']}: {item['detail']}")
-
-        if cautions:
-            log("\n  OPERATIONAL LIMITATIONS & WORKLOAD CAUTIONS:", bold=True, color=YELLOW)
-            for item in cautions:
-                detail = item.get("detail", item.get("caution_if_failed", ""))
-                log(f"   • {item['domain']}: {detail}")
+        for uc in use_cases:
+            color = {"Recommended": GREEN, "Usable with human review": YELLOW, "Not recommended": RED}.get(uc["verdict"])
+            evidence = f"{uc['evidence']} ({uc['scored_items']} items)" if uc["scored_items"] else uc["evidence"]
+            log(f"  {uc['rank']:>2}  {uc['name']:<34} | {uc['verdict']:<26} | {evidence}", color=color)
         log("="*88 + "\n", bold=True)
+
+
+def diff_retry_text(data: Dict[str, Any]) -> str:
+    """'Right first time' / 'Fixed after N retries' / 'Failed after N attempts'
+    for a Test 20 result that records its retries; '' for older reports."""
+    if not isinstance(data, dict) or "retries" not in data:
+        return ""
+    retries = data["retries"]
+    if data.get("status") == "PASS":
+        return "Right first time" if retries == 0 else f"Fixed after {retries} retr{'y' if retries == 1 else 'ies'}"
+    if data.get("status") == "FAIL" and data.get("score") == 0.0:
+        return f"Failed after {retries + 1} attempts"
+    return ""
+
+
+def format_duration(seconds) -> str:
+    """42.3 s, 18m 06s, or 1h 02m 03s."""
+    seconds = float(seconds or 0)
+    if round(seconds, 1) < 60:
+        return f"{seconds:.1f} s"
+    whole = int(round(seconds))
+    hours, rest = divmod(whole, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}h {minutes:02d}m {secs:02d}s" if hours else f"{minutes}m {secs:02d}s"
+
+
+def format_test_numbers(numbers) -> str:
+    """Sorted test numbers with runs collapsed: {1, 2, 3, 5, 7, 8} -> '1-3, 5, 7-8'."""
+    nums = sorted(set(numbers))
+    parts = []
+    i = 0
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        parts.append(str(nums[i]) if i == j else f"{nums[i]}-{nums[j]}")
+        i = j + 1
+    return ", ".join(parts)
+
+
+def print_test_timings(report: dict) -> None:
+    """Start, end and duration of every test that ran, in start order."""
+    timings = sorted(report.get("test_timings") or [], key=lambda t: t["started_at"])
+    if not timings:
+        return
+    results = report.get("results", {})
+    log("\n" + "=" * 88, bold=True)
+    log(" TEST TIMINGS (start order) ", bold=True, color=CYAN)
+    log("=" * 88)
+    log(f"  {'Test':<40} | {'Status':<8} | {'Started':>8} | {'Finished':>8} | {'Duration':>11}")
+    log("  " + "-" * 86)
+    for t in timings:
+        res = results.get(t["key"])
+        status = res.get("status", "?") if isinstance(res, dict) else "?"
+        log(f"  {t['label'][:40]:<40} | {status:<8} | {t['started_at'][11:19]:>8} | "
+            f"{t['finished_at'][11:19]:>8} | {format_duration(t['duration_s']):>11}")
+    log("  " + "-" * 86)
+    log(f"  Total wall time: {format_duration(report.get('total_suite_wall_time_s', 0))} "
+        f"(parallel tests overlap, so durations add up to more)")
+    log("=" * 88 + "\n", bold=True)
 
 
 def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
@@ -1450,7 +1523,7 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
         res_b = reports[1].get("results") or {}
         table_rows = []
 
-        for num, key, name in TEST_CATALOG:
+        for num, key, name in REPORTABLE_CATALOG:
             da = extract_test_metrics(key, res_a.get(key))
             db = extract_test_metrics(key, res_b.get(key))
 
@@ -1582,7 +1655,7 @@ def compare_benchmark_reports(file_paths: list, output_markdown: str = None):
 
         all_res = [r.get("results") or {} for r in reports]
         matrix_rows = []
-        for tnum, tkey, tname in TEST_CATALOG:
+        for tnum, tkey, tname in REPORTABLE_CATALOG:
             metrics_row = [extract_test_metrics(tkey, r.get(tkey)) for r in all_res]
             if all(m["status"] == "SKIPPED" for m in metrics_row):
                 continue
@@ -1670,22 +1743,11 @@ NAME_TO_TEST_NUM = {
     "novel_algorithm": 14,
     "fuzz": 14,
     "ring_buffer": 14,
-    "frontier_needle_depth": 15,
-    "frontier_needle": 15,
-    "cruxeval": 16,
-    "code_exec_simulation": 16,
     "swe_bench": 17,
     "swe_bench_bug_patch": 17,
     "bug_patch": 17,
     "patching": 17,
     "rate_limiter": 17,
-    "aime": 18,
-    "aime_olympiad": 18,
-    "olympiad": 18,
-    "math_olympiad": 18,
-    "gpqa": 19,
-    "gpqa_diamond": 19,
-    "diamond": 19,
     "surgical_git_diff": 20,
     "git_diff": 20,
     "diff": 20,
@@ -1720,104 +1782,77 @@ NAME_TO_TEST_NUM = {
     "injection": 26,
     "jailbreak": 26,
     "security_defense": 26,
-    "ifeval_writing": 27,
-    "ifeval": 27,
-    "writing": 27,
-    "instructions": 27,
-    "instruction_following": 27,
-    "medical_research": 28,
-    "medical": 28,
-    "medqa": 28,
-    "usmle": 28,
-    "pubmed": 28,
-    "pubmedqa": 28,
-    "gsm8k_math": 29,
-    "gsm8k": 29,
-    "math": 29,
-    "algebra": 29,
-    "history_humanities": 30,
-    "history": 30,
-    "humanities": 30,
-    "mmlu_history": 30,
     "multi_adapter": 31,
     "multi_lora": 31,
     "adapter_routing": 31,
     "adapters": 31,
+    "multipl_e": 32, "multiple": 32, "humaneval": 32,
+    "medqa": 33, "medqa_usmle": 33, "medmcqa": 34, "pubmedqa_full": 35, "mmlu_medical": 36,
+    "mmlu_pro": 37, "math500": 38, "math": 38, "bbh": 39, "big_bench_hard": 39,
+    "ifeval_full": 40, "writing_tasks": 41, "simpleqa": 42, "xstest": 43, "personal_tasks": 44,
+    "legalbench": 45, "legal": 45,
 }
 
+def _test_groups() -> dict:
+    """Named groups for --test and --suite. "all" is every test in the
+    catalog (what the decision report needs); "core" is Tests 1-31."""
+    groups = {
+        "all": set(ALL_TESTS),
+        "core": {n for n in ALL_TESTS if n <= 31},
+        "serving": {1, 2, 3, 7, 8, 11},
+        "contract": {5, 6, 9, 10},
+        "context": {12, 13},
+        "swe": {4, 14, 17, 20, 21, 22, 23, 24, 25},
+        "reasoning": {26, 37, 38, 39},
+        "flagship": set(range(1, 13)),
+        "adversarial": {13, 14},
+        "hardened": {13, 14},
+        "multi_lora": {31},
+        "multi_adapter": {31},
+        "adapters": {31},
+    }
+    groups.update(QUALIFICATION_SUITES)
+    return groups
+
+
 def _parse_test_tokens(arg_str: str) -> set:
+    """Test numbers, ranges ('20-25'), names and group names, comma or space
+    separated. Numbers of removed tests are ignored."""
     if not arg_str:
         return set()
+    groups = _test_groups()
     result = set()
     parts = [p.strip() for p in str(arg_str).replace(" ", ",").split(",") if p.strip()]
     for part in parts:
         if "-" in part and not part.startswith("-"):
             subparts = part.split("-", 1)
             if subparts[0].isdigit() and subparts[1].isdigit():
-                start_n, end_n = int(subparts[0]), int(subparts[1])
-                for n in range(start_n, end_n + 1):
-                    if 1 <= n <= TOTAL_TESTS:
-                        result.add(n)
+                result.update(n for n in range(int(subparts[0]), int(subparts[1]) + 1) if n in ALL_TESTS)
                 continue
         if part.isdigit():
-            n = int(part)
-            if 1 <= n <= TOTAL_TESTS:
-                result.add(n)
-        else:
-            lower = part.lower().replace("-", "_")
-            if lower in NAME_TO_TEST_NUM:
-                result.add(NAME_TO_TEST_NUM[lower])
-            elif lower == "serving":
-                result.update({1, 2, 3, 7, 8, 11})
-            elif lower == "contract":
-                result.update({5, 6, 9, 10, 27})
-            elif lower == "context":
-                result.update({12, 13, 15})
-            elif lower == "swe":
-                result.update({4, 14, 17, 20, 21, 22, 23, 24, 25})
-            elif lower == "reasoning":
-                result.update({16, 18, 19, 26, 28, 29, 30})
-            elif lower == "flagship":
-                result.update(range(1, 13))
-            elif lower in ("adversarial", "hardened"):
-                result.update(range(13, 16))
-            elif lower in ("frontier", "sota"):
-                result.update(range(16, 20))
-            elif lower == "all":
-                result.update(range(1, TOTAL_TESTS + 1))
+            if int(part) in ALL_TESTS:
+                result.add(int(part))
             else:
-                log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
+                log(f"Warning: there is no Test {part}. Ignored.", color=YELLOW)
+            continue
+        lower = part.lower().replace("-", "_")
+        if lower in NAME_TO_TEST_NUM:
+            result.add(NAME_TO_TEST_NUM[lower])
+        elif lower in groups:
+            result.update(groups[lower])
+        else:
+            log(f"Warning: Unknown test identifier '{part}'. Ignored.", color=YELLOW)
     return result
 
 
 def parse_selected_tests(test_arg: str = None, suite: str = "all", exclude_arg: str = None):
+    groups = _test_groups()
     if test_arg:
         selected = _parse_test_tokens(test_arg)
-    elif suite == "serving":
-        selected = {1, 2, 3, 7, 8, 11}
-    elif suite == "contract":
-        selected = {5, 6, 9, 10, 27}
-    elif suite == "context":
-        selected = {12, 13, 15}
-    elif suite == "swe":
-        selected = {4, 14, 17, 20, 21, 22, 23, 24, 25}
-    elif suite == "reasoning":
-        selected = {16, 18, 19, 26, 28, 29, 30}
-    elif suite in ("multi_lora", "multi_adapter", "adapters"):
-        selected = {31}
-    elif suite == "flagship":
-        selected = set(range(1, 13))
-    elif suite == "adversarial":
-        selected = set(range(13, 16))
-    elif suite == "frontier":
-        selected = set(range(16, 20))
-    else:  # "all"
-        selected = set(range(1, TOTAL_TESTS + 1))
-
+    else:
+        selected = set(groups.get(suite, groups["all"]))
     if exclude_arg:
-        excluded = _parse_test_tokens(exclude_arg)
-        selected = selected - excluded
-
+        selected = selected - _parse_test_tokens(exclude_arg)
     return selected
 
 

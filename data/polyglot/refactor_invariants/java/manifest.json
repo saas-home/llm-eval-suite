@@ -1,0 +1,10 @@
+{
+  "mode": "program",
+  "answer_file": "OrderProcessor.java",
+  "main_class": "Main",
+  "strip_java_package": true,
+  "skip_support_if_defined": {
+    "OrderRecord.java": "record\\s+OrderRecord\\b",
+    "ProcessedOrder.java": "record\\s+ProcessedOrder\\b"
+  }
+}

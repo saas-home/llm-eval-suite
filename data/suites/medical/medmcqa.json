@@ -1,0 +1,1208 @@
+{
+ "source": "https://huggingface.co/datasets/openlifescienceai/medmcqa (validation; test has no keys)",
+ "license": "Apache-2.0",
+ "seed": 20261106,
+ "note": "",
+ "items": [
+  {
+   "id": "medmcqa_1a217f0a-2e93-40b4-b07c-79904e521375",
+   "question": "The feature that distinguishes herpes zoster from other \nvesiculo butlous eruptions is",
+   "options": {
+    "A": "Unilateral occurrence",
+    "B": "Severe burning pain",
+    "C": "Prominent crusting vesicles",
+    "D": "Sub epidermal bulious formation"
+   },
+   "answer": "A",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_06cab4ad-fb49-4daa-92db-5ee3529af02f",
+   "question": "Retraction of mandible is achieved by:",
+   "options": {
+    "A": "Lateral pterygoid",
+    "B": "Temporalis",
+    "C": "Medial pterygoid",
+    "D": "Masseter"
+   },
+   "answer": "B",
+   "subject": "Anatomy"
+  },
+  {
+   "id": "medmcqa_2dd59aba-38c0-4aff-a000-1bcb640254ff",
+   "question": "Drug adveisement letter is a necessary component of each drug formulation and contains various information about the drug like drug dosing, frequency and half-life. Which of the following information need not be given in the drug adveisement letter?",
+   "options": {
+    "A": "Research papers and other aicles proving efficacy of the drug",
+    "B": "Date of expiry of the drug",
+    "C": "Rare, but serious life threatening adverse-effects",
+    "D": "Common, not so serious adverse-effects"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_73b1ad96-1717-4bb2-930d-efa7e16bdc6f",
+   "question": "The material used in its pure form in dentistry is:",
+   "options": {
+    "A": "Composite",
+    "B": "Silver",
+    "C": "Gold",
+    "D": "Amalgam"
+   },
+   "answer": "C",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_5d786de9-1f31-4d77-9ef6-9bfefa3f86ba",
+   "question": "What should be the position of child during asthmatic attack:",
+   "options": {
+    "A": "Supine",
+    "B": "Semi erect",
+    "C": "Erect",
+    "D": "Trendelenburg"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_b0d97337-7157-40c6-984d-87e24959fa80",
+   "question": "Child Pugh score put patients into three categories of Score A (<7), Score B (7-9) and Score C (10-15). The following is a type of which scale?",
+   "options": {
+    "A": "Nominal",
+    "B": "Ordinal",
+    "C": "Quantitative",
+    "D": "Continuous"
+   },
+   "answer": "B",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_533dcf5e-9bf9-4c25-a1bd-64f13f6e916b",
+   "question": "What is the most common tumor of mediastinum?",
+   "options": {
+    "A": "Neurogenic",
+    "B": "Thymoma",
+    "C": "Lymphoma",
+    "D": "Metastatic tumor"
+   },
+   "answer": "A",
+   "subject": "Medicine"
+  },
+  {
+   "id": "medmcqa_c628fd13-7ada-40eb-917a-1de334a5ee5b",
+   "question": "The antidote for heparin is:",
+   "options": {
+    "A": "Penicillinase",
+    "B": "Protamine sulphate",
+    "C": "Pryosulphate",
+    "D": "Potassium sulphate"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_fb47f171-c6d7-4871-8d28-92f2b97acc88",
+   "question": "Dengue discharge protocol includes",
+   "options": {
+    "A": "24 hours after Recovery from shock",
+    "B": "Urine volume > 200 ml",
+    "C": "24 hours after absence of fever with use of Paracetamol",
+    "D": "Return of normal appetite"
+   },
+   "answer": "D",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_bdc34663-b39a-47bb-b034-7f804e437c09",
+   "question": "A young male patient is on 5 mg haloperidol for many days, recently for last 4 days of duration he has inner restlessness and urges to move. Diagnosis is?",
+   "options": {
+    "A": "Akathisia",
+    "B": "Tardive dyskinesia",
+    "C": "Rabbit syndrome",
+    "D": "Acute Dystonia"
+   },
+   "answer": "A",
+   "subject": "Psychiatry"
+  },
+  {
+   "id": "medmcqa_697158e5-3b79-4109-b172-66de3346e898",
+   "question": "Millennium development goal was adopted in which year?",
+   "options": {
+    "A": "1977",
+    "B": "2000",
+    "C": "1984",
+    "D": "2004"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_eb49deaf-5611-4a19-8ad5-0cca73608043",
+   "question": "Which of the following is not used in DIC?",
+   "options": {
+    "A": "Heparin",
+    "B": "Epsilon amino caproic acid",
+    "C": "Blood transfusion",
+    "D": "Intravenous fluids."
+   },
+   "answer": "B",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_114fa1dd-9f36-4b84-9f6a-68303bc63931",
+   "question": "Earliest diagnosis of pregnancy can be established safely by:",
+   "options": {
+    "A": "USG for fetal cardiac activity",
+    "B": "Fetal cardiac Doppler study",
+    "C": "hCG levels",
+    "D": "MRI pelvis"
+   },
+   "answer": "A",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_af344b7b-30b7-4663-a02c-0605fb54c801",
+   "question": "Which of the following anticoagulant preservative can be used to store blood, so that it can be kept for 35 days?",
+   "options": {
+    "A": "Acid citrate dextrose (ACD)",
+    "B": "CPD Citrate phosphate dextrose",
+    "C": "Citrate phosphate dextrose-adenine (CPD-A)",
+    "D": "CP2D - citrate phosphate double dextrose"
+   },
+   "answer": "C",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_7c9b4d7b-6290-430f-a097-96d88c65ecd8",
+   "question": "Z tracking technique is used in?",
+   "options": {
+    "A": "Administering long acting antipsychotic",
+    "B": "Lithium monitoring",
+    "C": "Carbamazepine monitoring",
+    "D": "Nicotine patch"
+   },
+   "answer": "A",
+   "subject": "Psychiatry"
+  },
+  {
+   "id": "medmcqa_6a2018d0-b742-44ff-a1df-5d0ce3483984",
+   "question": "A latex agglutination test for detection of meningitis was approved. Calculate the sensitivity and specificity of the test based on the data given below: Test PositiveTest NegativeDiseased273Non-diseased595",
+   "options": {
+    "A": "Sensitivity 90% Specificity 95%",
+    "B": "Specificity 90% Sensitivity 95%",
+    "C": "Sensitivity 80% Specificity 90%",
+    "D": "Sensitivity 75% Specificity 95%"
+   },
+   "answer": "A",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_901769b9-8f5f-48e3-869a-879c1d57ad93",
+   "question": "Which of the following abnormalities can be diagnosed in the I st trimester of pregnancy?",
+   "options": {
+    "A": "Anencephaly",
+    "B": "Encephalocele",
+    "C": "Meningocele",
+    "D": "Microcephaly"
+   },
+   "answer": "A",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_95567c10-0007-466a-8b8e-8f8891806716",
+   "question": "Purkinje fibers project to which of the following",
+   "options": {
+    "A": "Caudate nucleus",
+    "B": "Red nucleus",
+    "C": "Dentate nucleus",
+    "D": "Ventero lateral nucleus of thalamus"
+   },
+   "answer": "C",
+   "subject": "Anatomy"
+  },
+  {
+   "id": "medmcqa_d7bd1cec-6327-4552-8135-3544fa7c8d0f",
+   "question": "A radiograph is shown below. This type of root morphology has highest incidence in which population?",
+   "options": {
+    "A": "African",
+    "B": "Caucasians",
+    "C": "Mongoloids",
+    "D": "Asians"
+   },
+   "answer": "D",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_157f841a-269b-4207-825d-2a62dd8cd197",
+   "question": "Maximum steroid produced by fetal adrenal:-",
+   "options": {
+    "A": "DHEA-S",
+    "B": "Coisol",
+    "C": "Coicosterone",
+    "D": "Progesterone"
+   },
+   "answer": "B",
+   "subject": "Pediatrics"
+  },
+  {
+   "id": "medmcqa_d0e62648-4f9f-497a-be1a-a6ee1295704c",
+   "question": "Highest level of evidence is seen in:",
+   "options": {
+    "A": "Case control studies",
+    "B": "Meta-analysis",
+    "C": "Cohort studies",
+    "D": "Systematic review"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_662c0f6c-a3d9-48a4-b21a-0cc20ef76b87",
+   "question": "Which of the following is having Maximum buffering capacity",
+   "options": {
+    "A": "Histidine",
+    "B": "Cysteine",
+    "C": "Tyrosine",
+    "D": "Arginine"
+   },
+   "answer": "A",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_0c897b21-e2f5-4b70-ac40-edc59745a66c",
+   "question": "Polydactyly, craniosynostosis, Late closure of fontanelles is a feature of:",
+   "options": {
+    "A": "Apert's syndrome",
+    "B": "Crouton's syndrome",
+    "C": "Pierre robin syndrome",
+    "D": "Down' syndrome"
+   },
+   "answer": "A",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_6bd89605-daf0-43d9-bcfc-7f44847433a6",
+   "question": "'Potts puffy' tumour is:",
+   "options": {
+    "A": "A malignant tumour",
+    "B": "An extradural abscess",
+    "C": "A tumour or pituitary gland",
+    "D": "An adrenal gland tumour"
+   },
+   "answer": "B",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_17d49a43-a8cf-43c9-9c9e-70a42e741af1",
+   "question": "To check objective pain response, which is best used method",
+   "options": {
+    "A": "Facial pain scale",
+    "B": "Knee jerk reflex",
+    "C": "H - Reflex",
+    "D": "R III Reflex"
+   },
+   "answer": "A",
+   "subject": "Physiology"
+  },
+  {
+   "id": "medmcqa_285a31c4-9b01-416d-956d-82fa46d60bbb",
+   "question": "Percentage of surgical site infection in patients with clean contaminated wound after prophylactic antibiotic?",
+   "options": {
+    "A": "1-2%",
+    "B": "<10%",
+    "C": "10-20%",
+    "D": "20-30%"
+   },
+   "answer": "B",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_fe1e7fd7-eab7-4ce9-a865-8c02fb21022b",
+   "question": "Pulpectomy and pulp capping are more successful in\nprimary teeth because of:",
+   "options": {
+    "A": "Increased odontoblastic activity in the young",
+    "B": "Increased blood supply through the wide apex",
+    "C": "Increased volume of pulp in primary teeth",
+    "D": "Lesser amount of collagen fibres in young"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_f9be858f-ef2f-475e-9c82-ced530a1a623",
+   "question": "A pregnant lady is diagnosed to be HBs Ag positive. Which of the following is the best way to prevent infection to the child:",
+   "options": {
+    "A": "Hepatitis vaccine to the child",
+    "B": "Full course of Hepatitis B vaccine and immunoglobulin to the child",
+    "C": "Hepatitis B immunoglobulin to the mother",
+    "D": "Hepatitis B immunization to mother"
+   },
+   "answer": "B",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_b5135682-e700-4fda-a6b2-39b289c3cc41",
+   "question": "When a patient is asked to say 'ah' , if the uvula is drawn upwards to the left, the cranial nerve likely to be damaged is",
+   "options": {
+    "A": "Vagus",
+    "B": "Rt accessory",
+    "C": "Lt accessory",
+    "D": "Hypoglossal"
+   },
+   "answer": "B",
+   "subject": "Anatomy"
+  },
+  {
+   "id": "medmcqa_7ee6d817-eee3-42ad-8d49-7237f375f6f3",
+   "question": "Biomarker of alcoholic hepatitis:",
+   "options": {
+    "A": "ALP",
+    "B": "AST",
+    "C": "LDH",
+    "D": "GGT"
+   },
+   "answer": "D",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_e4281c68-9e8b-4802-9c1d-edf0de6c7195",
+   "question": "Which diseases are infectious but not communicable?",
+   "options": {
+    "A": "Measles",
+    "B": "Mumps",
+    "C": "Scarlet fever",
+    "D": "Tetanus"
+   },
+   "answer": "D",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_292be6a1-f5da-4d67-8ae1-ae4d05a5f4a4",
+   "question": "Post parotidectomy, patient feels numb while shaving. Which nerve was involved ?",
+   "options": {
+    "A": "Facial",
+    "B": "Mandibular",
+    "C": "Auriculotemporal",
+    "D": "Greater auricular"
+   },
+   "answer": "D",
+   "subject": "Anatomy"
+  },
+  {
+   "id": "medmcqa_4f2d9080-e4cc-48f7-a4d1-b06e0a207a76",
+   "question": "A girl comes with symptoms of involuntary movements. Sydenham's chorea and acute rheumatic fever is suspected. Other major criteria of rheumatic fever (ahritis, skin rashes, subcutaneous nodules and carditis) were absent. No evidence of sore throat. Best investigation to prove rheumatic etiology is:",
+   "options": {
+    "A": "Antistreptolysin S",
+    "B": "Antistreptolysin O",
+    "C": "Throat culture",
+    "D": "PCR for M protein"
+   },
+   "answer": "B",
+   "subject": "Medicine"
+  },
+  {
+   "id": "medmcqa_62eef71a-8a02-417f-be29-d32ae8f55d41",
+   "question": "Advantage of the submarginal falp for periradicular surgery is?",
+   "options": {
+    "A": "Crestal bone less",
+    "B": "Bleeding lees",
+    "C": "Gingival shrinking less",
+    "D": "Flap closure easy"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_15811471-d00e-471c-adf9-2edc497bb4ce",
+   "question": "ICD-10 stands for",
+   "options": {
+    "A": "International Classification of Drugs, 10th revision",
+    "B": "International Classification of Disabilities, 10th revision",
+    "C": "International Classification of Diseases, 10th revision",
+    "D": "International Classification of Disasters, 10th revision"
+   },
+   "answer": "C",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_7a6a550d-e730-40ac-8d5e-25a7212d4f23",
+   "question": "2 root canals are found in what percentage of Mandibular incisors",
+   "options": {
+    "A": "22-40%",
+    "B": "11-22%",
+    "C": "20-50 %",
+    "D": "5-15%"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_0984768a-39e6-4291-bc0d-fd61da9d2829",
+   "question": "According to WHO classification of periapical pathology, 4.81 means:",
+   "options": {
+    "A": "Periapical cyst",
+    "B": "Lateral cyst",
+    "C": "Residual cyst",
+    "D": "Inflammatory periodontal cyst"
+   },
+   "answer": "C",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_4c0b406e-5d78-4f1d-99ca-c51f8d240e4f",
+   "question": "A 38 years old female presented to the emergency with extensive burns. The patient had grade 3 burns on the face, back, upper arms and forearms along with singeing of hairs. Which of the following is not a proof of inhalation burns?",
+   "options": {
+    "A": "Yellow colored sputum",
+    "B": "Blackish soot deposit on posterior pa of tongue",
+    "C": "Hoarseness & stridor of voice",
+    "D": "Singeing of eyebrows and facial hair"
+   },
+   "answer": "A",
+   "subject": "Forensic Medicine"
+  },
+  {
+   "id": "medmcqa_91f22318-7737-491a-8096-d504ac9c8aae",
+   "question": "Mean and standard deviation can be worked out only if data is on -",
+   "options": {
+    "A": "Interval/Ratio scale",
+    "B": "Dichotomous scale",
+    "C": "Nominal scale",
+    "D": "Ordinal scale"
+   },
+   "answer": "A",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_e763e9a8-273c-4bae-a31d-4a4e688ba787",
+   "question": "Folic acid deficiency is precipitated by:",
+   "options": {
+    "A": "Aspirin",
+    "B": "Ranitidine",
+    "C": "Cyclosporin",
+    "D": "Phenytoin"
+   },
+   "answer": "D",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_1821da63-79b6-4ad9-bae2-f3565b857f97",
+   "question": "In hemorrhagic shock, hypotension occurs when blood loss is more than:",
+   "options": {
+    "A": "10% - 15%",
+    "B": "15% - 30%",
+    "C": "30% - 40%",
+    "D": "More than 40%"
+   },
+   "answer": "D",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_17d0239b-33ee-44d0-9891-81a283b13b55",
+   "question": "Doc of bacterial vaginosis in pregnancy is",
+   "options": {
+    "A": "Clindamycin",
+    "B": "Metronidazole",
+    "C": "Erythromycin",
+    "D": "Rovamycin"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_77455482-e309-477c-a662-c2d26da66b19",
+   "question": "Which of these is not a cofactor for glycogen phosphorylase, an impoant enzyme of the glycogenolysis pathway?",
+   "options": {
+    "A": "Calmodulin",
+    "B": "c-AMP",
+    "C": "Protein Kinase A",
+    "D": "Glycogenin"
+   },
+   "answer": "D",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_2b776323-df34-4cab-ad74-e9d4e8c4e128",
+   "question": "Distance of the blade from the shank to have antirotational stability of the instrument?",
+   "options": {
+    "A": "2 mm",
+    "B": "3 mm",
+    "C": "4 mm",
+    "D": "5 mm"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_fd8d770d-784e-4dc2-83b7-6f41f923be5f",
+   "question": "White, spongy, folded thick mucosa is seen in",
+   "options": {
+    "A": "Oral hairy leukoplakia",
+    "B": "Aspirin burn",
+    "C": "White spongy nevus",
+    "D": "Pseudomembranous Candidiasis"
+   },
+   "answer": "C",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_c5e9dc1a-58ce-4be0-81bc-cb909c312257",
+   "question": "A 3 year old child has a fever of 102 degrees F; and\nfollowing upper respiratory tract infection discrete vesicles and ulcers on the soft plate and pharynx are noted. The most probable diagnosis is",
+   "options": {
+    "A": "Herpangina",
+    "B": "Scarlet fever",
+    "C": "RubeLlla",
+    "D": "Herpetic gingivostomatitis"
+   },
+   "answer": "A",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_5444cae2-aeab-4a04-8501-e91fe8ce794a",
+   "question": "The action of proparacaine stas within?",
+   "options": {
+    "A": "2 minutes",
+    "B": "5 minutes",
+    "C": "15 minutes",
+    "D": "20 minutes"
+   },
+   "answer": "A",
+   "subject": "Anaesthesia"
+  },
+  {
+   "id": "medmcqa_b0060b73-4e6b-4537-a556-c1fb94a65c4a",
+   "question": "A 25-year-old lady presents with sudden severe bilateral loss of vision, more so on the right side, with no perception of light. Rest of the examination including pupillary reflexes, fundus and optokinetic nystagmus are normal. She was able to touch the tips of her fingers with her right eye closed but not with her left eye closed. The most like1 tgnosis is:",
+   "options": {
+    "A": "Optic neuritis",
+    "B": "Anterior ischemic optic neuropathy",
+    "C": "CMV retinitis",
+    "D": "Functional vision loss"
+   },
+   "answer": "D",
+   "subject": "Ophthalmology"
+  },
+  {
+   "id": "medmcqa_31b780dc-dc96-470b-a6be-55d4b668ba51",
+   "question": "Glucosamines used in following condition:",
+   "options": {
+    "A": "Ahritis",
+    "B": "Niemann pick disease",
+    "C": "Alzheimer's disease",
+    "D": "Cancer"
+   },
+   "answer": "A",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_ad195e5d-7f52-42cc-a183-b05e3181d0ab",
+   "question": "A 40 years old female presented with acute onset shoness of breath. She has a history of nephrotic syndrome 1 year back and recent prolonged air travel. She has a BP of 90/60 mm Hg, hea rate of 115 per minute and sinus tachycardia on ECG. A 2-D echocardiogram revealed dilation of right ventricle with bulging of the interventricular septum to the left. What will be the primary treatment modality?",
+   "options": {
+    "A": "Thrombectomy",
+    "B": "Intravenous tissue plasminogen activator",
+    "C": "Unfractionated heparin",
+    "D": "d. IVC filter"
+   },
+   "answer": "B",
+   "subject": "Medicine"
+  },
+  {
+   "id": "medmcqa_0129977e-f5cf-4025-b727-dbf1a4d99c14",
+   "question": "Slow wave potential originates in which pa of intestine:",
+   "options": {
+    "A": "Interstitial cells of Cajal",
+    "B": "Parasympathetic neurons",
+    "C": "Smooth muscle cells",
+    "D": "Myentric plexus"
+   },
+   "answer": "A",
+   "subject": "Physiology"
+  },
+  {
+   "id": "medmcqa_377255a6-55d3-4204-a2f9-2105ecebb529",
+   "question": "Least complication in outlet forceps is:",
+   "options": {
+    "A": "Complete perinea! tear",
+    "B": "Vulval hematoma",
+    "C": "Extension of episiotomy",
+    "D": "Cervical tear"
+   },
+   "answer": "D",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_52d643b9-6455-43f0-a04e-a838bf1ba1c8",
+   "question": "Pure left sided failure may be seen with –a) ASDb) Aortic stenosisc) Patent ductus arteriosusd) Pulmonary valvular obstruction",
+   "options": {
+    "A": "a",
+    "B": "c",
+    "C": "bc",
+    "D": "ad"
+   },
+   "answer": "C",
+   "subject": "Pediatrics"
+  },
+  {
+   "id": "medmcqa_e7278113-c555-4128-a8df-cbd10ca7833f",
+   "question": "A patient is administered 200 mg of a drug. 75 mg of the drug is eliminated from the body in 90 minutes. If the drug follows first order kinetics, how much drug will remain after 6 hours?",
+   "options": {
+    "A": "12.5 mg",
+    "B": "25 mg",
+    "C": "30 mg",
+    "D": "50 mg"
+   },
+   "answer": "C",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_2dd66c3e-9b8c-421e-818b-5770ed270bfe",
+   "question": "Dental plaque adheres to the tooth because:",
+   "options": {
+    "A": "Levans are gummy",
+    "B": "Dextrans are insoluble and sticky",
+    "C": "Plaque grows into the irregularities",
+    "D": "Microorganisms produce sticky lipoproteins"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_fe55c8c7-c6ba-4882-a3c0-15171d62e603",
+   "question": "Drug of choice for scrub typhus is:",
+   "options": {
+    "A": "Azithromycin",
+    "B": "Ciprofloxacin",
+    "C": "Doxycycline",
+    "D": "Chloramphenicol"
+   },
+   "answer": "C",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_7095637c-81c9-42f8-8484-54c3eedf5623",
+   "question": "Schizonts and late trophozoite stages of plasmodium falciparum not seen in peripheral blood smear because:",
+   "options": {
+    "A": "They are sequestered in the spleen",
+    "B": "Due to adherence to the capillary endothelium, they are not seen in peripheral blood",
+    "C": "Due to antigen-antibody reaction and removal",
+    "D": "They are seen in mosquito blood"
+   },
+   "answer": "B",
+   "subject": "Microbiology"
+  },
+  {
+   "id": "medmcqa_e8b18049-9725-4ab5-89ad-2799af470822",
+   "question": "The cannula infuse maximum fluids in dehydration and diarrhea is",
+   "options": {
+    "A": "Grey",
+    "B": "Green",
+    "C": "Pink",
+    "D": "Blue"
+   },
+   "answer": "A",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_4d60bdc9-a192-424b-96f8-8ce60b75208b",
+   "question": "Which of the following is not a major maxillary metal partial denture frame work:",
+   "options": {
+    "A": "Lingual U plate",
+    "B": "Palatal strap",
+    "C": "Palatal plate",
+    "D": "Single palatal plate"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_00a9d0ce-1638-4a3d-98a6-59e99938c5db",
+   "question": "Which of the following drugs acting on dilator pupillae has an action analogous to that of pilocarpine on sphincter papillae?",
+   "options": {
+    "A": "Timolol",
+    "B": "Epinephrine",
+    "C": "Neostigmine",
+    "D": "Tropicamide"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_32cb89d3-375d-4ada-873b-4ae11edd21a1",
+   "question": "Two palatal roots are found in what percentage of maxillary 1st molars",
+   "options": {
+    "A": "1-4%",
+    "B": "2-10%",
+    "C": "0-1 %",
+    "D": "Two palatal roots are never found"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_10f55205-d1e0-47cb-8ebf-db94890cda19",
+   "question": "Square knot is composed of:",
+   "options": {
+    "A": "Two single loops thrown in opposite direction",
+    "B": "Two double loops thrown in opposite direction",
+    "C": "Two single loops thrown in same direction",
+    "D": "Two double loops thrown in Same direction"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_99ebb66d-a706-49db-aa48-96f3430ce0d4",
+   "question": "Thermal conductivity of which material is close to dentin:",
+   "options": {
+    "A": "Amalgam",
+    "B": "Silicate",
+    "C": "Composite resin",
+    "D": "Cavity varnish"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_b84e818e-f4e5-4cf9-a6a6-4e13640d3fcf",
+   "question": "A layman before introduction of fluoride in prevention of dental caries knew about it as a constituent used in",
+   "options": {
+    "A": "Pesticide",
+    "B": "Industrial use",
+    "C": "Fertilizers",
+    "D": "Irrigant"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_04f192d7-760b-468b-a895-658b0efeb566",
+   "question": "Arrange the sequence of auditory pathway from peripheral to central: Inferior colliculus Cochlear nucleus Auditory coex Medial geniculate body",
+   "options": {
+    "A": "B>A>D>C",
+    "B": "B>D>C>A",
+    "C": "A>D>B>C",
+    "D": "C>A>B>D"
+   },
+   "answer": "A",
+   "subject": "ENT"
+  },
+  {
+   "id": "medmcqa_431cd080-eae1-4b26-a7d5-42475e01fcd3",
+   "question": "Stimulated saliva as compared to unstimulated saliva has more",
+   "options": {
+    "A": "Bicarbonate",
+    "B": "Cl",
+    "C": "Na",
+    "D": "H"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_a4e71725-0ed0-4088-bec3-6cfc37490df4",
+   "question": "Light cure system, side effect is:",
+   "options": {
+    "A": "Iritis",
+    "B": "Cataract",
+    "C": "Conjunctivitis",
+    "D": "Retinal damage"
+   },
+   "answer": "D",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_5344a6b5-cfa1-47bf-8849-18ea7c196869",
+   "question": "Vulcanization refers to the setting of:",
+   "options": {
+    "A": "Reversible hydrocolloid",
+    "B": "Mercaptan impression material",
+    "C": "Zinc phosphate cement",
+    "D": "Zinc oxide-eugenol"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_99ebfb54-f46f-4053-8ef1-3c931d657bdb",
+   "question": "Biopsy specimens removed for examinations are immediately placed in:",
+   "options": {
+    "A": "10% ethanol",
+    "B": "10% formalin",
+    "C": "Hydrogen peroxide",
+    "D": "1% formalin"
+   },
+   "answer": "B",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_02a06bac-14e5-4bf2-a085-9d14305cd460",
+   "question": "Impression compound has which of the following characteristic property?",
+   "options": {
+    "A": "Low thermal conductivity",
+    "B": "High flow property",
+    "C": "Degradation in presence of moisture",
+    "D": "Remain distortion free up to 72 hrs. pouring can be safely delayed"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_a5d204a1-2ae9-428a-bf12-1419fa344668",
+   "question": "The most common bone cancer is:",
+   "options": {
+    "A": "Osteosarcoma",
+    "B": "Metastatic bone cancer",
+    "C": "Multiple myelonia",
+    "D": "Squamous cell carcinoma"
+   },
+   "answer": "B",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_ac1196e0-224c-4c6c-a6b8-2853a776ade6",
+   "question": "Which one of the following is NOT a socio-economic indicator?",
+   "options": {
+    "A": "Literacy rate",
+    "B": "Life expectancy at birth",
+    "C": "Housing",
+    "D": "Family size"
+   },
+   "answer": "B",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_7b08c0f1-55fc-45d7-b4e1-b6e4666a1f88",
+   "question": "A 26 years old patient c/o foul smelling greyish white discharge diagnosed to be Gardnerella vaginalis infection. Microscopic finding is suggestive of?",
+   "options": {
+    "A": "Group of bacilli arranged in chain forms",
+    "B": "Bacteria found to be engulfed by macrophages",
+    "C": "Bacteria adherent to lining vaginal epithelial cells",
+    "D": "Bacteria arranged in cluster forms"
+   },
+   "answer": "C",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_97ea4638-c71a-428b-b839-7638bdd467ab",
+   "question": "Manufaeturer of a drug company labels that the drug contains 500 mg of paracetamol. On analysis' if was found to contain only 200 mg of drug. Which type of drug it is known as?",
+   "options": {
+    "A": "Counterfeit drug",
+    "B": "Adulterant drug",
+    "C": "Spurious drug",
+    "D": "Unethical drug"
+   },
+   "answer": "A",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_abd87919-d7f6-44cd-b4c8-8e70630084b5",
+   "question": "Which of following is an oral precancer?",
+   "options": {
+    "A": "Oral hairy Leukoplakia",
+    "B": "White spongy naevus",
+    "C": "Leukemia",
+    "D": "Speckled Leukoplakia"
+   },
+   "answer": "D",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_108d98b3-bf9a-4d0b-92f0-3736950e4c20",
+   "question": "Carotid sinus/baroreceptor is located at the origin of",
+   "options": {
+    "A": "Common carotid artery",
+    "B": "Internal carotid artery",
+    "C": "Aorta",
+    "D": "External carotid artery"
+   },
+   "answer": "B",
+   "subject": "Physiology"
+  },
+  {
+   "id": "medmcqa_399563b2-ad18-41a9-82bc-3d49e1642fd9",
+   "question": "A child to emergency with accidental ingestion of cyanide. It blocks citric acid cycle by blocking:",
+   "options": {
+    "A": "Aconitase",
+    "B": "Acetyl-CoA production",
+    "C": "NAO",
+    "D": "Citrate"
+   },
+   "answer": "C",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_a3da135a-a6a2-4e1c-8823-8ab0913f5668",
+   "question": "A patient presented to emergency with overdose some drug. There were increased salivation and increased bronchial secretions. On examination, blood pressure was 88/60 mmHg. RBC esterase level is 50. What should be the treatment of this person?",
+   "options": {
+    "A": "Neostigmine",
+    "B": "Atropine",
+    "C": "Flumazenil",
+    "D": "Physostigmine"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_031499f6-c4ae-423c-8cef-b0b992ed9bf0",
+   "question": "Which\tof\tthe\tfollowing\tcan\tresult\tin\tParadoxical\nexcitement in children.",
+   "options": {
+    "A": "Morphine",
+    "B": "Phenobarbitone",
+    "C": "Nitrous Oxide",
+    "D": "Amphetamine"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_0ef0297d-91cb-4320-9d3e-6d04ae3e9c07",
+   "question": "Which of the following is not required for protein synthesis of eukaryotes:",
+   "options": {
+    "A": "RNA polymerase",
+    "B": "Ribosomes",
+    "C": "Peptidyl transferase",
+    "D": "Amino acyl tRNA synthetase"
+   },
+   "answer": "A",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_fa304b14-4fa8-415b-8fba-3e670529cc8a",
+   "question": "A 28 years old female presented with the history of recurrent aboions, pain in calves for 4 years. Patient is suffering from congenital deficiency of:",
+   "options": {
+    "A": "Protein C",
+    "B": "Thrombin",
+    "C": "Plasmin",
+    "D": "Factor XIII"
+   },
+   "answer": "A",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_3c7f7351-8925-4c0e-89e7-1d4b8e806797",
+   "question": "Which of the following series act as the best space\nmaintainer in a child's mouth?",
+   "options": {
+    "A": "Restored deciduous tooth",
+    "B": "Acrylic partial denture",
+    "C": "Distal shoe space maintainer",
+    "D": "Band and loop space maintainer"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_0b749e6e-3f81-4303-9377-3b49a2bd6ee5",
+   "question": "Which of the following tooth structure during formation\nis most effected due to Vit -A deficiency",
+   "options": {
+    "A": "Enamel",
+    "B": "Dentin",
+    "C": "Cementom",
+    "D": "Periodontal Ligament"
+   },
+   "answer": "A",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_838f8aa6-e9c7-4e24-ae4b-d430371f9e27",
+   "question": "An 18 years old girl presents with primary amenorrhea. On evaluation, she was having a karyotype of 45X0 and infantile uterus. What should he done next?",
+   "options": {
+    "A": "H to induce pubey",
+    "B": "Vaginoplasty",
+    "C": "Clitoroplasty",
+    "D": "Bilateral gonadectomy"
+   },
+   "answer": "D",
+   "subject": "Gynaecology & Obstetrics"
+  },
+  {
+   "id": "medmcqa_2fd85795-3aca-4bd2-b367-256d33655e91",
+   "question": "Leeway space is due to ?",
+   "options": {
+    "A": "Space differential between deciduous canine and molar and their succedaneous permanent teeth",
+    "B": "Space differential between deciduous incisors and their succedaneous permanent teeth",
+    "C": "Difference between deciduous and permanent maxillary and mandibular canines only",
+    "D": "Difference between deciduous and permanent maxillary and mandibular molars only"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_a4260f2f-ca39-4778-90a9-87064c39a11c",
+   "question": "In Mount and Hume classification, what will be the site size of the following lesion?",
+   "options": {
+    "A": "2.1",
+    "B": "2.2",
+    "C": "3.1",
+    "D": "3.2"
+   },
+   "answer": "C",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_29f210a1-e9b8-41d8-913a-9f1c4f894106",
+   "question": "Rhodopsin deficiency is chiefly associated with:",
+   "options": {
+    "A": "Vitamin D deficiency",
+    "B": "Rickets",
+    "C": "Vitamin A deficiency",
+    "D": "Scurvy"
+   },
+   "answer": "C",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_790947ee-b119-4f1f-ac07-8f0c5a701010",
+   "question": "In a child, surgery was done for biliary stricture with hepatojejunal anastomosis. Postoperative bilirubin level after 2 weeks was 6 mg/dL from a preoperative level 12mg/dL. The reason for this could be:",
+   "options": {
+    "A": "Normal lowering of bilirubin takes time",
+    "B": "Anastomotic stricture",
+    "C": "Delta bilirubin",
+    "D": "Mistake in lab technique"
+   },
+   "answer": "C",
+   "subject": "Pediatrics"
+  },
+  {
+   "id": "medmcqa_78a1bd5f-291f-4708-a187-40fd3bc901e2",
+   "question": "Which of the following is carcinoma of the skin, spreads by local invasion and has no tendency to metastasise?",
+   "options": {
+    "A": "Malignant melanoma",
+    "B": "Basal cell carcinoma",
+    "C": "Fibrosarcoma",
+    "D": "Leukoplakia"
+   },
+   "answer": "B",
+   "subject": "Pathology"
+  },
+  {
+   "id": "medmcqa_5dd40005-ebc1-4136-9b9b-70705d09e384",
+   "question": "After the appearance of rash, prophylactic isolation of measles case is necessary for a minimum of:September 2007",
+   "options": {
+    "A": "2 days",
+    "B": "5 days",
+    "C": "7 days",
+    "D": "9 days"
+   },
+   "answer": "B",
+   "subject": "Social & Preventive Medicine"
+  },
+  {
+   "id": "medmcqa_bd5b9ca9-7065-4c91-8a54-26c8d3a34501",
+   "question": "A young man was on high protein diet and raw eggs. After 3 days he developed weakness. Blood investigation revealed hypoglycemia. Hypoglycemia is due to inhibition of which of the following enzymes",
+   "options": {
+    "A": "Glucose 6 phosphatase",
+    "B": "Glycogen phosphorylase",
+    "C": "Pyruvate Carboxylase",
+    "D": "Glucokinase"
+   },
+   "answer": "C",
+   "subject": "Biochemistry"
+  },
+  {
+   "id": "medmcqa_6f0b2cc4-de54-4d80-8aa6-e9dc3acc4bb0",
+   "question": "A patient on anti-tubercular drug therapy developed tingling sensation on lower limb. Which of the following drug should be used for the treatment?",
+   "options": {
+    "A": "Thiamine",
+    "B": "Folic acid",
+    "C": "Pyridoxine",
+    "D": "Vitamin B-12"
+   },
+   "answer": "C",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_72d767a5-261a-4055-b23a-fb1e1a5acb23",
+   "question": "The fear of a 6 year old related to dentistry is primarily:",
+   "options": {
+    "A": "Subjective",
+    "B": "Objective",
+    "C": "Subjective & objective",
+    "D": "Psychological"
+   },
+   "answer": "A",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_433889ad-6b7a-4b52-b45d-2e2379f81d5e",
+   "question": "Which of the following finger has two dorsal interossei (AIIMS May 2019)",
+   "options": {
+    "A": "Little",
+    "B": "Ring",
+    "C": "Middle",
+    "D": "Index"
+   },
+   "answer": "C",
+   "subject": "Anatomy"
+  },
+  {
+   "id": "medmcqa_edb0ef61-a009-4fe9-811e-5b9d6ea40435",
+   "question": "Chances of ankyloses of mandibular molar which is autotransplanted depends on?",
+   "options": {
+    "A": "Splinting of mandibular molar",
+    "B": "Surgical extraction of molar",
+    "C": "Socket preparation of molar for autotransplantation",
+    "D": "Root kept moist in cotton"
+   },
+   "answer": "B",
+   "subject": "Dental"
+  },
+  {
+   "id": "medmcqa_52e0bdf3-57a4-4dd6-ba5c-e9facb82e61f",
+   "question": "Which of these is most commonly used as pre-anesthetic medication?",
+   "options": {
+    "A": "Atropine",
+    "B": "Promethazine",
+    "C": "Scopolamine",
+    "D": "Glycopyrrolate"
+   },
+   "answer": "D",
+   "subject": "Anaesthesia"
+  },
+  {
+   "id": "medmcqa_10919dfe-e40f-43e4-8e85-0a7679238e21",
+   "question": "Pegloticase used in which of the following conditions?",
+   "options": {
+    "A": "Chronic Gout",
+    "B": "Psoriatic ahritis",
+    "C": "RA",
+    "D": "Paralytic Ileus"
+   },
+   "answer": "A",
+   "subject": "Pharmacology"
+  },
+  {
+   "id": "medmcqa_a8741f5b-b523-461f-b335-3dbe021ad8de",
+   "question": "In postductal coarctation of the aorta, blood flow to the lower limb is maintained through which of the following arteries –",
+   "options": {
+    "A": "Umblical artery and subcostal arteries",
+    "B": "Thoracic and pericardiophrenic arteries",
+    "C": "Intercostal arteries and superior epigastric artery",
+    "D": "Ant and post circumflex arteries"
+   },
+   "answer": "C",
+   "subject": "Pediatrics"
+  },
+  {
+   "id": "medmcqa_e2dd93d8-8047-4e9a-9389-e2b1781f8a35",
+   "question": "Which is the most conspicuous sign in breast cancer?",
+   "options": {
+    "A": "Nipple retraction",
+    "B": "Peau d'orange",
+    "C": "Puckering",
+    "D": "Cancer en-cuirasse"
+   },
+   "answer": "B",
+   "subject": "Surgery"
+  },
+  {
+   "id": "medmcqa_20cbdec0-d488-4dcf-9630-2707c948390a",
+   "question": "What does low volume of distribution of a drug mean?",
+   "options": {
+    "A": "Low bioavailability",
+    "B": "Does not accumulates in tissues",
+    "C": "Low absorption",
+    "D": "Not metabolized in the body"
+   },
+   "answer": "B",
+   "subject": "Pharmacology"
+  }
+ ]
+}

@@ -1,0 +1,7 @@
+{
+  "mode": "program",
+  "answer_file": "Pipeline.java",
+  "main_class": "Main",
+  "strict": true,
+  "strip_java_package": true
+}

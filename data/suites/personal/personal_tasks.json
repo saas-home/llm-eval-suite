@@ -1,0 +1,288 @@
+{
+ "source": "original tasks written for this repository",
+ "license": "same as repository",
+ "seed": null,
+ "note": "mechanical requirements checked by code; quality criteria by the LLM judge",
+ "items": [
+  {
+   "id": "p_summarize_email",
+   "prompt": "Summarize this email in exactly 3 bullet points for a busy reader.\n\nHi all, quick logistics update for Thursday's offsite. The venue has moved from the Lakeview Hall to the Harbor Room on the 3rd floor of the same building, because of a booking conflict. We'll now start at 9:30 instead of 9:00, so you have an extra half hour. Lunch is still provided. Please bring your laptop, as the afternoon workshop is hands-on. Parking validation is available at reception. Thanks, Mia",
+   "code_checks": {
+    "bullets": 3
+   },
+   "judge_criteria": [
+    "Does the summary state that the venue changed to the Harbor Room?",
+    "Does it state the new start time of 9:30?",
+    "Does it mention bringing a laptop for the workshop?",
+    "Does it avoid details that are not in the email?"
+   ],
+   "context": "Hi all, quick logistics update for Thursday's offsite. The venue has moved from the Lakeview Hall to the Harbor Room on the 3rd floor of the same building, because of a booking conflict. We'll now start at 9:30 instead of 9:00, so you have an extra half hour. Lunch is still provided. Please bring your laptop, as the afternoon workshop is hands-on. Parking validation is available at reception. Thanks, Mia"
+  },
+  {
+   "id": "p_kyoto_trip",
+   "prompt": "Plan a 3-day budget trip to Kyoto for a first-time visitor who likes temples and food. Give a day-by-day plan.",
+   "code_checks": {
+    "must_include": [
+     "Day 1",
+     "Day 2",
+     "Day 3"
+    ]
+   },
+   "judge_criteria": [
+    "Does each day have a realistic, geographically sensible plan?",
+    "Does it include temples and food experiences?",
+    "Does it include budget-conscious choices (e.g. transit passes, cheap eats)?",
+    "Does it avoid stating specific prices or opening hours as certain facts?"
+   ]
+  },
+  {
+   "id": "p_electric_bill",
+   "prompt": "Here is my electricity bill. Explain the charges and check whether the total is correct.\n\nUsage: 620 kWh at $0.14 per kWh. Fixed service charge: $12.50. Sales tax: 6% on the energy charge plus the service charge. TOTAL DUE: $110.26",
+   "code_checks": {
+    "must_include_any": [
+     [
+      "105.26"
+     ]
+    ]
+   },
+   "judge_criteria": [
+    "Does it explain the energy charge, fixed charge and tax?",
+    "Does it conclude that the billed total is too high (overcharged by $5.00)?",
+    "Does it suggest contacting the utility about the discrepancy?"
+   ],
+   "context": "Usage: 620 kWh at $0.14 per kWh. Fixed service charge: $12.50. Sales tax: 6% on the energy charge plus the service charge. TOTAL DUE: $110.26"
+  },
+  {
+   "id": "p_phone_plans",
+   "prompt": "Which phone plan should I pick? I use about 9 GB of data a month, rarely call, and want to keep costs low.\n\nPlan A: $25/month, 5 GB data, unlimited calls. Plan B: $30/month, 15 GB data, 200 minutes. Plan C: $55/month, unlimited data, unlimited calls.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Does it recommend Plan B?",
+    "Does it justify the choice using the user's 9 GB usage and low cost priority?",
+    "Does it note Plan A's 5 GB limit is too small for 9 GB?"
+   ],
+   "context": "Plan A: $25/month, 5 GB data, unlimited calls. Plan B: $30/month, 15 GB data, 200 minutes. Plan C: $55/month, unlimited data, unlimited calls."
+  },
+  {
+   "id": "p_meal_plan",
+   "prompt": "Make a vegetarian dinner plan for 5 weeknights for two people, with a combined shopping list at the end.",
+   "code_checks": {
+    "must_include_any": [
+     [
+      "shopping list",
+      "Shopping List",
+      "Shopping list"
+     ]
+    ]
+   },
+   "judge_criteria": [
+    "Are there exactly 5 dinners, all vegetarian?",
+    "Is there a combined shopping list that covers the dinners?",
+    "Are the meals realistic for weeknights?"
+   ]
+  },
+  {
+   "id": "p_compound_interest",
+   "prompt": "Explain compound interest to someone with no finance background, with a simple numeric example.",
+   "code_checks": {
+    "max_words": 300
+   },
+   "judge_criteria": [
+    "Is the explanation correct (interest earned on previous interest)?",
+    "Is there a numeric example that is calculated correctly?",
+    "Is it understandable without finance background?"
+   ]
+  },
+  {
+   "id": "p_budget",
+   "prompt": "Here is my monthly budget. How much money is left after all expenses and my savings goal?\n\nTake-home income: $4,200. Rent: $1,450. Groceries: $520. Transport: $180. Utilities: $210. Subscriptions: $65. Savings goal: $600.",
+   "code_checks": {
+    "must_include_any": [
+     [
+      "1,175",
+      "1175"
+     ]
+    ]
+   },
+   "judge_criteria": [
+    "Does it show how the leftover amount was calculated?",
+    "Is the final leftover amount stated clearly?"
+   ],
+   "context": "Take-home income: $4,200. Rent: $1,450. Groceries: $520. Transport: $180. Utilities: $210. Subscriptions: $65. Savings goal: $600."
+  },
+  {
+   "id": "p_recipe_scale",
+   "prompt": "Scale this recipe from 4 servings to 6 servings.\n\nPancakes (serves 4): 2 cups flour, 3 eggs, 1 tsp salt, 250 ml milk, 2 tbsp sugar.",
+   "code_checks": {
+    "must_include_any": [
+     [
+      "3 cups"
+     ],
+     [
+      "375"
+     ],
+     [
+      "4.5",
+      "4 1/2",
+      "4½"
+     ]
+    ]
+   },
+   "judge_criteria": [
+    "Are all ingredients scaled by 1.5x?",
+    "Does it handle the half egg sensibly (e.g. suggests 4 or 5 eggs or beating an extra egg)?"
+   ],
+   "context": "Pancakes (serves 4): 2 cups flour, 3 eggs, 1 tsp salt, 250 ml milk, 2 tbsp sugar."
+  },
+  {
+   "id": "p_packing_list",
+   "prompt": "Make a packing list for a 5-day beach vacation, grouped into categories.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Is it grouped into sensible categories?",
+    "Does it include sun protection and swimwear?",
+    "Is it a reasonable size for 5 days?"
+   ]
+  },
+  {
+   "id": "p_router_reset",
+   "prompt": "Explain step by step how to restart a home Wi-Fi router to fix a slow connection, for a non-technical person.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Are the steps in a correct order (unplug, wait, plug back in, wait for lights)?",
+    "Does it distinguish a restart from a factory reset, or warn not to factory reset?",
+    "Is it easy to follow for a non-technical person?"
+   ]
+  },
+  {
+   "id": "p_study_plan",
+   "prompt": "Create a 4-week study plan to prepare for a beginner Spanish conversation exam, studying 30 minutes a day.",
+   "code_checks": {
+    "must_include": [
+     "Week 1",
+     "Week 2",
+     "Week 3",
+     "Week 4"
+    ]
+   },
+   "judge_criteria": [
+    "Does the plan fit 30 minutes a day?",
+    "Does it build progressively toward conversation?",
+    "Does it include speaking practice?"
+   ]
+  },
+  {
+   "id": "p_explain_kid",
+   "prompt": "Rewrite this paragraph so a 10-year-old can understand it.\n\nPhotosynthesis is the process by which chlorophyll-containing organisms convert light energy into chemical energy, synthesizing glucose from carbon dioxide and water while releasing oxygen as a byproduct.",
+   "code_checks": {
+    "max_words": 120
+   },
+   "judge_criteria": [
+    "Is the rewrite accurate to the original meaning?",
+    "Is the language simple enough for a 10-year-old?",
+    "Does it avoid jargon such as 'photosynthesis' without explaining it?"
+   ],
+   "context": "Photosynthesis is the process by which chlorophyll-containing organisms convert light energy into chemical energy, synthesizing glucose from carbon dioxide and water while releasing oxygen as a byproduct."
+  },
+  {
+   "id": "p_gift_ideas",
+   "prompt": "Suggest 5 gift ideas under $50 for a 70-year-old who loves gardening. Give one line for each.",
+   "code_checks": {
+    "bullets": 5
+   },
+   "judge_criteria": [
+    "Are all 5 ideas related to gardening or suitable for a gardener?",
+    "Are the ideas plausibly under $50?",
+    "Are the ideas suitable for a 70-year-old (e.g. not physically demanding)?"
+   ]
+  },
+  {
+   "id": "p_landlord_heater",
+   "prompt": "Write a polite message to my landlord asking them to fix the broken heater in my apartment (unit 4B), which stopped working 2 days ago. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "must_include": [
+     "4B"
+    ]
+   },
+   "judge_criteria": [
+    "Does it describe the problem and when it started?",
+    "Does it ask for a repair and a time frame?",
+    "Is it polite and clear?"
+   ]
+  },
+  {
+   "id": "p_rent_vs_buy",
+   "prompt": "I'm deciding whether to rent or buy a home. Give me a balanced list of the main considerations.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Does it cover both renting and buying fairly?",
+    "Does it mention upfront costs and flexibility?",
+    "Does it avoid telling the user which to choose without their personal details?"
+   ]
+  },
+  {
+   "id": "p_action_items",
+   "prompt": "Extract the action items from this chat, listing who does what and by when.\n\nLena: I'll send the contract draft by Wednesday. Omar: ok. Omar: I'll book the venue, aiming for Friday. Lena: sounds good, coffee later? Omar: sure.",
+   "code_checks": {
+    "must_include": [
+     "Lena",
+     "Omar"
+    ]
+   },
+   "judge_criteria": [
+    "Does it list Lena sending the contract draft by Wednesday?",
+    "Does it list Omar booking the venue by Friday?",
+    "Does it avoid inventing action items that are not in the chat?"
+   ],
+   "context": "Lena: I'll send the contract draft by Wednesday. Omar: ok. Omar: I'll book the venue, aiming for Friday. Lena: sounds good, coffee later? Omar: sure."
+  },
+  {
+   "id": "p_bill_split",
+   "prompt": "Split this restaurant bill evenly among 4 people. Tip is 18% and tax is 8%, both calculated on the subtotal.\n\nSubtotal: $184.00",
+   "code_checks": {
+    "must_include_any": [
+     [
+      "57.96"
+     ]
+    ]
+   },
+   "judge_criteria": [
+    "Does it show the tip and tax amounts?",
+    "Is the per-person amount clearly stated?"
+   ],
+   "context": "Subtotal: $184.00"
+  },
+  {
+   "id": "p_wfh_routine",
+   "prompt": "Create a simple daily routine for someone working from home 9am to 5pm who wants more exercise and fewer distractions.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Does it fit the 9-to-5 working hours?",
+    "Does it include exercise?",
+    "Does it include at least one concrete strategy against distractions?"
+   ]
+  },
+  {
+   "id": "p_lease_clause",
+   "prompt": "Explain in plain English what this lease clause means for me as a tenant.\n\nTenant shall provide Landlord with no less than sixty (60) days' written notice prior to vacating the Premises; failure to do so shall entitle Landlord to retain a pro-rated portion of the Security Deposit equal to the deficient notice period.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Does it explain that the tenant must give 60 days' written notice before moving out?",
+    "Does it explain the deposit may be partly kept if notice is short?",
+    "Does it suggest confirming the exact terms with the landlord or a qualified professional?"
+   ],
+   "context": "Tenant shall provide Landlord with no less than sixty (60) days' written notice prior to vacating the Premises; failure to do so shall entitle Landlord to retain a pro-rated portion of the Security Deposit equal to the deficient notice period."
+  },
+  {
+   "id": "p_email_tone_check",
+   "prompt": "Is this email too harsh to send to a client? If so, suggest a better version.\n\nWe told you twice already. Send the signed form today or the project stops.",
+   "code_checks": {},
+   "judge_criteria": [
+    "Does it identify that the email is too harsh or blunt?",
+    "Does it provide an improved version that keeps the key request?",
+    "Is the improved version polite and professional?"
+   ],
+   "context": "We told you twice already. Send the signed form today or the project stops."
+  }
+ ]
+}

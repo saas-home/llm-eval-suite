@@ -1,0 +1,9 @@
+{
+  "mode": "program",
+  "answer_file": "auth_service.go",
+  "go_package": "authsvc",
+  "skip_support_if_defined": {
+    "models.go": "type\\s+User\\s+struct",
+    "repository.go": "type\\s+UserRepository\\s+interface"
+  }
+}

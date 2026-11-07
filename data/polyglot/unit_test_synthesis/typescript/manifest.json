@@ -1,0 +1,31 @@
+{
+  "mode": "unit_tests",
+  "answer_file": "payment.test.ts",
+  "min_tests": 3,
+  "mutants": [
+    {
+      "name": "any_status_treated_as_success",
+      "file": "paymentProcessor.ts",
+      "replace": [
+        "if (resp.status === 'succeeded') {",
+        "if (resp.status) {"
+      ]
+    },
+    {
+      "name": "amount_guard_removed",
+      "file": "paymentProcessor.ts",
+      "replace": [
+        "if (amount <= 0) throw new Error('Amount must be positive');",
+        "if (amount < -1e9) throw new Error('Amount must be positive');"
+      ]
+    },
+    {
+      "name": "receipt_sent_with_wrong_charge_id",
+      "file": "paymentProcessor.ts",
+      "replace": [
+        "await this.notifier.sendReceipt(email, resp.id);",
+        "await this.notifier.sendReceipt(email, token);"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,608 @@
+{
+ "source": "https://github.com/openai/simple-evals (SimpleQA test set)",
+ "license": "MIT",
+ "seed": 20261106,
+ "note": "",
+ "items": [
+  {
+   "id": "simpleqa_0",
+   "question": "Who was the Argentine-English-American mathematician and biochemist famous for her use of mathematical techniques to deduce protein structure?",
+   "answer": "Dorothy Maud Wrinch",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_1",
+   "question": "In what month and year did Anna Halprin create the \"Rope Dance\" performance with Janine Antoni and Stephen Petronio in Kentfield, California?",
+   "answer": "September 2014",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_2",
+   "question": "What year did Albert-László Barabási receive the Cozzarelli Prize from the U.S. National Academies of Sciences?",
+   "answer": "2009",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_3",
+   "question": "What month, day, and year did the \"harp and bowl\" worship model start at the International House of Prayer (IHOPKC)?",
+   "answer": "September 19, 1999",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_4",
+   "question": "What was the first season in which the number of houseguests for the American version of \"Big Brother\" increased?",
+   "answer": "2",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_5",
+   "question": "How many times did Joe Powell (stunt performer) get married? What are the names of his wives?",
+   "answer": "Twice, first to Marguerite and then to Juliet.",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_6",
+   "question": "What player from Aston Villa had the most yellow cards in the 2021-22 Premier League season?",
+   "answer": "Tyrone Mings",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_7",
+   "question": "How many referees were selected from the South American Football Confederation (CONMEBOL) for the 2010 FIFA World Cup in Durban, South Africa?",
+   "answer": "6",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_8",
+   "question": "What is the surname of the individual who won the Liversidge Award in 1946?",
+   "answer": "Urey",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_9",
+   "question": "On what day, month, and year was Ila Pant (an Indian politician) born?",
+   "answer": "10 March 1938",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_10",
+   "question": "In which year did the Japanese scientist Koichi Mizushima receive the Kato Memorial Prize?",
+   "answer": "1999",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_11",
+   "question": "During the 2019 Spring-Summer fashion season, Undercover by Jun Takahashi released a collection with what name?",
+   "answer": "The New Warriors",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_12",
+   "question": "How many minutes and seconds is the length of Sidhu Moosewala's song \"Death Route\"?",
+   "answer": "3:37",
+   "topic": "Music"
+  },
+  {
+   "id": "simpleqa_13",
+   "question": "What day, month, and year was Vladislav Kaborda born?",
+   "answer": "July 24, 1995",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_14",
+   "question": "In what year was Benoni Stinson ordained to the ministry in Kentucky?",
+   "answer": "1821",
+   "topic": "History"
+  },
+  {
+   "id": "simpleqa_15",
+   "question": "What university was awarded the \"Visitor's Award\" for \"Best University\" in 2017 by the President of India?",
+   "answer": "Jawaharlal Nehru University",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_16",
+   "question": "Who was the 4th Indian president to be elected after independence from British rule?",
+   "answer": "Varahagiri Venkata Giri",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_17",
+   "question": "The main ingredients of Braulio liquor are medicinal herbs, fruits, roots, and berries that originally were collected on the slopes of what valley?",
+   "answer": "Braulio Valley",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_18",
+   "question": "What is the title in French of Dame Margot's debate song (jeu parti) in which she debates Dame Maroie?",
+   "answer": "\"Je vous pri, dame Maroie\"",
+   "topic": "Music"
+  },
+  {
+   "id": "simpleqa_19",
+   "question": "What years was Antonio de Padua María Severino López de Santa Anna y Pérez de Lebrón vice president?",
+   "answer": "1837 to 1839",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_20",
+   "question": "Which Terraria patch added the secret world seed Celebrationmk10?",
+   "answer": "1.4.2.3",
+   "topic": "Video games"
+  },
+  {
+   "id": "simpleqa_21",
+   "question": "Which player character in Exandria Unlimited: Calamity was Sam Riegel's character, Loquatius, previously married to, and who was that character's player?",
+   "answer": "Laerryn Coramar-Seelie, played by Aabria Iyengar",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_22",
+   "question": "Who was the first-ever personality to hoist the Indian National Flag in the Metaverse at the 'Azadi Ka Amrit Mahotsav' Metaverse event in 2022?",
+   "answer": "Adil Hussain",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_23",
+   "question": "What were the day, month, and year when Instagram introduced comment liking?",
+   "answer": "December 6, 2016",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_24",
+   "question": "What were the month, day, and year Elizabeth Carey, Lady Berkeley, was born?",
+   "answer": "24 May 1576",
+   "topic": "History"
+  },
+  {
+   "id": "simpleqa_25",
+   "question": "From what year to what year was David Lloyd Wolper, born in 1928, married to Toni Carroll?",
+   "answer": "1953-1955",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_26",
+   "question": "The drawing of William Buell Sr.'s (1751-1832) house he built, displayed on the historic plaque installed in 2006 at the intersection of Water Street West and Home Street in Brockville, Ontario, was drawn in 1887 by which Brockville artist?",
+   "answer": "Fred Gordon",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_27",
+   "question": "In what year did Aftab Ghulam Nabi Kazi's (12th Deputy Chairman of the Planning Commission of Pakistan) wife, Zakia Nabi Kazi, pass away?",
+   "answer": "2009",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_28",
+   "question": "How many losses did Adolf Anderssen have in his 1864 chess match against Berthold Suhle?",
+   "answer": "3",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_29",
+   "question": "Who were the runners-up for the 2000 doubles competition for the WTA Finals?",
+   "answer": "Nicole Arendt and Manon Bollegraf. ",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_30",
+   "question": "In the lore of Dungeons and Dragons, what is the name of the fortress in the Astral Plane used as a lair by the red great wyrm Ashardalon?",
+   "answer": "Bastion of Unborn Souls",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_31",
+   "question": "Who was the 3rd umpire in the Indian Premier League 2019 final match between CSK and MI on May 12, 2019?",
+   "answer": "Nigel Llong",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_32",
+   "question": "What day, month, and year did the exhibition of Horiyoshi's silk scroll paintings, \"The Art of Horiyoshi III\", end its display at Somerset House in London?",
+   "answer": "01 Jul 2012 ",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_33",
+   "question": "In which year did Fayaz A. Malik (an Indian pharmacologist, cancer biologist, and scientist) receive the Young Scientist of the Year from the Council of Scientific and Industrial Research?",
+   "answer": "2009",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_34",
+   "question": "In which month and year did Sir Frederick Lugard organize the West African Frontier Force?",
+   "answer": "August 1897",
+   "topic": "History"
+  },
+  {
+   "id": "simpleqa_35",
+   "question": "In what year did the Ethiopian politician Billene Seyoum Woldeyes co-form a spoken-word poetry collective called Zemneged-Andinet?",
+   "answer": "2011",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_36",
+   "question": "In April 2018, who won the Shorty Awards Creator of the Decade?",
+   "answer": "MKBHD",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_37",
+   "question": "What is the basin size of the Koshi River in square kilometers?",
+   "answer": "74,500 km2 ",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_38",
+   "question": "At which art institute did Cornelia Parker have her first solo museum exhibition?",
+   "answer": " Institute of Contemporary Art Boston",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_39",
+   "question": "In which year was Dina Nath Walli (an Indian watercolor artist and poet from Srinagar city) born?",
+   "answer": "1908",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_40",
+   "question": "What is the name and surname of the person who was the first recipient of the Carl E. Misch Advanced Dental Implant Studies Education Award in 2017?",
+   "answer": "Dr. Michael A. Pikos",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_41",
+   "question": "Who is the founder of Lumon Industries in \"Severance\"?",
+   "answer": "Kier Eagan",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_42",
+   "question": "What year did Bill Brown start teaching at the University of Chicago?",
+   "answer": "1989.",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_43",
+   "question": "Name the person who was appointed Vice-Chancellor of Indira Gandhi National Open University, New Delhi, in 2012.",
+   "answer": "Gopinath Pradhan",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_44",
+   "question": "In what season of Sister, Sister was \"The Road Less Traveled\" included?",
+   "answer": "6",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_45",
+   "question": "In which year was Amrita Sher-Gil (a Hungarian-Indian painter) briefly engaged to Yusuf Ali Khan?",
+   "answer": "1931",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_46",
+   "question": "In what year did artist Doris Lusk create a painting of the Tuai Power Station?",
+   "answer": "1948",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_47",
+   "question": "What coach was Mike Young an assistant to at Radford University?",
+   "answer": "Oliver Purnell",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_48",
+   "question": "Who was awarded the Oceanography Society's Jerlov Award in 2018?",
+   "answer": "Annick Bricaud",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_49",
+   "question": "In what year did Augustus De Morgan publish the article \"Trochoidal Curve\" in the Penny Cyclopaedia?",
+   "answer": "1843",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_50",
+   "question": "What day, month, and year was Aniello Formisano, an Italian politician and lawyer, born?",
+   "answer": "June 10, 1954.",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_51",
+   "question": "How many children did Ernest Moloto and Ellen Kuzwayo have?",
+   "answer": "Two",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_52",
+   "question": "Which district court in Norway was politician Nikolai Christian Grove Prebensen a deputy judge from 1878 to 1881?",
+   "answer": "Romsdal District Court",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_53",
+   "question": "Who was Patricia Bullrich's first husband?",
+   "answer": "Marcelo Langieri",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_54",
+   "question": "How many Long-Evans rats were used in the scientific paper, \"A role for anterior thalamic nuclei in affective cognition: interaction with environmental conditions,\" published in Hippocampus in May 2013?",
+   "answer": "102",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_55",
+   "question": "What was the name of the watchdog in the South African children's series \"Pumpkin Patch\" in 1988?",
+   "answer": "Woofles",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_56",
+   "question": "In what year was Professor Ascher Herman Shapiro awarded the Benjamin Garver Lamme Award by the American Society for Engineering Education?",
+   "answer": "1977",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_57",
+   "question": "The Partisan weapon in the original version of Bloodstained: Ritual of the Night for the PC is dropped by which enemy with the word \"armor\" in its name?",
+   "answer": "Lance Armor ",
+   "topic": "Video games"
+  },
+  {
+   "id": "simpleqa_58",
+   "question": "What month, day, and year did Briana Scurry marry Chryssa Zizos?",
+   "answer": "1 June 2018",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_59",
+   "question": "What day, month, and year did Lothair I, King of Italy, become King of Middle Francia?",
+   "answer": "10 August 843",
+   "topic": "History"
+  },
+  {
+   "id": "simpleqa_60",
+   "question": "What was the nationality of the scientists who used lasers to measure Usain Bolt’s performance in the different stages of a 100-meter race held in September 2011?",
+   "answer": "Belgian",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_61",
+   "question": "What was the capacity of the orchestra level of the Hanna Theatre located in Cleveland, Ohio, before its renovation?",
+   "answer": "827 seats",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_62",
+   "question": "Where was the first \"All-India Ijtema of Jamaat-e-Islami\" held?",
+   "answer": " Pathankot",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_63",
+   "question": "How heavy is my Ricoh GR III body only in grams?",
+   "answer": "227 grams",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_64",
+   "question": "What month and year was the then Indian Punjab Tourism Minister Navjot Singh Sidhu informed about the plan to open the Dera Baba Nanak–Kartarpur corridor on Guru Nanak's 550th birth anniversary?",
+   "answer": "August 2018",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_65",
+   "question": "In what year was Chattahoochee State Park in Alabama destroyed by a hurricane, which caused its permanent closure shortly thereafter?",
+   "answer": "2018.",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_66",
+   "question": "In which year did Ratan Parimoo (an Indian art historian from Kashmir) get a Cultural Scholarship for Painting from the Government of India?",
+   "answer": "1957",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_67",
+   "question": "How many mountaineers were killed in the avalanche in Uttarkashi on 4 October 2022?",
+   "answer": "27",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_68",
+   "question": "What is the other name for dodhe maaz, a Kashmiri milk-based curry cooked in spices and ghee over a low flame?",
+   "answer": "Aab gosh",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_69",
+   "question": "What is the name of the member of the judging panel who crowned Reita Faria, the winner of Miss World 1966?",
+   "answer": "Lady Annabel Birley",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_70",
+   "question": "In which surah of the Holy Quran are the palm trees and the olives mentioned in the 29th verse?",
+   "answer": "Abasa 80.",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_71",
+   "question": "Which Chinese president was nicknamed \"Mr. Democracy?\"",
+   "answer": "Lee Teng-hui.",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_72",
+   "question": "What is the name of the village in Jammu and Kashmir named after the Sufi saint Baba Payam Uddin Reshi?",
+   "answer": "Babareshi",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_73",
+   "question": "On what day, month, and year did the Brazilian mathematician Leopoldo Luis Cabo Penna Franca marry Ana Cristina Leonardos?",
+   "answer": "July 28, 1983",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_74",
+   "question": "What was the name of the venue where the 1993 Scandinavian Masters golf tournament happened?",
+   "answer": "Forsgården Golf Club",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_75",
+   "question": "How much money did Benny Hinn Ministries donate to the tsunami relief effort in 2007?",
+   "answer": "$250,000",
+   "topic": "Other"
+  },
+  {
+   "id": "simpleqa_76",
+   "question": "As of the 2004 ending date of the show, how many times did Lor McQuarrie wear heels in The Weekenders?",
+   "answer": "3",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_77",
+   "question": "Who is the credited conductor on the Super Mario Galaxy Original Soundtrack: Platinum Version?",
+   "answer": "Koji Haishima",
+   "topic": "Video games"
+  },
+  {
+   "id": "simpleqa_78",
+   "question": "What was the total area in square kilometers of Patiala and East Punjab States Union (PEPSU), a state of India uniting eight princely states between 1948 and 1956?",
+   "answer": "26,208",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_79",
+   "question": "What was the name of the Detroit-born medium to whom William Lyon Mackenzie King was introduced in 1932?",
+   "answer": "Etta Wriedt",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_80",
+   "question": "When (month-day-year) was \"I Could Have Been Your Cellmate\" released?",
+   "answer": "April 3rd, 2007",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_81",
+   "question": "What month, day, and year did the Wayback Machine begin fact-checking content?",
+   "answer": "30 October 2020",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_82",
+   "question": "Who was awarded the Rumelhart Prize in 2011?",
+   "answer": "Judea Pearl",
+   "topic": "Science and technology"
+  },
+  {
+   "id": "simpleqa_83",
+   "question": "What is the name of the first female president popularly elected as the head of state in East Asia?",
+   "answer": "Park Geun-hye ",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_84",
+   "question": "At what age did Natalia Dmitriyevna Shpiller pass away?",
+   "answer": "85",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_85",
+   "question": "What year was the municipality of Chigorodó, Antioquia, Colombia, founded?",
+   "answer": "1878",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_86",
+   "question": "What patch changed the required amount of titanium ore to make a titanium bar from 5 to 4 in Terraria?",
+   "answer": "Desktop 1.4.1",
+   "topic": "Video games"
+  },
+  {
+   "id": "simpleqa_87",
+   "question": "As of the latest official population estimate in 2015 for the town of Szentes in southeastern Hungary, what is the population density in square kilometers?",
+   "answer": "79/km2 ",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_88",
+   "question": "In which year was Monir Shahroudy Farmanfarmaian (an Iranian artist) awarded the Venice Biennale?",
+   "answer": "1958",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_89",
+   "question": "What recording label was Dylan's \"Planet Waves\" released on in the UK?",
+   "answer": "Island Records",
+   "topic": "Music"
+  },
+  {
+   "id": "simpleqa_90",
+   "question": "In which season and episode of Peaky Blinders does John get married?",
+   "answer": "Season 1, Episode 1.4",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_91",
+   "question": "Who was the first fashion designer to stream a runway show online?",
+   "answer": "Helmut Lang",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_92",
+   "question": "What were the population counts for the two municipalities of Mitrovica according to the 2011 census?",
+   "answer": "97,686",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_93",
+   "question": "After being expelled from BSP due to alleged anti-party activities, the Indian politician Kuldeep Singh Sengar joined the Samajwadi Party and won a seat from which constituency in 2007?",
+   "answer": "Bangermau",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_94",
+   "question": "How many goals did the Selkirk Fishermen score in Game 2 of the 1920 Memorial Cup against the Toronto Canoe Club Paddlers?",
+   "answer": "4",
+   "topic": "Sports"
+  },
+  {
+   "id": "simpleqa_95",
+   "question": "In what city did Marina Abramović and Uwe Laysiepen perform 'Rest Energy' in 1980?",
+   "answer": "Dublin",
+   "topic": "Art"
+  },
+  {
+   "id": "simpleqa_96",
+   "question": "How many maxi challenges did Sharon Needles win in Season 4 of RPDR?",
+   "answer": "4",
+   "topic": "TV shows"
+  },
+  {
+   "id": "simpleqa_97",
+   "question": "Between what years did Ashraf Abbasi, the first Deputy Speaker of the National Assembly of Pakistan, remain a member of the West Pakistan Assembly?",
+   "answer": "1962-1965",
+   "topic": "Politics"
+  },
+  {
+   "id": "simpleqa_98",
+   "question": "In what country is Ribes colandina found?",
+   "answer": "Perú",
+   "topic": "Geography"
+  },
+  {
+   "id": "simpleqa_99",
+   "question": "What is the name of track 10 on disc 2 of the Sen no Kiseki IV - The End of Saga - original soundtrack?",
+   "answer": "Break In",
+   "topic": "Video games"
+  }
+ ]
+}

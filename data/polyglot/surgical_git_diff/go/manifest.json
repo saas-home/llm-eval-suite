@@ -1,0 +1,5 @@
+{
+  "mode": "program",
+  "answer_file": "payroll.go",
+  "go_package": "payroll"
+}

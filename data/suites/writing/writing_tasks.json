@@ -1,0 +1,323 @@
+{
+ "source": "original tasks written for this repository",
+ "license": "same as repository",
+ "seed": null,
+ "note": "mechanical requirements checked by code; quality criteria by the LLM judge",
+ "items": [
+  {
+   "id": "w_decline_meeting",
+   "prompt": "Write an email to Priya declining Thursday's 3pm budget review because of a client call, and propose Friday at 10am instead. Keep it under 120 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 120,
+    "must_include": [
+     "[Your Name]"
+    ]
+   },
+   "judge_criteria": [
+    "Does it clearly decline the Thursday 3pm budget review?",
+    "Does it give the client call as the reason?",
+    "Does it propose Friday at 10am?",
+    "Is the tone polite and professional?",
+    "Does it avoid inventing facts not given in the task?"
+   ]
+  },
+  {
+   "id": "w_interview_followup",
+   "prompt": "Write a short follow-up email to Mr. Alvarez thanking him for yesterday's interview for the Data Analyst role, mentioning your interest in the team's forecasting project. Under 150 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 150,
+    "must_include": [
+     "Data Analyst",
+     "[Your Name]"
+    ]
+   },
+   "judge_criteria": [
+    "Does it thank the interviewer for the interview?",
+    "Does it mention the forecasting project?",
+    "Does it reaffirm interest in the role?",
+    "Is it concise and professional?"
+   ]
+  },
+  {
+   "id": "w_late_delivery_apology",
+   "prompt": "Write an apology email to a customer, Ms. Chen, whose order #88213 will arrive 3 days late because of a warehouse delay. Offer free shipping on her next order. Under 130 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 130,
+    "must_include": [
+     "88213"
+    ]
+   },
+   "judge_criteria": [
+    "Does it apologize sincerely?",
+    "Does it state the 3-day delay and the warehouse reason?",
+    "Does it offer free shipping on the next order?",
+    "Does it avoid blaming the customer or making excuses beyond the given reason?"
+   ]
+  },
+  {
+   "id": "w_extension_request",
+   "prompt": "Write an email to your manager, Tom, asking to move the Q3 report deadline from Monday to Wednesday because the sales data arrived late. Under 110 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 110
+   },
+   "judge_criteria": [
+    "Does it ask to move the deadline from Monday to Wednesday?",
+    "Does it explain that the sales data arrived late?",
+    "Is it respectful and not apologetic to excess?",
+    "Does it read as a single coherent request?"
+   ]
+  },
+  {
+   "id": "w_out_of_office",
+   "prompt": "Write an out-of-office auto-reply: away until March 14, no email access, urgent matters to Dana Lee (dana.lee@example.com). Under 60 words.",
+   "code_checks": {
+    "max_words": 60,
+    "must_include": [
+     "March 14",
+     "Dana Lee",
+     "dana.lee@example.com"
+    ]
+   },
+   "judge_criteria": [
+    "Does it say the sender is away and when they return?",
+    "Does it direct urgent matters to Dana Lee?",
+    "Is it appropriate as an automatic reply (no questions to the reader)?"
+   ]
+  },
+  {
+   "id": "w_payment_reminder",
+   "prompt": "Write a polite payment reminder to Brightline LLC: invoice #4471 for $1,250 was due 10 days ago. Ask for payment or an expected payment date. Under 120 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 120,
+    "must_include": [
+     "4471",
+     "$1,250"
+    ]
+   },
+   "judge_criteria": [
+    "Does it state the invoice is 10 days overdue?",
+    "Does it ask for payment or an expected payment date?",
+    "Is the tone polite and non-threatening?",
+    "Does it avoid inventing late fees or penalties?"
+   ]
+  },
+  {
+   "id": "w_new_hire_announcement",
+   "prompt": "Write a short team announcement welcoming Jordan Patel, our new QA engineer starting Monday, who previously worked on payments testing at a fintech. Under 100 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 100,
+    "must_include": [
+     "Jordan Patel"
+    ]
+   },
+   "judge_criteria": [
+    "Does it welcome Jordan as the new QA engineer?",
+    "Does it say Jordan starts Monday?",
+    "Does it mention the payments-testing background?",
+    "Is the tone warm and professional?"
+   ]
+  },
+  {
+   "id": "w_sms_appointment",
+   "prompt": "Write an SMS reminder from Bright Smile Dental for an appointment on Tuesday at 3pm. Ask the patient to reply C to confirm. Maximum 160 characters, no emoji.",
+   "code_checks": {
+    "max_chars": 160,
+    "no_emoji": true,
+    "must_include": [
+     "3"
+    ]
+   },
+   "judge_criteria": [
+    "Does it identify Bright Smile Dental?",
+    "Does it give the Tuesday 3pm appointment?",
+    "Does it ask the patient to reply C to confirm?"
+   ]
+  },
+  {
+   "id": "w_text_cancel_dinner",
+   "prompt": "Write a casual text to your friend Sam cancelling tonight's dinner because you're sick, and suggest Saturday instead. Under 50 words.",
+   "code_checks": {
+    "max_words": 50
+   },
+   "judge_criteria": [
+    "Does it cancel tonight's dinner?",
+    "Does it say the reason is being sick?",
+    "Does it suggest Saturday?",
+    "Is the tone casual and friendly, as for a friend?"
+   ]
+  },
+  {
+   "id": "w_linkedin_cert",
+   "prompt": "Write a LinkedIn post announcing that you earned the AWS Solutions Architect Associate certification and thanking your mentor Lisa. Use exactly 3 hashtags, no emoji, under 120 words.",
+   "code_checks": {
+    "max_words": 120,
+    "hashtags": 3,
+    "no_emoji": true,
+    "must_include": [
+     "Lisa"
+    ]
+   },
+   "judge_criteria": [
+    "Does it announce the AWS Solutions Architect Associate certification?",
+    "Does it thank Lisa as a mentor?",
+    "Is the tone professional and suitable for LinkedIn?"
+   ]
+  },
+  {
+   "id": "w_x_launch",
+   "prompt": "Write a post for X (Twitter) announcing the launch of TaskPilot, a to-do app with offline sync, available today. Use exactly 2 hashtags. Maximum 280 characters.",
+   "code_checks": {
+    "max_chars": 280,
+    "hashtags": 2,
+    "must_include": [
+     "TaskPilot"
+    ]
+   },
+   "judge_criteria": [
+    "Does it announce that TaskPilot is available today?",
+    "Does it mention offline sync?",
+    "Is it engaging and suitable for a social post?"
+   ]
+  },
+  {
+   "id": "w_instagram_bakery",
+   "prompt": "Write an Instagram caption for a bakery introducing its new pumpkin-cardamom croissant, available for October only. Exactly 3 hashtags, under 60 words.",
+   "code_checks": {
+    "max_words": 60,
+    "hashtags": 3
+   },
+   "judge_criteria": [
+    "Does it introduce the pumpkin-cardamom croissant?",
+    "Does it say it is available in October only?",
+    "Is it appetizing and on-brand for a bakery?"
+   ]
+  },
+  {
+   "id": "w_thank_colleague",
+   "prompt": "Write a thank-you note to a colleague, Aisha, who stayed late to help fix the production outage on Friday. Under 90 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 90,
+    "must_include": [
+     "Aisha"
+    ]
+   },
+   "judge_criteria": [
+    "Does it thank Aisha specifically for staying late to help with the outage?",
+    "Is it sincere and specific rather than generic?",
+    "Is the length appropriate for a note?"
+   ]
+  },
+  {
+   "id": "w_lost_luggage",
+   "prompt": "Write a complaint email to an airline about luggage lost on flight QX204 (booking reference QX7P2L). Ask for an update within 48 hours and compensation for essentials bought. Under 160 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 160,
+    "must_include": [
+     "QX7P2L",
+     "QX204"
+    ]
+   },
+   "judge_criteria": [
+    "Does it describe the lost luggage clearly?",
+    "Does it request an update within 48 hours?",
+    "Does it request compensation for essentials bought?",
+    "Is it firm but polite?"
+   ]
+  },
+  {
+   "id": "w_rewrite_rude",
+   "prompt": "Rewrite this message so it is polite and professional, keeping its meaning: \"Your report is late AGAIN. This is unacceptable. Send it now.\" Output only the rewritten message.",
+   "code_checks": {
+    "max_words": 80,
+    "must_not_include": [
+     "AGAIN",
+     "unacceptable"
+    ]
+   },
+   "judge_criteria": [
+    "Does it keep the meaning that the report is late and needed now?",
+    "Is it polite and professional?",
+    "Does it avoid passive-aggressive phrasing?"
+   ]
+  },
+  {
+   "id": "w_meeting_summary",
+   "prompt": "Turn these notes into a short email to the team with exactly 3 bullet points: 'launch moved to May 2; marketing needs final screenshots by April 20; QA sign-off owned by Ravi'. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "bullets": 3,
+    "must_include": [
+     "May 2",
+     "April 20",
+     "Ravi"
+    ]
+   },
+   "judge_criteria": [
+    "Does each bullet correspond to one of the three notes?",
+    "Is it accurate to the notes with nothing invented?",
+    "Is it clear and concise?"
+   ]
+  },
+  {
+   "id": "w_cold_outreach",
+   "prompt": "Write a cold outreach email to the operations director of a mid-size logistics company introducing RouteWise, software that cuts delivery fuel costs, and asking for a 20-minute call next week. Under 150 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 150,
+    "must_include": [
+     "RouteWise"
+    ]
+   },
+   "judge_criteria": [
+    "Does it explain what RouteWise does in one or two sentences?",
+    "Does it make a clear call to action for a 20-minute call?",
+    "Does it avoid unverifiable claims such as specific savings percentages?",
+    "Is it concise and professional?"
+   ]
+  },
+  {
+   "id": "w_refund_decline",
+   "prompt": "Write a customer-support reply: a customer asks for a refund on a jacket bought 45 days ago. Policy allows refunds within 30 days. Decline politely and offer store credit instead. Under 120 words. Sign off as \"[Your Name]\".",
+   "code_checks": {
+    "max_words": 120
+   },
+   "judge_criteria": [
+    "Does it clearly decline the refund?",
+    "Does it explain the 30-day policy?",
+    "Does it offer store credit?",
+    "Is it empathetic and polite?"
+   ]
+  },
+  {
+   "id": "w_slack_freeze",
+   "prompt": "Write a Slack message reminding the engineering team that the code freeze starts Friday at 5pm and only release-blocking fixes are allowed after that. Under 40 words.",
+   "code_checks": {
+    "max_words": 40,
+    "must_include": [
+     "5"
+    ]
+   },
+   "judge_criteria": [
+    "Does it state the code freeze starts Friday at 5pm?",
+    "Does it say only release-blocking fixes are allowed after that?",
+    "Is it suitable for a Slack channel message?"
+   ]
+  },
+  {
+   "id": "w_proofread",
+   "prompt": "Proofread and correct this paragraph, keeping its meaning and tone. Output only the corrected paragraph: \"Their going to the conferance next week, and they has asked weather we can share are slides before hand.\"",
+   "code_checks": {
+    "must_include": [
+     "They're",
+     "conference",
+     "whether",
+     "our"
+    ],
+    "max_words": 40
+   },
+   "judge_criteria": [
+    "Are all spelling and grammar errors corrected?",
+    "Is the original meaning preserved?",
+    "Is only the corrected paragraph returned?"
+   ]
+  }
+ ]
+}

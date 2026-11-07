@@ -1,0 +1,10 @@
+{
+  "mode": "program",
+  "answer_file": "pipeline.ts",
+  "strict": true,
+  "forbidden_patterns": [
+    "\\bany\\b",
+    "@ts-ignore",
+    "@ts-nocheck"
+  ]
+}

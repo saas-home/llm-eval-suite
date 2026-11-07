@@ -170,35 +170,26 @@ class TestEnvLoader(unittest.TestCase):
 
 class TestParseSelectedTests(unittest.TestCase):
     def test_numbers(self):
-        self.assertEqual(reporting.parse_selected_tests("1,3,18"), {1, 3, 18})
+        self.assertEqual(reporting.parse_selected_tests("1,3,17"), {1, 3, 17})
+
+    def test_removed_tests_are_not_selected(self):
+        """Tests 15, 16, 18, 19 and 27-30 were removed; their numbers and
+        names select nothing, and ranges skip them."""
+        self.assertEqual(reporting.parse_selected_tests("15,16,gpqa,cruxeval"), set())
+        self.assertEqual(reporting.parse_selected_tests("14-20"), {14, 17, 20})
 
     def test_range(self):
         self.assertEqual(reporting.parse_selected_tests("1-5"), {1, 2, 3, 4, 5})
 
-    def test_alias(self):
-        self.assertEqual(reporting.parse_selected_tests("aime"), {18})
-        self.assertEqual(reporting.parse_selected_tests("gpqa"), {19})
-        self.assertEqual(reporting.parse_selected_tests("gpqa_diamond"), {19})
-        self.assertEqual(reporting.parse_selected_tests("context_scaling"), {12})
-        self.assertEqual(reporting.parse_selected_tests("surgical_git_diff"), {20})
-        self.assertEqual(reporting.parse_selected_tests("git_diff"), {20})
-        self.assertEqual(reporting.parse_selected_tests("multifile_context"), {21})
-        self.assertEqual(reporting.parse_selected_tests("code_review_security"), {22})
-        self.assertEqual(reporting.parse_selected_tests("unit_test_synthesis"), {23})
-        self.assertEqual(reporting.parse_selected_tests("strict_typing"), {24})
-        self.assertEqual(reporting.parse_selected_tests("refactor_invariants"), {25})
-        self.assertEqual(reporting.parse_selected_tests("prompt_injection_defense"), {26})
-
     def test_suites(self):
         self.assertEqual(reporting.parse_selected_tests(None, "flagship"), set(range(1, 13)))
-        self.assertEqual(reporting.parse_selected_tests(None, "adversarial"), set(range(13, 16)))
-        self.assertEqual(reporting.parse_selected_tests(None, "frontier"), set(range(16, 20)))
+        self.assertEqual(reporting.parse_selected_tests(None, "adversarial"), {13, 14})
         self.assertEqual(reporting.parse_selected_tests(None, "serving"), {1, 2, 3, 7, 8, 11})
-        self.assertEqual(reporting.parse_selected_tests(None, "contract"), {5, 6, 9, 10, 27})
-        self.assertEqual(reporting.parse_selected_tests(None, "context"), {12, 13, 15})
+        self.assertEqual(reporting.parse_selected_tests(None, "contract"), {5, 6, 9, 10})
+        self.assertEqual(reporting.parse_selected_tests(None, "context"), {12, 13})
         self.assertEqual(reporting.parse_selected_tests(None, "swe"), {4, 14, 17, 20, 21, 22, 23, 24, 25})
-        self.assertEqual(reporting.parse_selected_tests(None, "reasoning"), {16, 18, 19, 26, 28, 29, 30})
-        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(range(1, reporting.TOTAL_TESTS + 1)))
+        self.assertEqual(reporting.parse_selected_tests(None, "all"), set(reporting.ALL_TESTS))
+        self.assertEqual(reporting.parse_selected_tests(None, "core"), {n for n in reporting.ALL_TESTS if n <= 31})
 
     def test_unknown_ignored(self):
         self.assertEqual(reporting.parse_selected_tests("1,not_a_test"), {1})
@@ -211,13 +202,13 @@ class TestParseSelectedTests(unittest.TestCase):
         # Exclude from default 'all'
         all_minus_vision = reporting.parse_selected_tests(None, "all", exclude_arg="2")
         self.assertNotIn(2, all_minus_vision)
-        self.assertEqual(len(all_minus_vision), reporting.TOTAL_TESTS - 1)
+        self.assertEqual(len(all_minus_vision), len(reporting.ALL_TESTS) - 1)
 
         # Exclude multiple
-        res = reporting.parse_selected_tests(None, "all", exclude_arg="2,15")
+        res = reporting.parse_selected_tests(None, "all", exclude_arg="2,13")
         self.assertNotIn(2, res)
-        self.assertNotIn(15, res)
-        self.assertEqual(len(res), reporting.TOTAL_TESTS - 2)
+        self.assertNotIn(13, res)
+        self.assertEqual(len(res), len(reporting.ALL_TESTS) - 2)
 
     def test_exclude_range_and_alias(self):
         # Exclude range from flagship suite
@@ -645,11 +636,6 @@ class TestUsageTokenExtraction(unittest.TestCase):
 class TestGPQACatalog(unittest.TestCase):
     """Verifies that GPQA Diamond is properly indexed in the catalog and suites."""
 
-    def test_gpqa_catalog_entry(self):
-        catalog_dict = {num: (key, name) for num, key, name in reporting.TEST_CATALOG}
-        self.assertIn(19, catalog_dict)
-        self.assertEqual(catalog_dict[19][0], "gpqa_diamond")
-
     def test_gpqa_metrics_extraction(self):
         metrics = reporting.extract_test_metrics("gpqa_diamond", {
             "status": "PASS",
@@ -710,87 +696,6 @@ class TestClientEnhancements(unittest.TestCase):
             res = c.call([{"role": "user", "content": "hi"}], stream=True)
             self.assertIn("Stream error: Engine overloaded", res["error"])
             self.assertEqual(res["failure_kind"], "infra")
-
-
-class TestConcurrencyExecution(unittest.TestCase):
-    """Tests for run_test_concurrency execution and metrics."""
-
-    def test_concurrency_metrics_and_error_capture(self):
-        import eval as eval_module
-        from unittest.mock import MagicMock
-        mock_client = MagicMock()
-        mock_client.call.return_value = {
-            "prompt_tokens": 2000,
-            "completion_tokens": 100,
-            "decode_speed": 50.0,
-            "ttft": 0.05,
-            "error": None
-        }
-
-        res = eval_module.run_test_concurrency(mock_client, parallel=2, contexts=[2000, 4000])
-        self.assertIn("c1", res)
-        self.assertIn("c2", res)
-        self.assertIn("matrix", res)
-        self.assertEqual(res["c1"]["status"], "PASS")
-        self.assertEqual(res["c2"]["status"], "PASS")
-        self.assertIn("mean_ttft_ms", res["c2"])
-        self.assertIn("mean_ttft_s", res["c2"])
-        self.assertIn("mean_ttft_s", res["matrix"][0])
-        self.assertAlmostEqual(res["matrix"][0]["mean_ttft_s"], 0.05, places=2)
-        self.assertIn("speedup_vs_baseline", res["c2"])
-        self.assertIn("max_prefill_tok_s", res["c2"])
-        self.assertEqual(len(res["matrix"]), 4)  # 2 client levels x 2 contexts
-        self.assertEqual(res["matrix"][0]["clients"], 1)
-        self.assertEqual(res["matrix"][0]["target_context"], 2000)
-        self.assertIn("prefill_tok_s", res["matrix"][0])
-        self.assertIn("decode_tok_s", res["matrix"][0])
-        self.assertIn("aggregate_decode_tok_s", res["matrix"][0])
-        self.assertIn("avg_prefill_tok_s", res["matrix"][0])
-        self.assertIn("agg_prefill_tok_s", res["matrix"][0])
-        self.assertIn("avg_decode_tok_s", res["matrix"][0])
-        self.assertIn("agg_decode_tok_s", res["matrix"][0])
-        self.assertIn("rows", res["c1"])
-        self.assertEqual(len(res["c1"]["rows"]), 2)
-        # c=1: Aggregate exactly equals Average
-        self.assertEqual(res["matrix"][0]["agg_decode_tok_s"], res["matrix"][0]["avg_decode_tok_s"])
-        self.assertEqual(res["matrix"][0]["agg_prefill_tok_s"], res["matrix"][0]["avg_prefill_tok_s"])
-        # c=2: Aggregate is exactly 2x Average
-        self.assertAlmostEqual(res["matrix"][2]["agg_decode_tok_s"], 2 * res["matrix"][2]["avg_decode_tok_s"], places=1)
-        self.assertAlmostEqual(res["matrix"][2]["agg_prefill_tok_s"], 2 * res["matrix"][2]["avg_prefill_tok_s"], places=1)
-
-    def test_concurrency_full_matrix_default_levels(self):
-        import eval as eval_module
-        from unittest.mock import MagicMock
-        mock_client = MagicMock()
-        mock_client.call.return_value = {
-            "prompt_tokens": 2000,
-            "completion_tokens": 64,
-            "decode_speed": 40.0,
-            "ttft": 0.04,
-            "error": None
-        }
-        # parallel=4 executes 1, 2, 3, 4 clients across 5 contexts [2k, 4k, 8k, 16k, 32k]
-        res = eval_module.run_test_concurrency(mock_client, parallel=4)
-        for c in [1, 2, 3, 4]:
-            self.assertIn(f"c{c}", res)
-            self.assertEqual(res[f"c{c}"]["status"], "PASS")
-        self.assertEqual(len(res["matrix"]), 20)  # 4 clients * 5 contexts = 20 data points
-
-    def test_concurrency_error_propagated(self):
-        import eval as eval_module
-        from unittest.mock import MagicMock
-        mock_client = MagicMock()
-        mock_client.call.return_value = {
-            "completion_tokens": 0,
-            "decode_speed": 0.0,
-            "ttft": 0.0,
-            "error": "HTTPError 500: Internal Server Error"
-        }
-
-        res = eval_module.run_test_concurrency(mock_client, parallel=2, contexts=[2000])
-        self.assertEqual(res["c2"]["status"], "DEGRADED/FAIL")
-        self.assertTrue(len(res["c2"]["errors"]) > 0)
-        self.assertIn("HTTPError 500", res["c2"]["errors"][0])
 
 
 class TestSummaryTableFormatting(unittest.TestCase):
@@ -972,26 +877,6 @@ class TestEndpointConfigScoping(unittest.TestCase):
         self.assertEqual(detected_ctx, 204800)
 
 
-class TestConcurrencyParallelScaling(unittest.TestCase):
-    def test_parallel_6_levels(self):
-        import eval as eval_module
-        from unittest.mock import MagicMock
-        mock_client = MagicMock()
-        mock_client.call.return_value = {
-            "prompt_tokens": 1000,
-            "completion_tokens": 32,
-            "decode_speed": 40.0,
-            "ttft": 0.05,
-            "error": None
-        }
-        res = eval_module.run_test_concurrency(mock_client, parallel=6, contexts=[1000])
-        # Concurrency 6 must evaluate levels 1, 2, 4, and 6
-        for c in [1, 2, 4, 6]:
-            self.assertIn(f"c{c}", res)
-            self.assertEqual(res[f"c{c}"]["status"], "PASS")
-            self.assertIn("p95_ttft_ms", res[f"c{c}"]["rows"][0])
-
-
 class TestStopSequencesStrictness(unittest.TestCase):
     def test_counting_past_stop_is_rejected(self):
         import eval as eval_module
@@ -1009,10 +894,17 @@ class TestStopSequencesStrictness(unittest.TestCase):
             {"content": "83810205", "error": None},
             # Determinism call 2
             {"content": "83810205", "error": None},
+            # Determinism call 3
+            {"content": "83810205", "error": None},
         ]
         res = eval_module.run_test_stop_sequences(mock_client)
         self.assertFalse(res["stop_sequence_respected"])
         self.assertEqual(res["status"], "PARTIAL")  # deterministic was true, but stop was false
+
+
+def languages_has_git():
+    import shutil
+    return bool(shutil.which("git"))
 
 
 class TestSWEAndReasoningSuites(unittest.TestCase):
@@ -1040,15 +932,22 @@ class TestSWEAndReasoningSuites(unittest.TestCase):
             "ttft": 0.05,
             "error": None
         }
+        if not languages_has_git():
+            self.skipTest("git required")
         res = eval_module.run_test_surgical_git_diff(mock_client)
         self.assertTrue(res["valid_diff_syntax"])
-        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+        # The hunk header does not match its body, and the model sends the
+        # same diff every time: git apply rejects it, two retries, then FAIL.
+        self.assertFalse(res["git_apply_passed"])
+        self.assertEqual(mock_client.call.call_count, 3)
+        self.assertEqual(res["status"], "FAIL")
 
     def test_multifile_context_ast(self):
         import eval as eval_module
         from unittest.mock import MagicMock
         mock_client = MagicMock()
         code = (
+            "from models import AuthToken\n"
             "class AuthenticationService:\n"
             "    def __init__(self, user_repo, config):\n"
             "        self.user_repo = user_repo\n"
@@ -1171,7 +1070,11 @@ class TestSWEAndReasoningSuites(unittest.TestCase):
         }
         res = eval_module.run_test_unit_test_synthesis(mock_client)
         self.assertTrue(res["ast_valid"])
-        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+        # One test where three are required, sent again on every retry:
+        # two retries with the count in the feedback, then FAIL.
+        self.assertEqual(mock_client.call.call_count, 3)
+        self.assertIn("at least 3", res["attempts"][0]["feedback"])
+        self.assertEqual(res["status"], "FAIL")
 
     def test_refactor_invariants_ast(self):
         import eval as eval_module
@@ -1285,7 +1188,13 @@ class TestPolyglotSWEBenchmarkSuite(unittest.TestCase):
         self.assertEqual(languages.extract_code_by_language(rs_text, "rust"), "pub fn solve() -> i32 { 1 }")
 
     def test_verify_multifile_polyglot(self):
+        # Structural fallback (no toolchain): fragments are syntax-checked and
+        # symbols counted, but the result can never be a PASS.
         import languages
+        import polyglot
+        patcher = mock.patch.object(polyglot, "toolchain_available", return_value=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         ts_code = "export class AuthenticationService { constructor(userRepo: IUserRepository, config: TenantConfig) {} async authenticate(userId: string): Promise<AuthToken | null> { return null; } }"
         v = languages.verify_multifile_context(ts_code, "typescript")
         self.assertTrue(v["syntax_valid"])
@@ -1295,37 +1204,50 @@ class TestPolyglotSWEBenchmarkSuite(unittest.TestCase):
         v_go = languages.verify_multifile_context(go_code, "go")
         self.assertTrue(v_go["syntax_valid"])
         self.assertGreaterEqual(v_go["symbols_resolved"], 2)
+        self.assertEqual(v_go["status"], "PARTIAL")
 
     def test_verify_unit_test_polyglot(self):
+        # Without a toolchain the structural fallback must never award a PASS:
+        # trivial stubs like `expect(mock).toBeDefined()` are not a test suite.
         import languages
-        ts_test = "describe('PaymentProcessor', () => { it('calls sendReceipt on success', () => { const mockGateway = { charge: jest.fn() }; expect(mockGateway.charge).toBeDefined(); }); });"
-        v_ts = languages.verify_unit_test(ts_test, "typescript", "")
-        self.assertEqual(v_ts["status"], "PASS")
+        import polyglot
+        with mock.patch.object(polyglot, "toolchain_available", return_value=False):
+            ts_test = "describe('PaymentProcessor', () => { it('calls sendReceipt on success', () => { const mockGateway = { charge: jest.fn() }; expect(mockGateway.charge).toBeDefined(); }); });"
+            v_ts = languages.verify_unit_test(ts_test, "typescript", "")
+            self.assertEqual(v_ts["status"], "PARTIAL")
+            self.assertFalse(v_ts["execution_verified"])
 
-        java_test = "@Test\nvoid testCharge() { var mockGateway = Mockito.mock(StripeGateway.class); Mockito.verify(mockGateway); }"
-        v_java = languages.verify_unit_test(java_test, "java", "")
-        self.assertEqual(v_java["status"], "PASS")
+            java_test = "@Test\nvoid testCharge() { var mockGateway = Mockito.mock(StripeGateway.class); Mockito.verify(mockGateway); }"
+            self.assertNotEqual(languages.verify_unit_test(java_test, "java", "")["status"], "PASS")
 
-        csharp_test = "[Fact]\npublic void TestSuccess() { var mock = new Mock<IStripeGateway>(); mock.Verify(m => m.ChargeAsync()); }"
-        v_cs = languages.verify_unit_test(csharp_test, "csharp", "")
-        self.assertEqual(v_cs["status"], "PASS")
+            csharp_test = "[Fact]\npublic void TestSuccess() { var mock = new Mock<IStripeGateway>(); mock.Verify(m => m.ChargeAsync()); }"
+            self.assertNotEqual(languages.verify_unit_test(csharp_test, "csharp", "")["status"], "PASS")
 
     def test_verify_strict_typing_polyglot(self):
+        # Pattern matching cannot prove type safety: without a compiler the
+        # result is unverified and must not be a PASS.
         import languages
-        ts_typing = "export class Pipeline<T> { constructor(private readonly data: ReadonlyArray<T>) {} map<U>(fn: (item: T) => U): Pipeline<U> { return new Pipeline<U>([]); } filter(predicate: (item: T) => boolean): Pipeline<T> { return this; } execute(): T[] { return [...this.data]; } }"
-        v_ts = languages.verify_strict_typing(ts_typing, "typescript")
-        self.assertEqual(v_ts["status"], "PASS")
+        import polyglot
+        with mock.patch.object(polyglot, "toolchain_available", return_value=False):
+            ts_typing = "export class Pipeline<T> { constructor(private readonly data: ReadonlyArray<T>) {} map<U>(fn: (item: T) => U): Pipeline<U> { return new Pipeline<U>([]); } filter(predicate: (item: T) => boolean): Pipeline<T> { return this; } execute(): T[] { return [...this.data]; } }"
+            v_ts = languages.verify_strict_typing(ts_typing, "typescript")
+            self.assertTrue(v_ts["all_annotated"])
+            self.assertEqual(v_ts["status"], "PARTIAL")
 
-        go_typing = "type Pipeline[T any] struct { data []T }\nfunc NewPipeline[T any](data []T) *Pipeline[T] { return &Pipeline[T]{data: data} }\nfunc (p *Pipeline[T]) Execute() []T { return p.data }"
-        v_go = languages.verify_strict_typing(go_typing, "go")
-        self.assertEqual(v_go["status"], "PASS")
+            go_typing = "type Pipeline[T any] struct { data []T }\nfunc NewPipeline[T any](data []T) *Pipeline[T] { return &Pipeline[T]{data: data} }\nfunc (p *Pipeline[T]) Execute() []T { return p.data }"
+            self.assertEqual(languages.verify_strict_typing(go_typing, "go")["status"], "PARTIAL")
 
     def test_verify_refactoring_polyglot(self):
+        # This "refactor" drops rounding, discounts and price validation; only
+        # differential execution can tell, so unverified must not PASS.
         import languages
-        ts_refactored = "export function processOrderData(records: OrderRecord[] | null | undefined): ProcessedOrder[] { if (!records) return []; return records.filter(r => r.qty && r.qty > 0).map(r => ({ id: r.id || 'N/A', total: r.qty! * r.price! })); }"
-        v_ts = languages.verify_refactoring(ts_refactored, "typescript")
-        self.assertTrue(v_ts["invariants_preserved"])
-        self.assertEqual(v_ts["status"], "PASS")
+        import polyglot
+        with mock.patch.object(polyglot, "toolchain_available", return_value=False):
+            ts_refactored = "export function processOrderData(records: OrderRecord[] | null | undefined): ProcessedOrder[] { if (!records) return []; return records.filter(r => r.qty && r.qty > 0).map(r => ({ id: r.id || 'N/A', total: r.qty! * r.price! })); }"
+            v_ts = languages.verify_refactoring(ts_refactored, "typescript")
+            self.assertFalse(v_ts["invariants_preserved"])
+            self.assertFalse(v_ts["execution_verified"])
+            self.assertEqual(v_ts["status"], "PARTIAL")
 
     def test_eval_runners_with_non_python_language(self):
         import eval as eval_module
@@ -1338,9 +1260,11 @@ class TestPolyglotSWEBenchmarkSuite(unittest.TestCase):
             "ttft": 0.05,
             "error": None
         }
-        res = eval_module.run_test_multifile_context(mock_client, language="typescript")
+        import polyglot
+        with mock.patch.object(polyglot, "toolchain_available", return_value=False):
+            res = eval_module.run_test_multifile_context(mock_client, language="typescript")
         self.assertEqual(res["language"], "typescript")
-        self.assertIn(res["status"], ("PASS", "PARTIAL"))
+        self.assertEqual(res["status"], "PARTIAL")  # unverified without a toolchain
 
     def test_polyglot_mode_dispatch_aggregation(self):
         import eval as eval_module
@@ -1499,6 +1423,10 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
             "        processor = PaymentProcessor(mock_gw, MagicMock())\n"
             "        res = processor.process_order('user@example.com', 100, 'tok_fail')\n"
             "        self.assertFalse(res)\n"
+            "    def test_negative_amount(self):\n"
+            "        processor = PaymentProcessor(MagicMock(), MagicMock())\n"
+            "        with self.assertRaises(ValueError):\n"
+            "            processor.process_order('user@example.com', -5, 'tok')\n"
         )
         source = languages.UNIT_TEST_FIXTURES["python"]["source"]
         res = languages.verify_unit_test(unit_test_code, "python", source)
@@ -1529,24 +1457,25 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
 
     def test_verify_refactoring_future_import_hoisted(self):
         import languages
+        # A faithful refactor (same 'N/A' default, validation and rounding)
+        # that starts with a __future__ import, which must be hoisted.
         refactored_code = (
             "from __future__ import annotations\n"
-            "def process_order_data(orders: list[dict] | None = None) -> list[dict]:\n"
-            "    if not orders:\n"
+            "def process_order_data(records: list[dict] | None) -> list[dict]:\n"
+            "    if records is None:\n"
             "        return []\n"
-            "    result = []\n"
-            "    for o in orders:\n"
-            "        qty = o.get('qty', 0)\n"
-            "        price = o.get('price', 0)\n"
-            "        if qty <= 0:\n"
+            "    res = []\n"
+            "    for r in records:\n"
+            "        if not r or 'qty' not in r or 'price' not in r:\n"
             "            continue\n"
-            "        discount = o.get('discount', 0.0)\n"
-            "        total = qty * price * (1.0 - discount)\n"
-            "        item = {'id': o.get('id'), 'total': total}\n"
-            "        if item['id'] is None:\n"
-            "            del item['id']\n"
-            "        result.append(item)\n"
-            "    return result\n"
+            "        q, p = r['qty'], r['price']\n"
+            "        if q <= 0 or p < 0:\n"
+            "            continue\n"
+            "        total = q * p\n"
+            "        if 'discount' in r and 0 < r['discount'] <= 1:\n"
+            "            total = total * (1 - r['discount'])\n"
+            "        res.append({'id': r.get('id', 'N/A'), 'total': round(total, 2)})\n"
+            "    return res\n"
         )
         res = languages.verify_refactoring(refactored_code, "python")
         self.assertTrue(res["syntax_valid"])
@@ -1597,7 +1526,9 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
             self.assertEqual(res["status"], "FAIL")
             self.assertFalse(res["recovered"])
 
-    def test_json_schema_prose_outermost_fallback(self):
+    def test_json_schema_prose_wrapped_json_is_not_json_mode(self):
+        # response_format=json_object must yield a pure JSON document; prose
+        # around the object means the constraint was not honored.
         import eval as eval_module
         from unittest.mock import MagicMock
         mock_client = MagicMock()
@@ -1610,52 +1541,9 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
             "decode_speed": 40.0
         }
         res = eval_module.run_test_json_schema(mock_client)
-        self.assertTrue(res["valid_json"])
-        self.assertTrue(res["valid_schema"])
-        self.assertEqual(res["status"], "PASS")
-
-    def test_medical_research_budget_survives_thinking_models(self):
-        # Regression: partial run 20261104_031135 — USMLE items recorded
-        # extracted=null because the 500-token budget was fully consumed by the
-        # model's reasoning trace before it emitted the 'Answer: <letter>' line.
-        # The harness must give reasoning models enough budget to finish.
-        import eval as eval_module
-        import domain_benchmarks
-        from unittest.mock import MagicMock
-
-        usmle = domain_benchmarks.load_benchmark_dataset("medical/usmle_clinical.json")
-        pubmed = domain_benchmarks.load_benchmark_dataset("medical/biomedical_pubmed.json")
-        long_reasoning = "Let me analyze this clinical vignette systematically. " * 220
-
-        def fake_call(messages, **kwargs):
-            prompt = messages[0]["content"]
-            answer = None
-            for item in usmle:
-                if item["question"] in prompt:
-                    answer = f"Answer: {item['answer']}"
-                    break
-            if answer is None:
-                for item in pubmed:
-                    if item["question"] in prompt:
-                        answer = f"Conclusion: {item['final_decision'].lower()}"
-                        break
-            self.assertIsNotNone(answer, "prompt did not match any dataset item")
-            return {
-                "content": answer,
-                "reasoning": long_reasoning,
-                "text": long_reasoning + "\n\n" + answer,
-                "completion_tokens": kwargs.get("max_tokens", 0),
-                "ttft": 1.0,
-                "decode_speed": 40.0,
-            }
-
-        mock_client = MagicMock()
-        mock_client.call.side_effect = fake_call
-        res = eval_module.run_test_medical_research(mock_client)
-        self.assertEqual(res["status"], "PASS")
-        self.assertEqual(res["accuracy_pct"], 100.0)
-        for c in mock_client.call.call_args_list:
-            self.assertGreaterEqual(c.kwargs["max_tokens"], 1024)
+        self.assertFalse(res["valid_json"])
+        self.assertFalse(res["valid_schema"])
+        self.assertEqual(res["status"], "FAIL")
 
     def test_streamed_tool_call_ttft_recorded(self):
         from unittest.mock import patch, MagicMock
@@ -1687,95 +1575,6 @@ class TestCodeReviewBugFixesAndRobustness(unittest.TestCase):
         adv_depth = min(32000, max(milestones))
         self.assertLessEqual(adv_depth, max_context)
         self.assertEqual(adv_depth, max(milestones))
-
-
-class TestWorkloadSuitabilityAndPurposeQualification(unittest.TestCase):
-    """Verifies that the benchmark accurately qualifies model suitability across enterprise workload purposes."""
-
-    def test_suitability_matrix_classification(self):
-        import reporting
-        mock_report = {
-            "model": "qwen3.8-27b",
-            "endpoint": "http://localhost:8888/v1",
-            "results": {
-                # Agents and Tools: 100%
-                "tool_calling": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 150},
-                "json_schema": {"status": "PASS", "completion_tokens": 50, "tok_s": 44.0, "ttft_ms": 120},
-                "client_abort": {"status": "PASS", "completion_tokens": 10, "tok_s": 40.0, "ttft_ms": 100},
-                "prompt_injection_defense": {"status": "PASS", "completion_tokens": 80, "tok_s": 45.0, "ttft_ms": 140},
-                # Deep Reasoning: 100%
-                "cruxeval": {"status": "PASS", "completion_tokens": 120, "tok_s": 45.0, "ttft_ms": 130},
-                "aime_olympiad": {"status": "PASS", "completion_tokens": 300, "tok_s": 45.0, "ttft_ms": 160},
-                "gpqa_diamond": {"status": "PASS", "completion_tokens": 250, "tok_s": 44.0, "ttft_ms": 150},
-                # Long Context: 100%
-                "context_scaling": {"status": "PASS", "completion_tokens": 200, "tok_s": 42.0, "ttft_ms": 2000},
-                "multihop_graph": {"status": "PASS", "completion_tokens": 800, "tok_s": 40.0, "ttft_ms": 5000},
-                "frontier_needle_depth": {"status": "PASS", "completion_tokens": 150, "tok_s": 41.0, "ttft_ms": 6000},
-                "extreme_precision": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 140},
-                # Vision: 100%
-                "vision": {"status": "PASS", "completion_tokens": 500, "tok_s": 45.0, "ttft_ms": 950},
-                # Serving: 100%
-                "streaming": {"status": "PASS", "completion_tokens": 100, "tok_s": 46.0, "ttft_ms": 180},
-                "concurrency": {"status": "PASS", "completion_tokens": 128, "tok_s": 80.0, "ttft_ms": 2500},
-                "prefix_caching": {"status": "PASS", "completion_tokens": 100, "tok_s": 45.0, "ttft_ms": 2500},
-                "stop_sequences": {"status": "PASS", "completion_tokens": 50, "tok_s": 45.0, "ttft_ms": 120},
-                "error_handling": {"status": "PASS", "completion_tokens": 20, "tok_s": 45.0, "ttft_ms": 100},
-                # Software Engineering: Partial failure
-                "capabilities_4tasks": {
-                    "status": "FAIL",
-                    "tasks": [
-                        {"id": "task1", "name": "AVL Tree", "status": "PARTIAL"},
-                        {"id": "task2", "name": "Concurrency", "status": "PASS"},
-                        {"id": "task3", "name": "Rate Limiter", "status": "PASS"},
-                        {"id": "task4", "name": "Hidden Constraints", "status": "PASS"},
-                    ],
-                    "tokens": 4400, "tok_s": 45.0, "ttft_ms": 150
-                },
-                "novel_algorithm_fuzz": {"status": "PASS", "completion_tokens": 300, "tok_s": 45.0, "ttft_ms": 140},
-                "swe_bench_bug_patch": {"status": "PASS", "completion_tokens": 200, "tok_s": 45.0, "ttft_ms": 140},
-                "surgical_git_diff": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 130},
-                "multifile_context": {"status": "PASS", "completion_tokens": 200, "tok_s": 45.0, "ttft_ms": 140},
-                "code_review_security": {"status": "PASS", "completion_tokens": 180, "tok_s": 45.0, "ttft_ms": 140},
-                "unit_test_synthesis": {"status": "FAIL", "completion_tokens": 400, "tok_s": 45.0, "ttft_ms": 150},
-                "strict_typing": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 140},
-                "refactor_invariants": {"status": "PASS", "completion_tokens": 150, "tok_s": 45.0, "ttft_ms": 140},
-            }
-        }
-
-        suitability = reporting.compute_task_suitability_matrix(mock_report)
-        matrix = suitability["matrix"]
-
-        self.assertIn("agents_and_tools", matrix)
-        self.assertIn("deep_reasoning", matrix)
-        self.assertIn("long_context_rag", matrix)
-        self.assertIn("multimodal_vision", matrix)
-        self.assertIn("serving_and_batching", matrix)
-        self.assertIn("software_engineering", matrix)
-
-        self.assertEqual(matrix["agents_and_tools"]["rating"], "EXCELLENT")
-        self.assertEqual(matrix["agents_and_tools"]["score_pct"], 100.0)
-        self.assertEqual(matrix["deep_reasoning"]["rating"], "EXCELLENT")
-        self.assertEqual(matrix["long_context_rag"]["rating"], "EXCELLENT")
-        self.assertEqual(matrix["multimodal_vision"]["rating"], "EXCELLENT")
-        self.assertEqual(matrix["serving_and_batching"]["rating"], "EXCELLENT")
-
-        self.assertEqual(matrix["software_engineering"]["rating"], "COMPETENT")
-        self.assertAlmostEqual(matrix["software_engineering"]["score_pct"], 77.8, places=1)
-
-        best_domains = [b["domain"] for b in suitability["best_suited_for"]]
-        self.assertIn("Autonomous Agents & Tool Execution", best_domains)
-        self.assertIn("Long-Context Retrieval & RAG Pipelines", best_domains)
-        self.assertIn("Deep Reasoning, Science & Math", best_domains)
-
-        caution_domains = [c["domain"] for c in suitability["caution_areas"]]
-        self.assertIn("Unit Test Synthesis", caution_domains)
-        self.assertIn("Large Output Horizons", caution_domains)
-
-        summary = reporting.compute_executive_summary(mock_report)
-        self.assertIn("workload_suitability", summary)
-        self.assertIn("best_suited_for", summary)
-        self.assertIn("caution_areas", summary)
-        self.assertIn("workload_profile", summary)
 
 
 class TestMultiAdapterCatalogAndMetrics(unittest.TestCase):

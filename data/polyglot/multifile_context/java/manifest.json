@@ -1,0 +1,12 @@
+{
+  "mode": "program",
+  "answer_file": "AuthenticationService.java",
+  "main_class": "Main",
+  "strip_java_package": true,
+  "skip_support_if_defined": {
+    "User.java": "record\\s+User\\b",
+    "TenantConfig.java": "record\\s+TenantConfig\\b",
+    "AuthToken.java": "record\\s+AuthToken\\b",
+    "UserRepository.java": "interface\\s+UserRepository\\b"
+  }
+}

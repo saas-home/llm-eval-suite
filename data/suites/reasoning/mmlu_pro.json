@@ -1,0 +1,1777 @@
+{
+ "source": "https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro (test)",
+ "license": "MIT",
+ "seed": 20261106,
+ "note": "",
+ "items": [
+  {
+   "id": "mmlupro_4402",
+   "category": "chemistry",
+   "question": "At 40°C the vapor pressures of two liquids A and B are 20 mm Hg and 40 mm Hg respectively. Liquid A has a normal boiling point of 120°C and that for liquid B is 140°C. Given that the heat of vaporization of A is 11.3 kcal/mole which of the following best describes the heat of vaporiza-tion of B(5.65 kcal/mole, 11.09 kcal/mole, 22.6 kcal/mole, less than 11.3 kcal/mole, greater than 11.09 kcal/mole, about the same, indeterminate because of insufficient data)?",
+   "options": {
+    "A": "22.6 kcal",
+    "B": "5.65 kcal",
+    "C": "7.58 kcal",
+    "D": "11.3 kcal"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlupro_9825",
+   "category": "physics",
+   "question": "Thermal conduction involves mainly",
+   "options": {
+    "A": "isotopes",
+    "B": "ions",
+    "C": "mesons",
+    "D": "protons",
+    "E": "photons",
+    "F": "electrons",
+    "G": "quarks",
+    "H": "positrons",
+    "I": "molecules",
+    "J": "neutrons"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_9152",
+   "category": "physics",
+   "question": "In a hologram interference experiment with a helium-neon laser, the surface under test is illuminated and viewed at normal incidence. If the displacement to be determined is 2500 nm, by how many fringes will it be represented if (a) the displacement is normal to the surface, (b) it is 45° to the normal, and (c) it is in the plane of the surface?",
+   "options": {
+    "A": "(a) 7.9 fringes, (b) 0 fringes, (c) 5.6 fringes",
+    "B": "(a) 3.5 fringes, (b) 7.9 fringes, (c) 2.8 fringes",
+    "C": "(a) 0 fringes, (b) 3.5 fringes, (c) 5.6 fringes",
+    "D": "(a) 7.9 fringes, (b) 5.6 fringes, (c) 0 fringes",
+    "E": "(a) 5.6 fringes, (b) 7.9 fringes, (c) 0 fringes",
+    "F": "(a) 3.5 fringes, (b) 2.8 fringes, (c) 0 fringes",
+    "G": "(a) 5.6 fringes, (b) 3.5 fringes, (c) 2.8 fringes",
+    "H": "(a) 0 fringes, (b) 5.6 fringes, (c) 7.9 fringes",
+    "I": "(a) 5.6 fringes, (b) 0 fringes, (c) 3.5 fringes",
+    "J": "(a) 2.8 fringes, (b) 3.5 fringes, (c) 7.9 fringes"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_4066",
+   "category": "chemistry",
+   "question": "Consider the formation ofethylcyclohexane(C_8H_16) C_8H_10(l) + 3H_2(g) = C_8H_16\\DeltaH298°K= - 48.3 kcal and C_8H_8(l) + 4H_2 (g) = C_8H_16\\DeltaH_298°K = - 74.65 kcal . Given that at 298°K, the heats of combustion of C_8H_16 to water vapor and CO_2 is - 1238.23 kcal/mole, and the heats of formation of water vapor and CO_2 are, - 58.32 and - 94.05 kcal/mole respectively, calculate (a) heat of hydrogena-tion of styrene toethylbenzene. (b) the heat of formation ofethylbenzene.",
+   "options": {
+    "A": "- 26.4 kcal, 67.6 kcal",
+    "B": "- 32.6 kcal, 64.1 kcal",
+    "C": "-30.5 kcal, 70.2 kcal",
+    "D": "- 24.7 kcal, 66.2 kcal",
+    "E": "- 28.6 kcal, 65.4 kcal",
+    "F": "- 31.8 kcal, 72.5 kcal",
+    "G": "- 23.9 kcal, 70.7 kcal",
+    "H": "- 25.5 kcal, 71.9 kcal",
+    "I": "- 27.3 kcal, 69.8 kcal",
+    "J": "- 29.2 kcal, 68.3 kcal"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_10029",
+   "category": "physics",
+   "question": "Standing waves are produced by the superposition of two waves of the form y_1= 15 sin (3\\pit \\rule{1em}{1pt} 5x)(1) y_2 = 15 sin (3\\pit + 5x)(2) Find the amplitude of motion at x = 21.",
+   "options": {
+    "A": "24",
+    "B": "30",
+    "C": "21",
+    "D": "12",
+    "E": "27",
+    "F": "9.27",
+    "G": "0",
+    "H": "15",
+    "I": "7.5",
+    "J": "18.54"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_827",
+   "category": "business",
+   "question": " Four competing philosophies strongly influence the role of marketing and marketing activities within an organization. Which if the following is not a component of market orientation?",
+   "options": {
+    "A": "Ethical orientation.",
+    "B": "Product orientation.",
+    "C": "Interfunctional coordination.",
+    "D": "Stakeholder orientation.",
+    "E": "Profitability orientation.",
+    "F": "Innovation orientation.",
+    "G": "Sustainability orientation.",
+    "H": "Public relations orientation.",
+    "I": "Competitor orientation.",
+    "J": "Customer orientation."
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_7621",
+   "category": "economics",
+   "question": "What is the primary objective of management in managerial economics?",
+   "options": {
+    "A": "maximization of the firm's value",
+    "B": "minimization of costs",
+    "C": "maximization of market share",
+    "D": "minimization of environmental impact",
+    "E": "maximization of social welfare",
+    "F": "maximization of production output",
+    "G": "maximization of customer satisfaction",
+    "H": "minimization of risk exposure",
+    "I": "maximization of employee satisfaction",
+    "J": "maximization of profits"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_1433",
+   "category": "law",
+   "question": "A husband and wife were about to leave on vacation for one month. They thought it would be a great idea to have new carpeting installed in their home while they were away. They contacted a reputable carpeting company, which offered to do the job for $7,000. The husband and wife agreed, gave a set of house keys to the carpeting company, and left on vacation. A week later, the carpeting company discovered that they had overbooked their installation staff and could not finish all of the jobs for which they had contracted. The carpeting company contacted a workman whom they had used before, and told him about the job they were to perform for the husband and wife. The workman agreed to do the installation in exchange for the payment from the husband and wife. When the husband and wife returned from vacation, they were happy with the work and sent a check for $7,000 to the carpeting company, which deposited the check. If the workman now seeks to recover for services he performed, he will",
+   "options": {
+    "A": "not recover, because he agreed to perform the services without a direct contract with the husband and wife.",
+    "B": "recover against the husband and wife only.",
+    "C": "not recover, because the carpeting company already received payment.",
+    "D": "recover against the carpeting company only.",
+    "E": "not recover, because he did not have a written contract.",
+    "F": "recover against the carpeting company, because they were the ones who contracted him.",
+    "G": "recover against the husband and wife, because they were the ultimate beneficiaries of his work.",
+    "H": "not recover, because he was not in privity of contract.",
+    "I": "recover against both the husband and wife and the carpeting company.",
+    "J": "recover against either the husband and wife or the carpeting company."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_9625",
+   "category": "physics",
+   "question": "What is the fractional increase of mass for a 600─mi/hr jetliner?",
+   "options": {
+    "A": "1.0 × 10^-12",
+    "B": "1.5 × 10─12",
+    "C": "4.5 × 10^-12",
+    "D": "3.0 × 10^-12",
+    "E": "5.0 × 10^-12",
+    "F": "2.5 × 10─12",
+    "G": "3.5 × 10─12",
+    "H": "0.75 × 10^-12",
+    "I": ".5 × 10─12",
+    "J": "6.0 × 10^-12"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_3449",
+   "category": "biology",
+   "question": "A women feeds her new cat daily with canned cat food. As she opens the cans with a noisy electric can opener, she calls the cat. The cat comes in response, to its name, and the woman feeds it. Why does the cat eventually come running when it hears the electric can opener?",
+   "options": {
+    "A": "The cat believes that the can opener itself is a toy.",
+    "B": "The cat has learned that the can opener noise means someone is in the kitchen.",
+    "C": "The cat recognizes the can opener as a signal that its owner is nearby.",
+    "D": "The cat enjoys the routine of the feeding process and the sound signifies the start.",
+    "E": "The cat is trained to respond to the sound of the can opener.",
+    "F": "The cat is attracted by the noise of the can opener.",
+    "G": "The cat likes the sound of the can opener.",
+    "H": "The cat has associated the sound of the can opener with the presentation of food.",
+    "I": "The cat is curious about the source of the noise and comes to investigate.",
+    "J": "The cat has been conditioned to come for a treat whenever it hears any electrical appliance."
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_10705",
+   "category": "computer science",
+   "question": "The elements of a victor V are entered as follows on an APL computer. V \\leftarrow 3 4 2 -1. Show what will be displayed as a result of each of the Following statements: a) ×/V,b) \\div/V,c) \\textasteriskcentered/V d) -/V,e) +/V.",
+   "options": {
+    "A": "-24, 0.375, 9, 2, 8",
+    "B": "-24, 0.375, 81, -6, 8",
+    "C": "-24, 2.5, 8, -2, 8",
+    "D": "24, -1.5, 9, -2, 8",
+    "E": "-24, -1.5, 9, 1, 5",
+    "F": "-24, -1.5, 9, 2, 8",
+    "G": "24, 2.5, 81, 0, 8",
+    "H": "-24, -2, 8, 2, 8",
+    "I": "24, 0.375, 81, -6, 8",
+    "J": "-20, -1.5, 9, 3, 7"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_8695",
+   "category": "math",
+   "question": "Which measurement would best be rounded to the nearest thousand?",
+   "options": {
+    "A": "The number of yards run by a player in a game",
+    "B": "The number of people at a professional football game",
+    "C": "The length of a football in inches",
+    "D": "The weight of a professional football player in pounds",
+    "E": "The number of touchdowns in a professional football season",
+    "F": "The age of a professional football player in days",
+    "G": "The height of a professional football player in inches",
+    "H": "The length of a football field in yards",
+    "I": "The duration of a professional football game in minutes",
+    "J": "The diameter of a football in centimeters"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_5560",
+   "category": "other",
+   "question": "Which of the following sampling methods would an auditor use to estimate a numerical measurement of a population such as the dollar value of inventory?",
+   "options": {
+    "A": "Variable sampling.",
+    "B": "Discovery sampling.",
+    "C": "Snowball sampling.",
+    "D": "Stratified sampling.",
+    "E": "Systematic sampling.",
+    "F": "Attribute sampling.",
+    "G": "Random-number sampling.",
+    "H": "Quota sampling.",
+    "I": "Cluster sampling.",
+    "J": "Convenience sampling."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_3817",
+   "category": "chemistry",
+   "question": "A thermodynamic study of $\\mathrm{DyCl}_3$ (E.H.P. Cordfunke, et al., J. Chem. Thermodynamics 28, 1387 (1996)) determined its standard enthalpy of formation from the following information\n(1) $\\mathrm{DyCl}_3(\\mathrm{~s}) \\rightarrow \\mathrm{DyCl}_3(\\mathrm{aq}$, in $4.0 \\mathrm{M} \\mathrm{HCl}) \\quad \\Delta_{\\mathrm{r}} H^{\\ominus}=-180.06 \\mathrm{~kJ} \\mathrm{~mol}^{-1}$\n(2) $\\mathrm{Dy}(\\mathrm{s})+3 \\mathrm{HCl}(\\mathrm{aq}, 4.0 \\mathrm{~m}) \\rightarrow \\mathrm{DyCl}_3(\\mathrm{aq}$, in $4.0 \\mathrm{M} \\mathrm{HCl}(\\mathrm{aq}))+\\frac{3}{2} \\mathrm{H}_2(\\mathrm{~g})$ $\\Delta_{\\mathrm{r}} H^{\\ominus}=-699.43 \\mathrm{~kJ} \\mathrm{~mol}^{-1}$\n(3) $\\frac{1}{2} \\mathrm{H}_2(\\mathrm{~g})+\\frac{1}{2} \\mathrm{Cl}_2(\\mathrm{~g}) \\rightarrow \\mathrm{HCl}(\\mathrm{aq}, 4.0 \\mathrm{M}) \\quad \\Delta_{\\mathrm{r}} H^{\\ominus}=-158.31 \\mathrm{~kJ} \\mathrm{~mol}^{-1}$\nDetermine $\\Delta_{\\mathrm{f}} H^{\\ominus}\\left(\\mathrm{DyCl}_3, \\mathrm{~s}\\right)$ from these data.",
+   "options": {
+    "A": "-750.6 $\\mathrm{~kJ} \\mathrm{~mol}^{-1}$",
+    "B": "-600.2 kJ mol−1",
+    "C": "-878.2 $\\mathrm{~kJ} \\mathrm{~mol}^{-1}$",
+    "D": "-1048.6 kJ mol−1",
+    "E": "-825.7 kJ mol−1",
+    "F": "-920.4 kJ mol−1",
+    "G": "-994.3 $\\mathrm{~kJ} \\mathrm{~mol}^{-1}$",
+    "H": "-1115.9 kJ mol−1",
+    "I": "-975.0 kJ mol−1",
+    "J": "-1100.4 $\\mathrm{~kJ} \\mathrm{~mol}^{-1}$"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_6936",
+   "category": "economics",
+   "question": "If four firms in a competitive industry have supply schedules givenby the following equations: Q_1^S = 16 + 4PQ_3^S = 32 + 8P Q_2^S = 5 - 5PQ_4^S = 60 - 10P What is their combined supply?",
+   "options": {
+    "A": "Q^S_total= 113 - 5P",
+    "B": "Q^S_total = 108 - 6P",
+    "C": "Q^S_total = 120 + 0P",
+    "D": "Q^S_total = 116 + 2P",
+    "E": "Q^S_total= 113 - 3P",
+    "F": "Q^S_total= 113 + 3P",
+    "G": "Q^S_total = 115 - 7P",
+    "H": "Q^S_total = 111 + 7P",
+    "I": "Q^S_total= 113 + 5P",
+    "J": "Q^S_total = 118 - 2P"
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_5239",
+   "category": "other",
+   "question": "How is 4:00 pm expressed in military time?",
+   "options": {
+    "A": "1600",
+    "B": "1400",
+    "C": "4000",
+    "D": "4:00",
+    "E": "400",
+    "F": "4:00 pm",
+    "G": "0400",
+    "H": "16:00",
+    "I": "4",
+    "J": "2400"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_959",
+   "category": "law",
+   "question": "A purchaser signed an agreement of sale to buy real estate. It had a contingency clause requiring him to make a completed application for a mortgage within a specified time. It said that time was of the essence. The purchaser failed to apply but instead asked a mortgage broker friend for his opinion as to whether he would qualify. The seller told the purchaser that she rescinded the sale because there was no mortgage application within the agreed time. A few days later, the purchaser made a belated application and received approval, but the seller insisted on a rescission of the contract. Will the seller likely prevail in rescinding the transaction?",
+   "options": {
+    "A": "Yes, because the purchaser did not make a timely application and lost the protection of the contingency clause.",
+    "B": "Yes, because she rescinded the sale prior to his notifying her of the approval  the first notice communicated is the effective one.",
+    "C": "No, because the seller did not give the purchaser an opportunity to correct his mistake.",
+    "D": "No, because the original request to his mortgage broker friend was a timely application within the spirit of the agreement.",
+    "E": "Yes, because the purchaser did not formally submit a mortgage application, violating the agreement.",
+    "F": "No, because the approval of the belated application should allow the transaction to proceed.",
+    "G": "Yes, because the purchaser did not fulfill the conditions of the contingency clause in the specified time.",
+    "H": "No, because the amount of time that he was late was a \"de minimus\" delay that should not preclude him from the benefit of the bargain.",
+    "I": "No, because the purchaser's discussion with a mortgage broker should be considered as an attempt to apply.",
+    "J": "Yes, because the seller has the right to rescind the sale at any time."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_4014",
+   "category": "chemistry",
+   "question": "A chemist wants the percent dissociation of HC_2H_3O_2 to be 1 %. If theK_dissof HC_2H_3O_2 is 1.8 × 10^-5, what con-centration of HC_2H_3O_2 is required?",
+   "options": {
+    "A": "1.8 × 10^-2 M",
+    "B": "1.8 × 10^-5 M",
+    "C": "1.78 × 10^-3 M",
+    "D": "1.76 × 10^-1 M",
+    "E": "99%",
+    "F": "2.5 × 10^-6 M",
+    "G": "9.0 × 10^-3 M",
+    "H": "5.4 × 10^-3 M",
+    "I": "1.8 × 10^-7 M",
+    "J": "1.8 × 10^-4 M"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_10646",
+   "category": "computer science",
+   "question": "Consider an additive white Gaussian noise channel with an expected output power constraint $P=2$. Thus $Y = X + Z$, $Z \\sim N(0, 1)$, $Z$ is independent of $X$, and $E(Y)^2 \\leq 2$. Find the channel capacity in bits.",
+   "options": {
+    "A": "0.25",
+    "B": "2",
+    "C": "4",
+    "D": "0.75",
+    "E": "1",
+    "F": "0.5",
+    "G": "1.75",
+    "H": "3",
+    "I": "2.5",
+    "J": "1.5"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_2779",
+   "category": "psychology",
+   "question": "Why might a researcher use a variable ratio of reinforcement rather than a fixed ratio?",
+   "options": {
+    "A": "Fixed ratio schedules of reinforcements are more time intensive.",
+    "B": "Fixed ratio schedules of reinforcement allow for easier data collection.",
+    "C": "Variable ratio schedules of reinforcement are less effective but easier to implement.",
+    "D": "Variable ratio schedules of reinforcements avoid problems such as generalization and the Premack principle.",
+    "E": "Variable ratio schedules of reinforcements are less susceptible to habituation.",
+    "F": "Fixed ratio schedules of reinforcement are less predictable, thus more effective.",
+    "G": "Fixed ratio schedules of reinforcement are more resistant to extinction than variable schedules.",
+    "H": "Variable ratio schedules of reinforcement are more resistant to extinction than fixed schedules.",
+    "I": "Variable ratio schedules of reinforcements produce results more quickly."
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_3606",
+   "category": "chemistry",
+   "question": "2 moles of an ideal gas are expanded reversibly and isothermally at 0°C from 1 atm. Calculate the final volume occupied by the gas if the heat absorbed during the pro-cess is q = 750 cal. The external pressure over the sys-tem is 1 atm.",
+   "options": {
+    "A": "80.5 liters",
+    "B": "60.4 liters",
+    "C": "100.3 liters",
+    "D": "50.2 liters",
+    "E": "66.7 liters",
+    "F": "45.0 liters",
+    "G": "85.9 liters",
+    "H": "90.6 liters",
+    "I": "55.5 liters",
+    "J": "75.8 liters"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_3061",
+   "category": "biology",
+   "question": "All of the following environmental conditions increase the rate of transpiration from plants EXCEPT",
+   "options": {
+    "A": "high temperature",
+    "B": "high relative humidity",
+    "C": "low relative humidity",
+    "D": "wind"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_5338",
+   "category": "other",
+   "question": "Which of these television series was not set in the United States?",
+   "options": {
+    "A": "'Grey's Anatomy'",
+    "B": "'Boston Legal'",
+    "C": "'Breaking Bad'",
+    "D": "Northern Exposure'",
+    "E": "The Paper Chase'",
+    "F": "'Friends'",
+    "G": "M*A*S*H'",
+    "H": "Picket Fences'",
+    "I": "'The X-Files'",
+    "J": "'The West Wing'"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_7068",
+   "category": "economics",
+   "question": "If two variables, $x_t$ and $y_t$ are said to be cointegrated, which of the following statements are true?\n\ni) $x_t$ and $y_t$ must both be stationary\n\n\nii) Only one linear combination of $x_t$ and $y_t$ will be stationary\n\n\niii) The cointegrating equation for $x_t$ and $y_t$ describes the short-run relationship\n\nbetween the two series\n\n\niv) The residuals of a regression of $y_t$ on $x_t$ must be stationary",
+   "options": {
+    "A": "(i) and (iv) only",
+    "B": "(iii) and (iv) only",
+    "C": "(i) and (iii) only",
+    "D": "(ii) and (iv) only",
+    "E": "(i), (iii), and (iv) only",
+    "F": "(i), (ii), and (iii) only",
+    "G": "(ii) and (iii) only",
+    "H": "(i) and (ii) only",
+    "I": "(ii), (iii), and (iv) only",
+    "J": "(i), (ii), (iii), and (iv)"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_176",
+   "category": "business",
+   "question": "Mr. Carson signed a note as payment for a debt on March 15. If the note had a term of two months, what was its maturity date?",
+   "options": {
+    "A": "August 15",
+    "B": "May 15",
+    "C": "April 15",
+    "D": "March 15",
+    "E": "May 14",
+    "F": "July 15",
+    "G": "April 14",
+    "H": "May 16",
+    "I": "May 13",
+    "J": "June 15"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_9097",
+   "category": "physics",
+   "question": "When the wavelength of the incident light exceeds 6500 \\AA, the emission of photoelectrons from a surface ceases. The surface is irradiated with light of wave-length 3900 \\AA. What will be the maximum energy, in electron volts, of the electrons emitted from the surface?",
+   "options": {
+    "A": "1.27eV",
+    "B": "1.40eV",
+    "C": "1.20eV",
+    "D": "1.45eV",
+    "E": "1.50eV",
+    "F": "1.10eV",
+    "G": "1.35eV",
+    "H": "1.30eV",
+    "I": "1.25eV",
+    "J": "1.15eV"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_11748",
+   "category": "engineering",
+   "question": "Calculate the temperature of a fluid when both a Fahrenheit and a Celsius thermometer are immersed in it, under the following conditions: a) the numerical reading is identical in both thermometers and b) the Fahrenheit reading is numerically twice that of the Celsius reading. Express the values in °R and °K.",
+   "options": {
+    "A": "a) T = - 40°C or T = - 40°F, T_R= 420, T_K= 233.33 b) TC= 160, T_F= 320 F, T_R= 780, T_K= 433.33",
+    "B": "a) T = - 30°C or T = - 30°F, T_R= 420, T_K= 233.33 b) TC= 150, T_F= 320 F, T_R= 780, T_K= 433.33",
+    "C": "a) T = - 40°C or T = - 40°F, T_R= 420, T_K= 243.33 b) TC= 170, T_F= 320 F, T_R= 800, T_K= 433.33",
+    "D": "a) T = - 40°C or T = - 40°F, T_R= 400, T_K= 220 b) TC= 160, T_F= 300 F, T_R= 760, T_K= 423.33"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_10542",
+   "category": "computer science",
+   "question": "How are tracers useful as a debugging aid?",
+   "options": {
+    "A": "Tracers automatically correct errors in the source code",
+    "B": "Tracers help to encrypt the program",
+    "C": "Tracers compile the program into machine language",
+    "D": "Tracers help to optimize the code",
+    "E": "Tracers help to reduce the execution time of a program",
+    "F": "Tracers predict future bugs in the program based on past trends",
+    "G": "Tracers obfuscate the code to protect it from reverse engineering",
+    "H": "Tracers increase the processing speed of the program",
+    "I": "Tracers help locate bugs by analyzing and executing real machine instructions one at a time, allowing complete internal program inspection.",
+    "J": "Tracers enhance the graphical user interface of the program"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_4573",
+   "category": "chemistry",
+   "question": "200mlof oxygen is collected over water at 25°C and 750 torr. If the oxygen thus obtained is dried at a constant temperature of 25°C and 750torr, what volume will it occupy? What volume will be occupied by the water vapor removed from the oxygen if it is maintained at 25°C and 750 torr? (The equilibrium vapor pressure of water at 25°C is 28.3torr.)",
+   "options": {
+    "A": "200ml and 0ml",
+    "B": "185ml and 15ml",
+    "C": "205ml and 2.5ml",
+    "D": "195ml and 10ml",
+    "E": "180ml and 20ml",
+    "F": "192.45ml and 7.55ml",
+    "G": "192.45ml and 8.5ml",
+    "H": "210ml and 5ml",
+    "I": "200ml and 7.55ml",
+    "J": "190ml and 7.55ml"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_4653",
+   "category": "chemistry",
+   "question": ".0324 Faradays (F) liberated .651g of Calcium. What is the atomic weight of Calcium?",
+   "options": {
+    "A": "35.7",
+    "B": "40.2",
+    "C": "24.6",
+    "D": "50.5",
+    "E": "45.8",
+    "F": "80.4",
+    "G": "20.1",
+    "H": "70.9",
+    "I": "60.3",
+    "J": "32.1"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_3847",
+   "category": "chemistry",
+   "question": "A silicious rock contains the mineral ZnS. To analyze for Zn, a sample of the rock is pulverized and treated with HCl to dissolve the ZnS (silicious matter is insoluable). Zinc is precipitated from solution by the addition of potassium ferrocyanide K_4 Fe (CN)_6. After filtering, the precipitate is dried and weighed. The reactions which occur are ZnS + 2HCl \\rightarrow ZnCl_2 + H_2 S 2ZnCl_2 + K_4 Fe (CN)_6 \\rightarrow Zn_2 Fe (CN)_6 + 4 KCl If a 2 gram sample of rock yields 0.969 gram of Zn_2Fe(CN)_6, what is the percentage of Zn in the sample? Atomic weight Zn = 65.4, molecular weight Zn_2 Fe (CN)_6 = 342.6.",
+   "options": {
+    "A": "10 % Zn",
+    "B": "22 % Zn",
+    "C": "20 % Zn",
+    "D": "19 % Zn",
+    "E": "15 % Zn",
+    "F": "18 % Zn",
+    "G": "16 % Zn",
+    "H": "14 % Zn",
+    "I": "12 % Zn",
+    "J": "25 % Zn"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_1436",
+   "category": "law",
+   "question": "Over the years, a coin collector had amassed a large and valuable collection. On May 1, the collector sent the following letter to a retailer who had long coveted the collector's coin collection:\"I've decided to part with my coin collection. Since you've always been interested in purchasing my collection for your store, I'll sell you my entire collection for $50,000. You have until May 15 to make up your mind. \"The retailer received this letter on May 3. On May 10, without notif'ing the retailer, the collector sold her coin collection to a novice collector, for $60,000. The next day, the collector sent a letter to the retailer, regretfully informing him that she had sold the coin collection. This letter was received by the retailer on May 13. However, on May 12, the retailer read an article on the internet, published by a reputable site that reports coin collecting news, concerning the collector's sale of her coin collection to the novice collector. After reading the article, the retailer immediately sent an e-mail to the collector accepting her offer to buy the coin collection. This e-mail was read by the collector that same afternoon, May 12. In all likelihood was the retailer's e-mail to the collector on May 12 effective as an acceptance?",
+   "options": {
+    "A": "No, because the retailer should have responded to the initial letter before the collection was sold to the novice collector.",
+    "B": "No, because the collector had already sold the collection before the retailer's acceptance, making it invalid.",
+    "C": "No, because the retailer's acceptance was not valid as the collection had already been sold.",
+    "D": "Yes, because the retailer's knowledge of the sale to the novice collector was not confirmed until after he sent his acceptance e-mail.",
+    "E": "Yes, because the retailer's acceptance was made within the specified timeframe.",
+    "F": "No, because the retailer's reading the article on the internet on May 12 terminated the retailer's power of acceptance.",
+    "G": "Yes, because consideration is not necessary under the UCC for the creation of a sale of goods contract.",
+    "H": "Yes, because the collector's May 11 letter did not effectuate a revocation, since it was not received by the retailer until May 13.",
+    "I": "Yes, because the retailer's e-mail was sent before receiving the collector's May 11 letter."
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_9376",
+   "category": "physics",
+   "question": "Calculate $\\Delta G$ for the isothermal expansion of $2.25 \\mathrm{~mol}$ of an ideal gas at $325 \\mathrm{~K}$ from an initial pressure of 12.0 bar to a final pressure of 2.5 bar.",
+   "options": {
+    "A": "-7.89 $10^3 \\mathrm{~J}$",
+    "B": "-12.75 $10^3 \\mathrm{~J}$",
+    "C": "-8.01 $10^3 \\mathrm{~J}$",
+    "D": "-10.02 $10^3 \\mathrm{~J}$",
+    "E": "-11.32 $10^3 \\mathrm{~J}$",
+    "F": "-5.89 $10^3 \\mathrm{~J}$",
+    "G": "-6.47 $10^3 \\mathrm{~J}$",
+    "H": "-9.54 $10^3 \\mathrm{~J}$",
+    "I": "-10.76 $10^3 \\mathrm{~J}$",
+    "J": "-8.23 $10^3 \\mathrm{~J}$"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_1108",
+   "category": "law",
+   "question": "An elderly woman was mugged and robbed on a public street. At the time of the offense, the victim only saw her assailant's eyes. A hooded sweatshirt and bandana concealed the rest of his face. A few days later, while the victim waited to be interviewed, she observed the defendant being escorted through the courthouse, in jail clothing, and restrained by handcuffs and leg irons. She identified him as the perpetrator shortly thereafter. Will the court allow that identification into evidence?",
+   "options": {
+    "A": "No, because the defendant was restrained which could have influenced the victim's identification.",
+    "B": "Yes, the identification is allowed into evidence regardless of the circumstances.",
+    "C": "Yes, because the victim had a few days to recall the perpetrator's eyes.",
+    "D": "Yes, because the witness' recognition of someone is all that is needed; the reliability or credibility of it is subject to cross examination.",
+    "E": "No, because prior statements of identification are considered hearsay and never allowed into evidence.",
+    "F": "Yes, if the witness perceived the perpetrator by seeing his eyes, and made the identification on that basis it was reliable enough to be admitted.",
+    "G": "No, because it is not reliable enough and there was too much suggestion to make a reasonably accurate identification.",
+    "H": "Yes, because the defendant was in jail clothing, which suggests he is the perpetrator.",
+    "I": "No, because the victim was under stress at the time of the offense, which could have affected her identification.",
+    "J": "No, because the victim should have identified the perpetrator immediately after the offense."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_410",
+   "category": "business",
+   "question": "A new sofa, valued at $547.50 was purchased on the installment plan with a 20% down payment, and the remainder to be paid off in 36 months. If 20% of the unpaid balance was added on as a service charge, what was the amount of each of the monthly payments?",
+   "options": {
+    "A": "$21.60",
+    "B": "$16.60",
+    "C": "$18.60",
+    "D": "$14.60",
+    "E": "$13.60",
+    "F": "$19.60",
+    "G": "$15.60",
+    "H": "$20.60",
+    "I": "$22.60",
+    "J": "$17.60"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_1412",
+   "category": "law",
+   "question": "In the absence of a provision to the contrary in the articles of incorporation, the directors of a corporation elected for a specified term ",
+   "options": {
+    "A": "can be removed from office at a meeting of the shareholders, but only for cause and after an opportunity to be heard has been given to the directors.",
+    "B": "can be removed from office at a meeting of the shareholders, but only with a two-thirds majority vote.",
+    "C": "can be removed from office only by a unanimous vote of the shareholders, with or without cause.",
+    "D": "cannot be removed from office prior to the expiration of their term.",
+    "E": "can be removed from office at a meeting of the shareholders, but only if they fail to attend three consecutive meetings without a reasonable excuse.",
+    "F": "can be removed from office at a meeting of the shareholders, but only if a replacement director has been identified.",
+    "G": "can be removed from office at a meeting of the shareholders, with or without cause.",
+    "H": "can be removed from office at a meeting of the shareholders, but only for cause.",
+    "I": "can only be removed from office by the board of directors, not the shareholders.",
+    "J": "can be removed from office prior to the expiration of their term only by a decree of the circuit court in an action by the shareholders."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_9532",
+   "category": "physics",
+   "question": "Which of the following correctly describes the motion of a real object in free fall? Assume that the object experiences drag force proportional to speed and that it strikes the ground before reaching terminal sped.",
+   "options": {
+    "A": "It will fall with constant speed and constant acceleration.",
+    "B": "It will fall with constant speed and decreasing acceleration.",
+    "C": "It will fall with decreasing speed and constant acceleration.",
+    "D": "It will fall with constant speed and increasing acceleration.",
+    "E": "It will fall with increasing speed and decreasing acceleration.",
+    "F": "It will fall with decreasing speed and decreasing acceleration.",
+    "G": "It will fall with increasing speed and increasing acceleration.",
+    "H": "It will fall with no speed and no acceleration.",
+    "I": "It will fall with decreasing speed and increasing acceleration.",
+    "J": "It will fall with increasing speed and constant acceleration."
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_10469",
+   "category": "computer science",
+   "question": "Explain briefly the background and applications of BASIC computer language.",
+   "options": {
+    "A": "BASIC was developed by Microsoft to enhance the Windows operating system.",
+    "B": "BASIC was created by IBM as a language to program mainframe computers and has limited use today due to its complexity.",
+    "C": "BASIC stands for \"Business Acquisition and System Integration Code\" and is used mainly in the corporate finance sector.",
+    "D": "BASIC is an advanced programming language used mainly for developing complex scientific simulations and models.",
+    "E": "BASIC is an acronym for \"Binary Algorithmic Scientific Instruction Code\" and is used primarily in data analysis.",
+    "F": "BASIC was developed in the 1950s as a language for artificial intelligence research.",
+    "G": "BASIC is a language developed at Dartmouth College in the 1960s to make the computer more accessible and easy to use. It is widely used in science, business, and engineering due to its simplicity and similarity to English and algebra.",
+    "H": "BASIC was developed in the 1980s to simplify computer programming.",
+    "I": "BASIC is a language developed in the late 1970s for the exclusive use in graphical user interface design.",
+    "J": "BASIC is a language primarily used in the field of arts and literature."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_8062",
+   "category": "math",
+   "question": "How many integers between 1 (included) and 100 (included) are divisible by either 2, 3, or 5?",
+   "options": {
+    "A": "82",
+    "B": "60",
+    "C": "80",
+    "D": "68",
+    "E": "74",
+    "F": "72",
+    "G": "85",
+    "H": "50",
+    "I": "78",
+    "J": "66"
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_1044",
+   "category": "law",
+   "question": "A state government enacted a law that prohibited the state's agencies from purchasing services or goods from and companies doing business with Cuba. The federal government at the time was implementing a thaw in relations with the Cuban government. The U.S. Congress passed a statute regarding various policies and dealings toward Cuba. A National Trade Council sued the state in federal court seeking an injunction and declaratory judgment that the state law toward Cuba was unconstitutional. 30 of the business entities that were discriminated against by the state were members of the council. Is the federal court likely to grant the declaratory judgment and declare the state law unconstitutional?",
+   "options": {
+    "A": "Yes, the state law is unconstitutional because it violates the Supremacy Clause of the Constitution.",
+    "B": "Yes, the state law is unconstitutional because it illegally interfered with the foreign affairs power of the federal government.",
+    "C": "Yes, the state law is unconstitutional because it denies equal protection to citizens of other states.",
+    "D": "No, the state law is constitutional because it aligns with the federal government's previous policy on Cuba.",
+    "E": "No, the state law is constitutional as it is within the state's power to regulate commerce within its borders.",
+    "F": "Yes, the state law is unconstitutional because it interferes with the President's exclusive power to recognize foreign governments.",
+    "G": "No, a state has the sovereign right to pass its own laws concerning its policies toward foreign countries.",
+    "H": "No, the state law is constitutional because it does not interfere with any federally protected rights.",
+    "I": "Yes, the state law is unconstitutional because it constitutes a form of economic discrimination.",
+    "J": "No, the state law was consistent with the federal law and with federal policy on Cuba."
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_9440",
+   "category": "physics",
+   "question": "Incompressible oil of density 850 kg/m^3 is pumped through a cylindrical pipe at a rate of 9.5 liters per second. The second section of the pipe has a diameter of 4.0 cm. What are the flow speed in that section? (Unit: m/s)",
+   "options": {
+    "A": "9.8",
+    "B": "8.5",
+    "C": "8.0",
+    "D": "9.2",
+    "E": "6.8",
+    "F": "7.0",
+    "G": "10.1",
+    "H": "5.3",
+    "I": "7.6",
+    "J": "6.4"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_4857",
+   "category": "history",
+   "question": "This question refers to the following information.\n\"The question as to who, and what, is responsible for African underdevelopment can be answered at two levels. Firstly, the answer is that the operation of the imperialist system bears major responsibility for African economic retardation by draining African wealth and by making it impossible to develop more rapidly the resources of the continent. Secondly, one has to deal with those who manipulate the system and those who are either agents or unwitting accomplices of the said system. The capitalists of Western Europe were the ones who actively extended their exploitation from inside Europe to cover the whole of Africa.\"\nWalter Rodney, historian, How Europe Underdeveloped Africa, 1974\nWhich of the following best explains the importance of trading contacts with Europeans for Sub-Saharan Africans in the period 1450 to 1750 C.E.?",
+   "options": {
+    "A": "Sub-Saharan Africans consolidated new states and kingdoms by trading with the Europeans for firearms.",
+    "B": "Sub-Saharan Africans relied on trading contacts with Europeans to circumvent the Arab slave trade.",
+    "C": "Sub-Saharan Africans depended on European merchants as the sole purchasers of slaves.",
+    "D": "Sub-Saharan Africans established significant economic advantage by trading indigenous resources for European goods.",
+    "E": "Sub-Saharan Africans developed a dependency on European goods, leading to a collapse of local industries.",
+    "F": "Sub-Saharan Africans used European trading contacts to gain access to European education and religion.",
+    "G": "Sub-Saharan Africans relied on European merchants to sustain population growth through the constant importation of New World foodstuffs.",
+    "H": "Sub-Saharan Africans allied with European powers to evict Muslim and Arab merchant princes from encroaching on their sovereignty.",
+    "I": "Sub-Saharan Africans utilized trading contacts with Europeans to spread their cultural influence throughout Europe.",
+    "J": "Sub-Saharan Africans engaged in trade with Europeans to acquire new agricultural techniques."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_6887",
+   "category": "economics",
+   "question": "The money supply will increase as a result of which of the following?",
+   "options": {
+    "A": "An increase in the fraction of deposits that must be held by banks",
+    "B": "The purchase of bonds by private individuals",
+    "C": "An increase in the amount of physical cash in circulation",
+    "D": "A decrease in the amount of money people are saving",
+    "E": "The Federal Reserve raising interest rates",
+    "F": "The selling of bonds by the Federal Reserve",
+    "G": "An increase in the discount rate",
+    "H": "The government increasing taxes",
+    "I": "A decrease in the required reserve ratio",
+    "J": "A decrease in the rate of inflation"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_9988",
+   "category": "physics",
+   "question": "A compound microscope has an objective of 3 mm focal length. The objective forms an (intermediary) image 160 mm beyond the second focal plane of the objective. If the eyepiece alone gives 20x magnification (for the eye focused at infinity) , what is the total magnification provided by the microscope?",
+   "options": {
+    "A": "800",
+    "B": "950",
+    "C": "1400",
+    "D": "1300",
+    "E": "900",
+    "F": "1100",
+    "G": "1066",
+    "H": "1000",
+    "I": "1500",
+    "J": "1200"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_1717",
+   "category": "law",
+   "question": "A professor was the record owner in fee simple absolute of a 30-acre tract of land located in a small town. The professor made a conveyance thereof in these words, \"I hereby convey my 30-acre tract to both my friend and my co-worker as joint tenants with right of survivorship. \"Two years after making the conveyance to the friend and the co-worker, the friend executed a mortgage on the 30-acre tract of land to a bank to secure a loan. One year after executing the mortgage, the friend died intestate, leaving his uncle as his only heir. At the time of the friend's death, the indebtedness had not been paid to the bank. The jurisdiction in which the 30-acre tract of land is located recognizes a title theory of mortgages. In an appropriate action, the court should determine that title to the 30-acre tract of land is vested",
+   "options": {
+    "A": "in the bank until the mortgage is paid, then in the co-worker and the uncle.",
+    "B": "half in the co-worker and half in the bank, with both subject to the mortgage.",
+    "C": "entirely in the uncle, subject to the mortgage.",
+    "D": "entirely in the uncle, free and clear of the mortgage.",
+    "E": "half in the co-worker and half in the uncle, with both subject to the mortgage.",
+    "F": "in the co-worker and the uncle, with the co-worker's portion free of the mortgage and the uncle's portion subject to it.",
+    "G": "half in the co-worker, free of the mortgage, and half in the uncle, subject to the mortgage.",
+    "H": "in the co-worker, with the entire interest subject to the mortgage.",
+    "I": "half in the co-worker, subject to the mortgage, and half in the uncle, free of the mortgage."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_10416",
+   "category": "computer science",
+   "question": "An Euler circuit of an undirected graph is a circuit in which each edge of the graph appears exactly once. Which of the following undirected graphs must have an Euler circuit?\nI. A complete graph with 12 vertices\nII. A complete graph with 13 vertices\nIII. A tree with 13 vertices",
+   "options": {
+    "A": "A complete graph with 11 vertices",
+    "B": "III only",
+    "C": "I and II",
+    "D": "None of the above",
+    "E": "II and III",
+    "F": "All of the above",
+    "G": "I only",
+    "H": "II only",
+    "I": "I and III",
+    "J": "A tree with 12 vertices"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_12120",
+   "category": "engineering",
+   "question": "The emissivity of inner and outer surfaces of vertical air spacein a 6 in. thick and 9 ft. high wall is 0.90. The inner andouter wall surfaces are at 95°F and 125°F respectively. Determine the total heat transfer rate across the air space.",
+   "options": {
+    "A": "45.46 Btu/hr-ft^2",
+    "B": "30.46 Btu/hr-ft^2",
+    "C": "55.46 Btu/hr-ft^2",
+    "D": "25.46 Btu/hr-ft^2",
+    "E": "40.46 Btu/hr-ft^2",
+    "F": "35.46 Btu/hr-ft^2",
+    "G": "60.46 Btu/hr-ft^2",
+    "H": "65.46 Btu/hr-ft^2",
+    "I": "50.46 Btu/hr-ft^2",
+    "J": "20.46 Btu/hr-ft^2"
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_4940",
+   "category": "history",
+   "question": "This question refers to the following information.\nPerhaps, however, I am more conscious of the importance of civil liberties in this particular moment of our history than anyone else, because I travel through the country and meet people and see things that have happened to little people, I realize what it means to democracy to preserve our civil liberties.\nAll through the years we have had to fight for civil liberty, and we know that there are times when the light grows rather dim, and every time that happens democracy is in danger. Now, largely because of the troubled state of the world as a whole, civil liberties have disappeared in many other countries.\nIt is impossible, of course, to be at war and keep freedom of the press and freedom of speech and freedom of assembly. They disappear automatically. And so in many countries where ordinarily they were safe, today they have gone. In other countries, even before war came, not only freedom of the press and freedom of assembly, and freedom of speech disappeared, but freedom of religion disappeared.\nAnd so we know here in this country, we have a grave responsibility. We are at peace. We have no reason for the fears which govern so many other peoples throughout the world; therefore, we have to guard the freedoms of democracy.\n—Eleanor Roosevelt, Address to the American Civil Liberties Union, Chicago, Illinois, March 14, 1940\nRoosevelt's concerns can most directly be compared to those of the people who debated which of the following?",
+   "options": {
+    "A": "The Homestead Act of 1862",
+    "B": "The USA Patriot Act of 2001",
+    "C": "The Gulf of Tonkin Resolution of 1964",
+    "D": "The Affordable Care Act of 2010",
+    "E": "The Civil Rights Act of 1964",
+    "F": "The Indian Removal Act of 1830",
+    "G": "The Social Security Act of 1935",
+    "H": "The Defense of Marriage Act of 1996",
+    "I": "The Voting Rights Act of 1965",
+    "J": "The Alien and Sedition Acts of 1798"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_522",
+   "category": "business",
+   "question": "From this information compute: a) The current ratio. b) The quick asset ratio. c) The net working capital. 1. Current Assets: Current Liabilities Cash $22,150 Accounts Payable $28,500 Marketable Securities 16,000 Notes Payable 20,000 Other Bills Payable 10,000 Accounts Receivable 30,450 Inventories 25,000 Total $93,600 Total $58,500",
+   "options": {
+    "A": "Current ratio: 2.0, Quick asset ratio: 1.5, Net working capital: $45,000",
+    "B": "Current ratio: 1.6, Quick asset ratio: 1.05, Net working capital: $35,100",
+    "C": "Current ratio: 1.5, Quick asset ratio: 1.3, Net working capital: $33,100",
+    "D": "Current ratio: 1.8, Quick asset ratio: 1.4, Net working capital: $38,000",
+    "E": "Current ratio: 1.7, Quick asset ratio: 1.1, Net working capital: $40,100",
+    "F": "Current ratio: 1.7, Quick asset ratio: 1.25, Net working capital: $39,100",
+    "G": "Current ratio: 1.5, Quick asset ratio: 1.2, Net working capital: $30,100",
+    "H": "Current ratio: 1.3, Quick asset ratio: 0.9, Net working capital: $25,000",
+    "I": "Current ratio: 1.6, Quick asset ratio: 1.17, Net working capital: $35,100",
+    "J": "Current ratio: 1.6, Quick asset ratio: 1.2, Net working capital: $35,000"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_8235",
+   "category": "math",
+   "question": "A farmer wants to know whether a new fertilizer has increased the mean weight of his apples. With the old fertilizer, the mean weight was 4.0 ounces per apple. The farmer decides to test H0: μ = 4.0 ounces versus Ha : μ > 4.0 ounces, at a 5 percent level of significance, where μ = the mean weight of apples using the new fertilizer. The weights of apples are approximately normally distributed. The farmer takes a random sample of 16 apples and computes a mean of 4.3 ounces and a standard deviation of 0.6 ounces. Which of the following gives the p-value for this test?",
+   "options": {
+    "A": "P(Z > 2)",
+    "B": "P(Z < 2)",
+    "C": "P(Z > 2) with 16 degrees of freedom",
+    "D": "P(t > 2) with 15 degrees of freedom",
+    "E": "P(t < 2) with 15 degrees of freedom",
+    "F": "P(Z < 1.5)",
+    "G": "P(Z > 1.5)",
+    "H": "P(t > 1.5) with 15 degrees of freedom",
+    "I": "P(t < 2) with 16 degrees of freedom",
+    "J": "P(t < 1.5) with 15 degrees of freedom"
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_11487",
+   "category": "engineering",
+   "question": "A 6 in. I.D. and 6.5 O.D. stainless steel (k = 26 Btu/hr-ft-°F) pipe is insulated with a 3.5 in. thick layer of an insulating material (k = 0.04 Btu/hr-ft °F). If the inner surface of the pipe is at 500°F and the outer surface of insulation is at 150°F, determine the rate of heat loss per foot length of the pipe and the temperature at the interface between the pipe and the insulation.",
+   "options": {
+    "A": "130.28 Btu/hr- (ft. length of pipe), 497.88°F",
+    "B": "100.28 Btu/hr- (ft. length of pipe), 500.88°F",
+    "C": "140.28 Btu/hr- (ft. length of pipe), 496.88°F",
+    "D": "120.28 Btu/hr- (ft. length of pipe), 501.88°F",
+    "E": "150.28 Btu/hr- (ft. length of pipe), 495.88°F",
+    "F": "110.28 Btu/hr- (ft. length of pipe), 502.88°F",
+    "G": "120.28 Btu/hr- (ft. length of pipe), 499.88°F",
+    "H": "80.28 Btu/hr- (ft. length of pipe), 504.88°F",
+    "I": "90.28 Btu/hr- (ft. length of pipe), 503.88°F",
+    "J": "130.28 Btu/hr- (ft. length of pipe), 498.88°F"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_4284",
+   "category": "chemistry",
+   "question": "An excellent method of making alcohols is the reaction of an aldehydeon a Grignard reagent. If you perform this reaction, you must scrupulously dry thealdehydebefore adding it to the Grignard reagent. Why?",
+   "options": {
+    "A": "The aldehyde's structure is altered by the presence of water",
+    "B": "The aldehyde can react with other components if not dried",
+    "C": "Water increases the viscosity of the reaction mixture, reducing the efficiency",
+    "D": "Water can initiate a side reaction with the Grignard reagent, forming an unwanted byproduct",
+    "E": "Water can cause the Grignard reagent to decompose into a hydrocarbon",
+    "F": "The dry aldehyde can absorb moisture from the air, which can slow down the reaction",
+    "G": "The Grignard reagent is sensitive to temperature changes",
+    "H": "The aldehyde will polymerize if not dried",
+    "I": "The aldehyde needs to be in a dry state for the reaction to occur",
+    "J": "The presence of water reduces or eliminates the Grignard reagent from solution"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_850",
+   "category": "business",
+   "question": "A bookstore can obtain from a publisher 200 anthropology textbooks for $3 each. The store believes it can sell these books at $15 each, but will be able to sell 10 more for every 50 cent reduction in the price. What is the price that maximizes its profit per book?",
+   "options": {
+    "A": "$11",
+    "B": "$7",
+    "C": "$6",
+    "D": "$9",
+    "E": "$15",
+    "F": "$12",
+    "G": "$14",
+    "H": "$13",
+    "I": "$10",
+    "J": "$8"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_2511",
+   "category": "psychology",
+   "question": "Which of the following is true of strong organizational culture?",
+   "options": {
+    "A": "It is correlated with low levels of job performance",
+    "B": "It is correlated with low levels of job commitment",
+    "C": "It is correlated with high levels of job performance",
+    "D": "It has no effect on job performance or commitment"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlupro_7675",
+   "category": "economics",
+   "question": "Why, according to Marx, are capitalists forced to accumulate?",
+   "options": {
+    "A": "To maintain a minimum standard of living for workers",
+    "B": "desire for personal wealth",
+    "C": "To fund social welfare programs",
+    "D": "To prevent the depreciation of their capital",
+    "E": "government regulations",
+    "F": "Legal requirements for continuous growth",
+    "G": "Pressure from shareholders to maximize dividends",
+    "H": "fierce competition of the free market",
+    "I": "increased consumer demand",
+    "J": "Historical inevitability of class struggle"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_5245",
+   "category": "other",
+   "question": "How many $100 bills does it take to equal one million dollars?",
+   "options": {
+    "A": "five hundred thousand",
+    "B": "five thousand",
+    "C": "two thousand",
+    "D": "one hundred thousand",
+    "E": "one thousand",
+    "F": "fifty thousand",
+    "G": "twenty thousand",
+    "H": "one hundred",
+    "I": "one million",
+    "J": "ten thousand"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_5795",
+   "category": "other",
+   "question": "In recent research, the 14,000 stories that could be accessed on Google News' front page in a day pertained to how many actual news events?",
+   "options": {
+    "A": "9,574",
+    "B": "326",
+    "C": "5,000",
+    "D": "10,000",
+    "E": "24",
+    "F": "500",
+    "G": "100",
+    "H": "50",
+    "I": "1,000",
+    "J": "18"
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_6147",
+   "category": "health",
+   "question": "Peak flow meters record:",
+   "options": {
+    "A": "the amount of air inhaled into the lungs.",
+    "B": "the total capacity of the lungs.",
+    "C": "the lowest rate of air expelled from the lungs through an open mouth.",
+    "D": "the oxygen saturation level in the blood.",
+    "E": "the average rate of air expelled from the lungs through an open mouth.",
+    "F": "forced vital capacity.",
+    "G": "the volume of air remaining in the lungs after a forced expiration.",
+    "H": "forced expiratory volume.",
+    "I": "the highest rate of air expelled from the lungs through an open mouth.",
+    "J": "the rate of air inhaled into the lungs through an open mouth."
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_905",
+   "category": "law",
+   "question": "A buyer contracted in writing to purchase 1,000 gidgets (which are similar to widgets but are more popular because of their greater durability and- resiliency) from a manufacturer for a total contract price of $4,000. After this agreement was executed and before delivery, the buyer and the manufacturer agreed in a telephone conversation to change the quantity term from 1,000 to 800 gidgets. This modification is probably unenforceable, because",
+   "options": {
+    "A": "it violates the statute of frauds.",
+    "B": "the buyer did not provide sufficient notice.",
+    "C": "it was a verbal agreement, not a written one.",
+    "D": "the parol evidence rule bars contradictory terms.",
+    "E": "the manufacturer did not agree to the modification.",
+    "F": "the original contract was in writing.",
+    "G": "the price was not adjusted to reflect the change in quantity.",
+    "H": "there was no consideration.",
+    "I": "the telephone conversation was not recorded.",
+    "J": "there was no written agreement to the modification."
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_6890",
+   "category": "economics",
+   "question": "What is the main contrast between the short-run and long-run Phillips curve?",
+   "options": {
+    "A": "In the short run there is a negative relationship between inflation and unemployment and in the long run the relationship is positive.",
+    "B": "In the short run there is a constant relationship between inflation and unemployment and in the long run the relationship is positive.",
+    "C": "In the short run there is a constant relationship between inflation and unemployment and in the long run the relationship is negative.",
+    "D": "In the short run there is a negative relationship between inflation and unemployment and in the long run the relationship is constant.",
+    "E": "In the short run there is a positive relationship between inflation and unemployment, in the long run the relationship is non-existent.",
+    "F": "In the short run, inflation and unemployment are unrelated, while in the long run, there is a positive relationship.",
+    "G": "In the short run there is a positive relationship between inflation and unemployment and in the long run the relationship is constant.",
+    "H": "In the short run there is a positive relationship between inflation and unemployment and in the long run the relationship is negative.",
+    "I": "In the short run, inflation and unemployment are unrelated, while in the long run, there is a negative relationship."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_6385",
+   "category": "health",
+   "question": "Which of the following statements about proteolysis is correct?\n",
+   "options": {
+    "A": "Proteolysis does not involve enzymatic processes.",
+    "B": "Proteolysis only occurs in animal cells.",
+    "C": "All tissue proteins undergo catabolism at more or less the same rate.",
+    "D": "The rate of tissue protein catabolism is more or less constant throughout the day.",
+    "E": "Proteolysis can only occur in the presence of light.",
+    "F": "Proteolysis is the process of protein synthesis, not breakdown.",
+    "G": "All proteins are catabolised at the exact same time.",
+    "H": "All proteins that are to be catabolised are tagged with the peptide ubiquitin.",
+    "I": "Ubiquitin is only attached to proteins that are to be synthesized, not catabolised.",
+    "J": "Lysosomal enzymes provide the only mechanism for tissue protein catabolism."
+   },
+   "answer": "D"
+  },
+  {
+   "id": "mmlupro_11098",
+   "category": "philosophy",
+   "question": "What has been a central focus of religious traditions in China and Korea?",
+   "options": {
+    "A": "Wealth and prosperity",
+    "B": "Fear and obedience",
+    "C": "Knowledge and education",
+    "D": "Power and influence",
+    "E": "Truth and love",
+    "F": "Honor and loyalty",
+    "G": "Justice and equality",
+    "H": "Peace and harmony",
+    "I": "Sacrifice and service"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_9771",
+   "category": "physics",
+   "question": "A crude model for the molecular distribution of atmospheric gases above Earth's surface (denoted by height $h$ ) can be obtained by considering the potential energy due to gravity:\n$$\nP(h)=e^{-m g h / k T}\n$$\nIn this expression $m$ is the per-particle mass of the gas, $g$ is the acceleration due to gravity, $k$ is a constant equal to $1.38 \\times 10^{-23} \\mathrm{~J} \\mathrm{~K}^{-1}$, and $T$ is temperature. Determine $\\langle h\\rangle$ for methane $\\left(\\mathrm{CH}_4\\right)$ using this distribution function.",
+   "options": {
+    "A": "1.2 $10^4 \\mathrm{~m}$",
+    "B": "2.5 $10^4 \\mathrm{~m}$",
+    "C": "1.8 x 10^4 m",
+    "D": "1.0 x 10^4 m",
+    "E": "1.4 x 10^4 m",
+    "F": "1.6 $10^4 \\mathrm{~m}$",
+    "G": "2.0 $10^4 \\mathrm{~m}$",
+    "H": "3.5 x 10^4 m",
+    "I": "3.0 x 10^4 m",
+    "J": "2.2 x 10^4 m"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_9085",
+   "category": "physics",
+   "question": "Anucleusof mass M emits a \\Upsilon ray of energy E_\\Upsilon^\\ding{217} . The nucleuswas initially at rest . What is its recoil energy after the emission?",
+   "options": {
+    "A": "E_\\Elzpbgam^2/ 4Mc^2",
+    "B": "\\( 2E_{\\Upsilon}^2 / Mc^2 \\)",
+    "C": "\\( E_{\\Upsilon} / Mc^2 \\)",
+    "D": "\\( 3E_{\\Upsilon}^2 / 2Mc^2 \\)",
+    "E": "\\( E_{\\Upsilon} / 4Mc^2 \\)",
+    "F": "E_\\Elzpbgam/ 2Mc^2",
+    "G": "\\( 4E_{\\Upsilon}^2 / Mc^2 \\)",
+    "H": "E_\\Elzpbgam^2/ Mc^2",
+    "I": "E_\\Elzpbgam^2/ 2Mc^2",
+    "J": "\\( E_{\\Upsilon}^2 / 2M \\)"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_10581",
+   "category": "computer science",
+   "question": "a) 3652_8 × 24_8 b b ) 11.01_2 × 1.01_2 ) 11.01_2 × 1.01_2 c) 5AB_16 × F5A_16",
+   "options": {
+    "A": "235761_8, 110.1100_2, ABF55C_16",
+    "B": "305214_8, 101.1101_2, 1DF570_16",
+    "C": "172340_8, 111.1101_2, 5AB0F5_16",
+    "D": "987654_8, 101.1010_2, FEDCBA_16",
+    "E": "451236_8, 100.1011_2, 0F5A5B_16",
+    "F": "123456_8, 111.1111_2, ABCDEF_16",
+    "G": "731642_8, 110.1011_2, A55A1F_16",
+    "H": "114510_8, 100.0001_2, 57031D_16",
+    "I": "654321_8, 000.0000_2, 12345F_16",
+    "J": "146253_8, 101.0110_2, F5A0AB_16"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_3812",
+   "category": "chemistry",
+   "question": "The 13C spectrum of which isomer of C6H14 has lines with five distinct chemical shifts?",
+   "options": {
+    "A": "3-ethylpentane",
+    "B": "cyclohexane",
+    "C": "hexane",
+    "D": "1,1-dimethylcyclobutane",
+    "E": "3-methylpentane",
+    "F": "2,2-dimethylbutane",
+    "G": "2,2,2-trimethylpropane",
+    "H": "3,3-dimethylbutane",
+    "I": "2-methylpentane"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_519",
+   "category": "business",
+   "question": "A man shipped his car to Israel. In the United States his car averaged 10 miles to the gallon of gas. He now wishes to convert this figure in order to compare his car's efficiency to that of the Israeli cars. Convert the miles per gallon to kilometers per liter.",
+   "options": {
+    "A": "7.2 kilometers per liter",
+    "B": "6.5 kilometers per liter",
+    "C": "3.7 kilometers per liter",
+    "D": "2.8 kilometers per liter",
+    "E": "3.0 kilometers per liter",
+    "F": "8.1 kilometers per liter",
+    "G": "4.16 kilometers per liter",
+    "H": "2.2 kilometers per liter",
+    "I": "9.4 kilometers per liter",
+    "J": "5.3 kilometers per liter"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_514",
+   "category": "business",
+   "question": "Consider a strategy of the form $(\\gamma, 0, 0)$ for the investment wheel. Show that the overall factor multiplying your money after $n$ steps is likely to be $(1+2\\gamma)^{n/2}(1-\\gamma)^{n/2}$. Find the value of $\\gamma$ that maximizes this factor.",
+   "options": {
+    "A": "0.80",
+    "B": "0.25",
+    "C": "0.10",
+    "D": "0.33",
+    "E": "0.50",
+    "F": "0.66",
+    "G": "1.00",
+    "H": "0.20",
+    "I": "0.40",
+    "J": "0.75"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_507",
+   "category": "business",
+   "question": "assume you are Indonesian. In 2010, the rupiah exchange rate was around IDR15,000/USD, and the consumer price index in Indonesia and the United States was at 100. In 2019, the exchange rate changed to IDR14,000/USD. Simultaneously, Indonesia’s inflation rose 5% due to the consumer price index rising to 105. Meanwhile, the United States’ inflation rate rose 10% due to the consumer price index rising to 110. Whats the real exchange rate?",
+   "options": {
+    "A": "14000.00",
+    "B": "15500.00",
+    "C": "15000.00",
+    "D": "16000.00",
+    "E": "13500.00",
+    "F": "14666.67",
+    "G": "13888.89",
+    "H": "14800.00",
+    "I": "15200.00",
+    "J": "13333.33"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_3263",
+   "category": "biology",
+   "question": "Describe the differences between an element and a compound.",
+   "options": {
+    "A": "Elements are compounds that consist of different atoms",
+    "B": "Compounds are substances made up of identical atoms",
+    "C": "An element is a mixture of different types of atoms, while a compound is made up of identical atoms bonded together.",
+    "D": "A compound is always in a gaseous state, whereas elements can be solids, liquids, or gases.",
+    "E": "Compounds are substances that can exist in any ratio of atoms, while elements have a fixed composition.",
+    "F": "A compound is a substance that is composed of one type of atom",
+    "G": "Elements can be separated into simpler substances by chemical means, while compounds cannot.",
+    "H": "Elements are the smallest unit of chemical matter that cannot be divided, while compounds are larger structures made of elements.",
+    "I": "Elements are substances that consist of identical atoms, while a compound is a substance composed of two or more different kinds of atoms combined in a definite weight ratio.",
+    "J": "Elements are made of molecules that consist of more than one type of atom, while compounds consist of only one type of atom."
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_10447",
+   "category": "computer science",
+   "question": "Which of the following decimal numbers has an exact representation in binary notation?",
+   "options": {
+    "A": "0.8",
+    "B": "0.3",
+    "C": "0.9",
+    "D": "0.2",
+    "E": "0.1",
+    "F": "0.7",
+    "G": "0.6",
+    "H": "0.5",
+    "I": "0.4"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_2231",
+   "category": "psychology",
+   "question": "Discuss Murray's theory of motivation and what influence it had on McClelland's development of the Achievement Motivation model.",
+   "options": {
+    "A": "McClelland's model was influenced by Hull's theory of survival instincts",
+    "B": "McClelland's model expanded on Murray's theory by introducing the idea that motivation is primarily driven by social comparison, which wasn't a focus in Murray's work.",
+    "C": "Murray's theory had no influence on McClelland's model",
+    "D": "McClelland's model was a direct copy of Murray's ideas",
+    "E": "McClelland's Achievement Motivation model was influenced by Murray's theory of motivation that human behavior is a reflection of individual needs and motives, and that anything leading to positive affect produces approach behavior and anything leading to negative affect produces avoidance behavior.",
+    "F": "McClelland's Achievement Motivation model was influenced by Murray's emphasis on psychosocial stages of development, which is not actually a part of Murray's theory.",
+    "G": "McClelland's model disregarded Murray's focus on individual needs and instead proposed that environmental factors are the only determinants of human motivation.",
+    "H": "McClelland's model was based on the premise that motivation is solely a product of external rewards and punishments, without any influence from Murray's theory.",
+    "I": "McClelland's model was influenced by Murray's hierarchy of needs, which is a confusion with Maslow's theory, not Murray's.",
+    "J": "Murray's theory suggested that motivation is derived from subconscious sexual and aggressive drives, which McClelland incorporated directly into his model."
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_12212",
+   "category": "engineering",
+   "question": "A 125/250-volt three-wire system has a load on the positive side of 500 amp, on the negative side of 450 amp, the neutral current therefore being 50 amp. If each machine of the balancer set has an efficiency of 86 percent, calculate the current for each of these machines and for the main generator.",
+   "options": {
+    "A": "I_g= 25 amp, I_m= 30 amp, I of main generator = 490 amp",
+    "B": "I_g= 15 amp, I_m= 20 amp, I of main generator = 465 amp",
+    "C": "I_g= 24 amp, I_m= 31 amp, I of main generator = 481 amp",
+    "D": "I_g= 20 amp, I_m= 25 amp, I of main generator = 480 amp",
+    "E": "I_g= 18 amp, I_m= 32 amp, I of main generator = 468 amp",
+    "F": "I_g= 19.5 amp, I_m= 30.5 amp, I of main generator = 469.5 amp",
+    "G": "I_g= 22.5 amp, I_m= 27.5 amp, I of main generator = 475 amp",
+    "H": "I_g= 23 amp, I_m= 26 amp, I of main generator = 476 amp",
+    "I": "I_g= 17 amp, I_m= 33 amp, I of main generator = 467 amp",
+    "J": "I_g= 21.26 amp, I_m= 28.74 amp, I of main generator = 478.74 amp"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_9232",
+   "category": "physics",
+   "question": "\"Top gun\" pilots have long worried about taking a turn too tightly. As a pilot's body undergoes centripetal acceleration, with the head toward the center of curvature, the blood pressure in the brain decreases, leading to loss of brain function.\nThere are several warning signs. When the centripetal acceleration is $2 g$ or $3 g$, the pilot feels heavy. At about $4 g$, the pilot's vision switches to black and white and narrows to \"tunnel vision.\" If that acceleration is sustained or increased, vision ceases and, soon after, the pilot is unconscious - a condition known as $g$-LOC for \" $g$-induced loss of consciousness.\"\n\nWhat is the magnitude of the acceleration, in $g$ units, of a pilot whose aircraft enters a horizontal circular turn with a velocity of $\\vec{v}_i=(400 \\hat{\\mathrm{i}}+500 \\hat{\\mathrm{j}}) \\mathrm{m} / \\mathrm{s}$ and $24.0 \\mathrm{~s}$ later leaves the turn with a velocity of $\\vec{v}_f=(-400 \\hat{\\mathrm{i}}-500 \\hat{\\mathrm{j}}) \\mathrm{m} / \\mathrm{s}$ ?",
+   "options": {
+    "A": "95.67 $\\mathrm{m} / \\mathrm{s}^2$",
+    "B": "62.48 $\\mathrm{m} / \\mathrm{s}^2$",
+    "C": "83.81 $\\mathrm{m} / \\mathrm{s}^2$",
+    "D": "72.14 $\\mathrm{m} / \\mathrm{s}^2$",
+    "E": "110.87 $\\mathrm{m} / \\mathrm{s}^2$",
+    "F": "75.19 $\\mathrm{m} / \\mathrm{s}^2$",
+    "G": "100.56 $\\mathrm{m} / \\mathrm{s}^2$",
+    "H": "55.92 $\\mathrm{m} / \\mathrm{s}^2$",
+    "I": "90.43 $\\mathrm{m} / \\mathrm{s}^2$",
+    "J": "68.25 $\\mathrm{m} / \\mathrm{s}^2$"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlupro_1968",
+   "category": "law",
+   "question": "One Sunday afternoon, a sports fan went to a professional football game. While standing in line at a concession stand, he got into an argument with three men ahead of him in the line. The three men were friends attending the game together. One of the men punched the sports fan in the mouth. A fight ensued. During the fracas, one of the other three men hit the sports fan over the head with a bottle, which caused him to suffer a serious concussion. The sports fan does not know for certain which of the three men struck him with the bottle. If the sports fan asserts a claim against the man who punched him in the mouth to recover damages for the head injury, will the sports fan prevail?",
+   "options": {
+    "A": "No, because the sports fan should not have argued with the three men in the first place.",
+    "B": "No, because the sports fan does not have a legal basis to sue the man who punched him in the mouth.",
+    "C": "No, because the man who punched him in the mouth did not actually strike the sports fan with the bottle.",
+    "D": "No, because the sports fan could have avoided the fight.",
+    "E": "Yes, because the man who punched him in the mouth was the instigator who struck the first blow that started the fracas.",
+    "F": "Yes, because the sports fan was defending himself from an unprovoked attack.",
+    "G": "Yes, because the man who punched him in the mouth and the other men were acting in concert.",
+    "H": "No, because the sports fan cannot offer proof as to which of the men struck the sports fan over the head with the bottle.",
+    "I": "Yes, because the three men were acting as a group and are therefore jointly responsible.",
+    "J": "Yes, because all the men were involved in the fight and are therefore liable."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_11591",
+   "category": "engineering",
+   "question": "A container having an area of 1 ft^2 and a volume of 5 ft^3 holds2 ft^3 of an ideal gas at a pressure of 10 atm. An externalforce is applied to keep the 1440 lb piston in positionin the container, which is open to the atmosphere of 1atm, pressure.When the external force is released the pistonrisesfrictionlesslyup the container. The gas in the containeris always kept at the same temperature. a) What will be the velocity of the piston as itmoves. b) What is the total vertical displacement of thepiston.",
+   "options": {
+    "A": "V = 28 ft/sec, Z_max = 17 ft",
+    "B": "V = 33 ft/sec, Z_max = 21.5 ft",
+    "C": "V = 30 ft/sec, Z_max = 20 ft",
+    "D": "V = 35.4 ft/sec, Z_max = 21 ft",
+    "E": "V = 37 ft/sec, Z_max = 20.5 ft",
+    "F": "V = 40 ft/sec, Z_max = 18 ft",
+    "G": "V = 34 ft/sec, Z_max = 18.5 ft",
+    "H": "V = 25 ft/sec, Z_max = 23 ft",
+    "I": "V = 32 ft/sec, Z_max = 22 ft",
+    "J": "V = 35.4 ft/sec, Z_max = 19.5 ft"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_8386",
+   "category": "math",
+   "question": "Solve for $x$:$$\\left(\\frac{1}{25}\\right)^{x + 2} = 125^{-x}.$$",
+   "options": {
+    "A": "7",
+    "B": "2",
+    "C": "4",
+    "D": "-2",
+    "E": "3",
+    "F": "5",
+    "G": "0",
+    "H": "-1",
+    "I": "6",
+    "J": "1"
+   },
+   "answer": "C"
+  },
+  {
+   "id": "mmlupro_11037",
+   "category": "philosophy",
+   "question": " Select the best translation into predicate logic: All first-year students take a swim test.",
+   "options": {
+    "A": "(∀x)(Sx ⊃ Fx)",
+    "B": "(∀x)(Fx ≡ Sx)",
+    "C": "(∀x)(Sx ∨ Fx)",
+    "D": "(∀x)(Sx ≡ Fx)",
+    "E": "(∀x)(Sx ∧ Fx)",
+    "F": "(∀x)(Fx ∨ Sx)",
+    "G": "(∀x)(~Sx ⊃ Fx)",
+    "H": "(∀x)(Fx ∧ Sx)",
+    "I": "(∀x)(Fx ⊃ ~Sx)",
+    "J": "(∀x)(Fx ⊃ Sx)"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_7329",
+   "category": "economics",
+   "question": "What is the principle of diminishing marginal returns?",
+   "options": {
+    "A": "A rule that describes how, after a certain level of performance, additional input does not yield any output",
+    "B": "A point beyond which the output attributable to each additional unit of factor input will become less and less.",
+    "C": "An economic principle that suggests a constant decrease in output with each additional input",
+    "D": "An economic theory that predicts unlimited growth",
+    "E": "The phenomenon where output increases exponentially with each additional input",
+    "F": "The principle stating that output increases linearly with input",
+    "G": "The idea that each unit of input improves the quality of output, regardless of how much is already being produced",
+    "H": "The concept that each additional input doubles the output",
+    "I": "The belief that each additional unit of input decreases the total cost of production",
+    "J": "A process where increasing amounts of input lead to proportional increases in output"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_82",
+   "category": "business",
+   "question": "What is the term for the 'rule of thumb' type of bias in decision making?",
+   "options": {
+    "A": "Framing bias",
+    "B": "Availability bias",
+    "C": "Representativeness bias",
+    "D": "Self-serving bias",
+    "E": "Hindsight bias",
+    "F": "Over-confidence bias",
+    "G": "Confirmation bias",
+    "H": "Optimism bias",
+    "I": "Anchoring bias",
+    "J": "Heuristics"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_994",
+   "category": "law",
+   "question": "In 1888, a landowner owned a dairy farm. The landowner conveyed this real property to his son in1938. In 1953, the son conveyed the dairy farm to his friend. This deed was not recorded until after the son's death in 1957. In 1956, the son mortgaged the dairy farm to the bank. The mortgage instrument, which was recorded in 1956, recited that it was subordinate to a mortgage on the same land given by the son to an investor in 1936 and recorded in 1936. In that instrument the son purported to grant the investor a mortgage on the dairy farm. In 1979, the friend conveyed the dairy farm to a farmer. This deed was duly recorded, but did not mention any mortgage. In 2008, a buyer entered into an agreement with the farmer, whereby the farmer would convey the dairy farm in fee simple to the buyer for the sum of $75,000. The closing date was set for January 15, 2009. All of the deeds mentioned in the aforementioned transactions are general warranty deeds. In addition, this jurisdiction has a notice-type recording statute and follows a title theory for mortgages. On January 15, 2009, the sale of the dairy farm is finalized and the buyer paid the farmer $75,000. The fanner executed a general warranty deed. The deed contains the following covenants of title:(1) Covenant for seisin. (2) Covenant of the right to convey. (3) Covenant against encumbrances. After the buyer takes possession of the dairy farm, he learns of the son investor 1936 mortgage, which was not satisfied, and seeks monetary damages for breach of the covenant against encumbrances. Judgment should be for",
+   "options": {
+    "A": "the farmer, unless the covenantee is disturbed in his actual enjoyment of the land thereby conveyed.",
+    "B": "the buyer, if the farmer knew about the mortgage to the investor but did not disclose it.",
+    "C": "the buyer, because the covenant against encumbrances protects against future claims on the property.",
+    "D": "the buyer, because the covenant of the right to convey was breached.",
+    "E": "the farmer, because the son's mortgage to the investor was not mentioned in the deed.",
+    "F": "the buyer, because the covenant against encumbrances is a guarantee to the grantee that the property is not subject to outstanding rights or interests.",
+    "G": "the farmer, if the mortgage to the investor was satisfied before the sale to the buyer.",
+    "H": "the buyer, because the covenant against encumbrances would be breached at the time the deed was delivered, thereby entitling the covenantee to recover damages.",
+    "I": "the farmer, because the buyer did not perform a thorough title search before purchasing the property.",
+    "J": "the farmer, because the covenant against encumbrances may only be breached, if at all, at the time of conveyance."
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_4590",
+   "category": "chemistry",
+   "question": "How much water must be added to 5 gallons of 90% ammonia solution to reduce the solution to a 60% solution?",
+   "options": {
+    "A": "2.5 gallons",
+    "B": "1 gallon",
+    "C": "5 gallons",
+    "D": "3.5 gallons",
+    "E": "0.5 gallons",
+    "F": "2 gallons",
+    "G": "1.5 gallons",
+    "H": "4 gallons",
+    "I": "3 gallons",
+    "J": "4.5 gallons"
+   },
+   "answer": "A"
+  },
+  {
+   "id": "mmlupro_7819",
+   "category": "math",
+   "question": "Divide. 7,285 ÷ 4",
+   "options": {
+    "A": "1,821",
+    "B": "1,811 R1",
+    "C": "1,801",
+    "D": "1,811",
+    "E": "1,831 R1",
+    "F": "1,821 R2",
+    "G": "1,831",
+    "H": "1,801 R2",
+    "I": "1,801 R1",
+    "J": "1,821 R1"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_4381",
+   "category": "chemistry",
+   "question": "Skeletal muscle contains about 5 × 10^-6 mole of ATP and (30 × 10^-6) mole of phosphocreatine per gram wet weight. Calculate how much work (in calories) a 400\\rule{1em}{1pt}gram muscle can theoretically carry out at the expense of its high- energy phosphate bonds alone, assuming that both glycolysis and respiration are inhibited.",
+   "options": {
+    "A": "90 cal",
+    "B": "138.2 cal",
+    "C": "75 cal",
+    "D": "165 cal",
+    "E": "120 cal",
+    "F": "100 cal",
+    "G": "110 cal",
+    "H": "150 cal",
+    "I": "180 cal",
+    "J": "200 cal"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_9743",
+   "category": "physics",
+   "question": "The atomic mass of the 4He atom is 4.002603 u. Find the binding energy of the 4He nucleus in MeV.",
+   "options": {
+    "A": "33.9",
+    "B": "29.8",
+    "C": "27.5",
+    "D": "31.2",
+    "E": "24.3",
+    "F": "32.5",
+    "G": "30.4",
+    "H": "28.3",
+    "I": "26.1",
+    "J": "25.7"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_1704",
+   "category": "law",
+   "question": "A state has recently enacted a statute that provides no person or company may be awarded any state construction contract unless the person or company agrees to hire only citizens of the state. The primary purpose of the statute is to help alleviate the state's high rate of unemployment. Which of the following, if established, is the strongest argument in support of the statute if it is attacked as violating the commerce clause? ",
+   "options": {
+    "A": "The statute was overwhelmingly adopted by the voters of the state.",
+    "B": "The state has the highest unemployment rate in the country.",
+    "C": "The statute will increase the state's overall economic productivity.",
+    "D": "The statute will help racial minorities living in the state obtain gainful employment.",
+    "E": "The statute will promote local businesses and stimulate economic growth within the state.",
+    "F": "The statute will discourage out-of-state companies from taking advantage of the state's resources.",
+    "G": "If the state uses its own taxpayer funds to purchase construction materials, it is responsible for creating demand for the required labor.",
+    "H": "The statute will ensure that the benefits of state contracts stay within the state.",
+    "I": "The statute was enacted in response to a major construction company hiring out-of-state workers for a large project.",
+    "J": "The statute will encourage more citizens to gain skills in the construction industry."
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_4236",
+   "category": "chemistry",
+   "question": "The ionization constant of lactic acid at 25°C is 1.4 × 10^-4 . A buffer solution is prepared by adding 1.00 mole of lactic acid and 0.80 mole of sodium lactate to 1 kg of water. Assume that water is at unit activity and that the activity coefficient of each univalent ion is 0.65 throughout this problem. (a) Find the pH (in the activity sense) of this solution at 25°C. (b) Find the change in the pH of the solution resulting from the addition of 0.50 mole of sodium hydroxide to the quantity of solution containing 1 kg of water. (c) Find the change in pH resulting from the addition of 0.50 mole of sodium hydroxide to 1 kg of pure water at 25°C.",
+   "options": {
+    "A": "3.47, 4.17, 13.412",
+    "B": "4.17, 4.77, 14.212",
+    "C": "3.87, 4.47, 13.812",
+    "D": "2.87, 3.47, 12.912",
+    "E": "3.07, 3.67, 13.312",
+    "F": "4.57, 5.07, 14.512",
+    "G": "3.57, 4.07, 13.512",
+    "H": "4.07, 4.67, 14.112",
+    "I": "3.67, 4.27, 13.712",
+    "J": "2.57, 3.07, 12.512"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_2441",
+   "category": "psychology",
+   "question": "When consulting with a colleague about a “therapeutic impasse” you are having with a therapy client:",
+   "options": {
+    "A": "it is only necessary to advise the client of the consultation if the client specifically asks about it.",
+    "B": "it is only necessary to advise the client of the consultation if the colleague is outside of your practice.",
+    "C": "it is unnecessary to advise the client of the consultation as long as only information that is relevant to the impasse is discussed.",
+    "D": "it is unnecessary to advise the client of the consultation if the colleague is a licensed professional.",
+    "E": "it is unnecessary to advise the client of the consultation as long as the client's identity is not revealed.",
+    "F": "it is necessary to get a signed waiver of confidentiality from the client before discussing confidential information with the consultant.",
+    "G": "it is necessary to advise the client of the consultation only if the client's identity is revealed.",
+    "H": "it is always necessary to get written approval from the client before discussing their case with a colleague.",
+    "I": "it is always necessary to advise the client about the consultation.",
+    "J": "it is unnecessary to advise the client of the consultation as long as you do not discuss the specifics of the therapy sessions."
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_6607",
+   "category": "health",
+   "question": "Which of the following bones has a process that joins with the zygomatic bone to form the zygomatic arch?",
+   "options": {
+    "A": "The lacrimal bone",
+    "B": "The frontal bone",
+    "C": "The maxillary bone",
+    "D": "The nasal bone",
+    "E": "The temporal bone",
+    "F": "The parietal bone",
+    "G": "The mandible bone",
+    "H": "The ethmoid bone",
+    "I": "The sphenoid bone",
+    "J": "The occipital bone"
+   },
+   "answer": "E"
+  },
+  {
+   "id": "mmlupro_7323",
+   "category": "economics",
+   "question": "What main functions are performed in the economyby commercialbanks ?",
+   "options": {
+    "A": "Conducting monetary policy for the government",
+    "B": "Offering educational services on finance",
+    "C": "Investing in securities",
+    "D": "Issuing credit cards",
+    "E": "Setting interest rates for the entire economy",
+    "F": "Regulating stock exchanges",
+    "G": "Printing and distributing currency",
+    "H": "Providing insurance services",
+    "I": "Managing retirement and pension plans",
+    "J": "Accepting and storing money, granting credit"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_10758",
+   "category": "computer science",
+   "question": "Suppose that a certain software product has a mean time between failures of 10,000 hours and has a mean time to repair of 20 hours. If the product is used by 100 customers, what is its availability?",
+   "options": {
+    "A": "90%",
+    "B": "97%",
+    "C": "100%",
+    "D": "75%",
+    "E": "85%",
+    "F": "99%",
+    "G": "80%",
+    "H": "95%",
+    "I": "98%",
+    "J": "99.80%"
+   },
+   "answer": "J"
+  },
+  {
+   "id": "mmlupro_5233",
+   "category": "other",
+   "question": "Which of the following terms refers to Archaic Greek statues whose poses‚Äîrigidly frontal with clenched fists‚Äîrecall the stance of ancient Egyptian statues?",
+   "options": {
+    "A": "Atlantes",
+    "B": "Gorgons",
+    "C": "Telamones",
+    "D": "Sphinxes",
+    "E": "Minotaurs",
+    "F": "Kouroi",
+    "G": "Centaurs",
+    "H": "Discoboloi",
+    "I": "Hetairoi",
+    "J": "Caryatids"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_2570",
+   "category": "psychology",
+   "question": "___________ is a communication disorder that is characterized by difficulties in regulating the rate, rhythm, pitch, and loudness of speech.",
+   "options": {
+    "A": "Dysphagia",
+    "B": "Aphasia",
+    "C": "Dysphonia",
+    "D": "Dyspraxia",
+    "E": "Dyslexia",
+    "F": "Dysarthria",
+    "G": "Apraxia",
+    "H": "Dysprosody",
+    "I": "Paraphasia",
+    "J": "Adynamia"
+   },
+   "answer": "H"
+  },
+  {
+   "id": "mmlupro_11913",
+   "category": "engineering",
+   "question": "A certain submerged body is to move horizontally through oil (\\gamma = 52 lb/ft^3, \\mu = 0.0006lb\\bullets/ft^2) at a velocity of 45 fps. To studythe characteristics of this motion, an enlarged model of thebody is tested in 60°F water. The model ratio \\lambda is8 :1. Determine the velocity at which this enlarged model should bepulled through the water to achieve dynamic similarity. If thedrag force on the model is 0.80 lb, predict the drag force onthe prototype. Body is submerged, hence there is no waveaction. Reynolds criterion must be satisfied. \\rho(water) = 1.94 slugs/ft^3. TABLE Temp, F Specific weight \\gamma, lb/ft^3 Density \\rho, slugs/ft^3 Viscosity \\mu × 10^5, lb.s /ft^2 Kine-matic Viscosity \\cyrchar\\CYRIZH × 10^5, ft^2/s 32 62.42 1.940 3.746 1.931 40 62.43 1.940 3.229 1.664 50 62.41 1.940 2.735 1.410 60 62.37 1.938 2.359 1.217 70 62.30 1.936 2.050 1.059 80 62.22 1.934 1.799 0.930 90 62.11 1.931 1.595 0.826 100 62.00 1.927 1.424 0.739 110 61.86 1.923 1.284 0.667 120 61.71 1.918 1.168 0.609 130 61.55 1.913 1.069 0.558 140 61.38 1.908 0.981 0.514 150 61.20 1.902 0.905 0.476 160 61.00 1.896 0.838 0.442 170 60.80 1.890 0. 780 0.413 180 60.58 1.883 0.726 0.385 190 60.36 1.876 0.678 0.362 200 60.12 1.868 0.637 0.341 212 59.83 1.860 0.593 0.319",
+   "options": {
+    "A": "0.322 fps, 380 lb",
+    "B": "0.161 fps, 580 lb",
+    "C": "0.322 fps, 465 lb",
+    "D": "0.213 fps, 580 lb",
+    "E": "0.565 fps, 380 lb",
+    "F": "0.213 fps, 465 lb",
+    "G": "0.161 fps, 465 lb",
+    "H": "0.565 fps, 465 lb",
+    "I": "0.213 fps, 380 lb",
+    "J": "0.322 fps, 580 lb"
+   },
+   "answer": "F"
+  },
+  {
+   "id": "mmlupro_10478",
+   "category": "computer science",
+   "question": "The procedure below is intended to display the index in a list of unique names (nameList) where a particular name (targetName) is found. lf targetName is not found in nameList, the code should display 0.\n PROCEDURE FindName (nameList, targetName)\n {\n  index ← 0\n  FOR EACH name IN nameList\n  {\n   index ← index + 1\n   IF (name = targetName)\n   {\n   foundIndex ← index\n   }\n   ELSE\n   {\n   foundIndex ← 0\n   }\n  }\n  DISPLAY (foundIndex)\n }\n Which of the following procedure calls can be used to demonstrate that the procedure does NOT Work as intended?",
+   "options": {
+    "A": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\", \"Eva\", \"Frank\", \"Grace\", \"Hannah\", \"Igor\"], \"Igor\" )",
+    "B": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\"], \"Diane\" )",
+    "C": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\", \"Eva\", \"Frank\"], \"Frank\" )",
+    "D": "FindName ([\"Andrea\", \"Ben\"], \"Ben\" )",
+    "E": "FindName ([\"Andrea\", \"Chris\", \"Diane\"], \"Ben\")",
+    "F": "FindName ([\"Andrea\", \"Ben\" ], \"Diane\" )",
+    "G": "FindName ([\"Andrea\", \"Ben\", \"Chris\"], \"Ben\")",
+    "H": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\", \"Eva\"], \"Eva\" )",
+    "I": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\", \"Eva\", \"Frank\", \"Grace\", \"Hannah\"], \"Hannah\" )",
+    "J": "FindName ([\"Andrea\", \"Ben\", \"Chris\", \"Diane\", \"Eva\", \"Frank\", \"Grace\"], \"Grace\" )"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_860",
+   "category": "business",
+   "question": "A company has a permit to mine for gold in a region of New Mexico for 3 years. Management is trying to decide how to finance the machinery. One option is to rent it for $130 per month over the three years. The deal includes the fuel needed to operate the equipment. The other option is to buy the equipment now and. it after three years. The machinery costs $11,500. There is a down payment of $2,500, so that the balance due will be $11,500 - $2,500 = $9,000. This balance will be covered by a 5(1/2)% loan to be paid in equal annual installments over 15 years. The annual fuel costs for the equipment would be $375. If the minimum attractive rate of return is 5%, at what resale value (end of third year) will both options be equally economical? Make all calculations to the nearest dollar.",
+   "options": {
+    "A": "$8,400",
+    "B": "$2,650",
+    "C": "$6,825",
+    "D": "$5,760",
+    "E": "$4,248",
+    "F": "$1,987",
+    "G": "$7,950",
+    "H": "$10,500",
+    "I": "$9,937",
+    "J": "$3,500"
+   },
+   "answer": "I"
+  },
+  {
+   "id": "mmlupro_6978",
+   "category": "economics",
+   "question": "Which of the following is not among the methods unions use to increase wages?",
+   "options": {
+    "A": "Seeking to increase the demand for the union's labor",
+    "B": "Negotiations to obtain a wage floor",
+    "C": "Encouraging workers to increase their productivity",
+    "D": "Lobbying for higher minimum wage laws",
+    "E": "Promoting worker training and education",
+    "F": "Restrictive membership policies",
+    "G": "Efforts to decrease the prices of substitute resources",
+    "H": "Featherbedding or make-work rules",
+    "I": "Encouraging government regulation of industries",
+    "J": "Instituting strike actions"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_9838",
+   "category": "physics",
+   "question": "A load dissipates 1.5kW of power in an ac series RC circuit. Given that the power factor is 0.75, what is its reactive power $(P_r)$? What is its apparent power $(P_a)$? Represent the answer in a list [$P_r, P_a$] with unit kVA and kVAR respectively.",
+   "options": {
+    "A": "[1.5, 1.5]",
+    "B": "[1.32, 1.5]",
+    "C": "[1.0, 2.0]",
+    "D": "[0.75, 2.0]",
+    "E": "[1.5, 2.0]",
+    "F": "[2.25, 3.0]",
+    "G": "[2.0, 1.32]",
+    "H": "[1.8, 2.4]",
+    "I": "[1.2, 1.0]",
+    "J": "[0.9, 1.8]"
+   },
+   "answer": "G"
+  },
+  {
+   "id": "mmlupro_428",
+   "category": "business",
+   "question": "Mr. Reynolds, owner of Reynold's Auto Service, had a total income from his auto service last year of $366,000. Included in the $366,000 was $732 worth of checks that proved to be worthless. What was his percent of loss from bad checks?",
+   "options": {
+    "A": "1.0%",
+    "B": ".2%",
+    "C": ".1%",
+    "D": ".6%",
+    "E": ".8%",
+    "F": ".9%",
+    "G": ".4%",
+    "H": ".7%",
+    "I": ".5%",
+    "J": ".3%"
+   },
+   "answer": "B"
+  },
+  {
+   "id": "mmlupro_6020",
+   "category": "health",
+   "question": "A problem for immune system theories of senescence is",
+   "options": {
+    "A": "Determining what first causes the senescence in the immune system",
+    "B": "The immune system theories do not explain the role of lifestyle in senescence",
+    "C": "Immune system theories do not explain the role of genetic factors in senescence",
+    "D": "Immune system theories are too complex to test effectively",
+    "E": "The lack of information about senescence in general",
+    "F": "That the immune system improves with age",
+    "G": "Immune system theories cannot account for the environmental factors in senescence",
+    "H": "That the immune system does not decline with age",
+    "I": "The difficulty of isolating the immune system from other bodily systems",
+    "J": "Auto-immune disorders are far too rare"
+   },
+   "answer": "A"
+  }
+ ]
+}

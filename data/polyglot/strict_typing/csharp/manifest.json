@@ -1,0 +1,9 @@
+{
+  "mode": "program",
+  "answer_file": "Pipeline.cs",
+  "strict": true,
+  "csharp_namespace_using": "Program.cs",
+  "forbidden_patterns": [
+    "\\bdynamic\\b"
+  ]
+}

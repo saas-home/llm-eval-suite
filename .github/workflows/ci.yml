@@ -21,6 +21,9 @@ jobs:
       - name: Compile all modules
         run: |
           python -m py_compile eval.py compare.py judge_eval.py env_loader.py client.py reporting.py
+          python -m py_compile languages.py domain_benchmarks.py polyglot.py scripts/verify_polyglot_packs.py
+          python -m py_compile suites.py judge.py ifeval.py scripts/fetch_benchmark_data.py
+          python -m py_compile workload.py usecases.py report_md.py judge_validation.py scripts/*.py
           python -m py_compile benchmarks/*.py
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
@@ -29,6 +32,20 @@ jobs:
           python eval.py --help
           python compare.py --help
           python judge_eval.py --help
+
+  # Polyglot graders (Tests 20-25): build the image with every toolchain and
+  # prove each test pack still tells known-good code from known-bad code.
+  polyglot-packs:
+    name: Polyglot test packs (Docker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t llm-eval-suite:ci .
+      - name: Self-check packs and run the full test suite with toolchains
+        run: |
+          docker run --rm --network none -v "$PWD:/app" --entrypoint python3 llm-eval-suite:ci scripts/verify_polyglot_packs.py
+          docker run --rm --network none -v "$PWD:/app" --entrypoint python3 llm-eval-suite:ci -m unittest discover -s tests
 
   # Lint / type check. Non-blocking (continue-on-error) so pre-existing legacy
   # debt doesn't break the build; it surfaces new issues for developers.

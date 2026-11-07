@@ -1,0 +1,5 @@
+{
+  "mode": "program",
+  "answer_file": "orders.go",
+  "go_package": "orders"
+}

@@ -1,0 +1,31 @@
+{
+  "mode": "unit_tests",
+  "answer_file": "PaymentProcessorTest.java",
+  "min_tests": 3,
+  "mutants": [
+    {
+      "name": "any_status_treated_as_success",
+      "file": "PaymentProcessor.java",
+      "replace": [
+        "if (\"succeeded\".equals(res.status()))",
+        "if (res.status() != null)"
+      ]
+    },
+    {
+      "name": "amount_guard_removed",
+      "file": "PaymentProcessor.java",
+      "replace": [
+        "if (amount <= 0) throw",
+        "if (amount < -1000000000) throw"
+      ]
+    },
+    {
+      "name": "receipt_sent_with_wrong_charge_id",
+      "file": "PaymentProcessor.java",
+      "replace": [
+        "notifier.sendReceipt(email, res.id());",
+        "notifier.sendReceipt(email, token);"
+      ]
+    }
+  ]
+}

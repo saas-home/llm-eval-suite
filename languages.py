@@ -22,8 +22,9 @@ import ast
 import shutil
 import tempfile
 import subprocess
+from typing import Any, Dict, Optional
 
-from client import assemble_python_script
+from client import assemble_python_script, harness_passed, run_model_code
 
 SUPPORTED_LANGUAGES = ["python", "typescript", "go", "java", "rust", "csharp"]
 
@@ -104,7 +105,21 @@ def normalize_language(lang_str: str) -> str:
 # 1. TEST 20: SURGICAL UNIFIED DIFF FIXTURES
 # ============================================================================
 
-DIFF_FIXTURES = {
+_GO_PAYROLL = (
+    "package payroll\n\n"
+    "type Employee struct{ Salary float64 }\n\n"
+    "func CalculatePayroll(employees []*Employee, taxRate float64, bonusPool float64) float64 {\n"
+    "\ttotal := 0.0\n"
+    "\tfor i := 0; i <= len(employees); i++ {\n"
+    "\t\temp := employees[i]\n"
+    "\t\tnet := emp.Salary * (1.0 - taxRate)\n"
+    "\t\ttotal += net\n"
+    "\t}\n"
+    "\treturn total + bonusPool\n"
+    "}\n"
+)
+
+DIFF_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "file_name": "payroll.py",
         "code": (
@@ -116,6 +131,14 @@ DIFF_FIXTURES = {
             "        net = salary * (1 - tax_rate)\n"
             "        total += net\n"
             "    return total + bonus_pool\n"
+        ),
+        "behavior_check": (
+            "assert abs(calculate_payroll([{'salary': 100.0}, {'salary': 200.0}], 0.1, 5.0) - 275.0) < 1e-9, "
+            "'off-by-one not fixed (wrong total)'\n"
+            "for empty in (None, []):\n"
+            "    r = calculate_payroll(empty, 0.1, 5.0)\n"
+            "    assert r in (0.0, 5.0), f'None/empty employees not handled safely: {r!r}'\n"
+            "print('DIFF_BEHAVIOR_VERIFIED', __import__('os').environ['EVAL_RUN_ID'])\n"
         ),
         "prompt": (
             "Here is an existing Python file `payroll.py` with an off-by-one index error and missing null check:\n\n"
@@ -169,34 +192,13 @@ DIFF_FIXTURES = {
     },
     "go": {
         "file_name": "payroll.go",
-        "code": (
-            "package payroll\n\n"
-            "type Employee struct { Salary float64 }\n\n"
-            "func CalculatePayroll(employees []*Employee, taxRate float64, bonusPool float64) float64 {\n"
-            "    total := 0.0\n"
-            "    for i := 0; i <= len(employees); i++ {\n"
-            "        emp := employees[i]\n"
-            "        net := emp.Salary * (1.0 - taxRate)\n"
-            "        total += net\n"
-            "    }\n"
-            "    return total + bonusPool\n"
-            "}\n"
-        ),
+        # gofmt output (tab indentation), as every real Go file is. With
+        # 4-space indentation, a diff written in normal Go style (tabs) did
+        # not match the file and failed git apply.
+        "code": _GO_PAYROLL,
         "prompt": (
             "Here is an existing Go file `payroll.go` with an out-of-bounds index error (`i <= len(employees)`) and missing nil check:\n\n"
-            "```go\n"
-            "package payroll\n\n"
-            "type Employee struct { Salary float64 }\n\n"
-            "func CalculatePayroll(employees []*Employee, taxRate float64, bonusPool float64) float64 {\n"
-            "    total := 0.0\n"
-            "    for i := 0; i <= len(employees); i++ {\n"
-            "        emp := employees[i]\n"
-            "        net := emp.Salary * (1.0 - taxRate)\n"
-            "        total += net\n"
-            "    }\n"
-            "    return total + bonusPool\n"
-            "}\n"
-            "```\n\n"
+            "```go\n" + _GO_PAYROLL + "```\n\n"
             "Fix the out-of-bounds loop and handle nil pointers safely.\n"
             "Provide a surgical unified git diff (patch) to fix this. "
             "Your response MUST contain a valid unified diff block starting with `--- a/payroll.go` and `+++ b/payroll.go`."
@@ -328,7 +330,7 @@ DIFF_FIXTURES = {
 # 2. TEST 21: MULTI-FILE CROSS-REFERENCE & DEPENDENCY INJECTION FIXTURES
 # ============================================================================
 
-MULTIFILE_FIXTURES = {
+MULTIFILE_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "prompt": (
             "You are working across multiple files in a repository.\n\n"
@@ -367,6 +369,24 @@ MULTIFILE_FIXTURES = {
             "#    - If user exists and is active, returns `AuthToken(token=f'tok_{user.id}', expires_in=config.max_token_ttl_seconds)`.\n"
             "#    - Otherwise returns None.\n"
             "# Output the complete, syntactically valid `auth_service.py` in a Python code block."
+        ),
+        "behavior_check": (
+            "from typing import Optional, List\n"
+            "from models import User, TenantConfig, AuthToken\n"
+            "from repository import AbstractUserRepository\n"
+            "from auth_service import AuthenticationService\n"
+            "class FakeRepo(AbstractUserRepository):\n"
+            "    def __init__(self, users): self.users = {u.id: u for u in users}; self.calls = []\n"
+            "    def get_by_id(self, user_id): self.calls.append(user_id); return self.users.get(user_id)\n"
+            "    def save(self, user): self.users[user.id] = user\n"
+            "    def list_active(self): return [u for u in self.users.values() if u.is_active]\n"
+            "repo = FakeRepo([User('u1', 'a@x.io', True), User('u2', 'b@x.io', False)])\n"
+            "svc = AuthenticationService(user_repo=repo, config=TenantConfig('t1', max_token_ttl_seconds=900))\n"
+            "assert svc.authenticate('u1') == AuthToken(token='tok_u1', expires_in=900), 'active user token wrong'\n"
+            "assert svc.authenticate('u2') is None, 'inactive user must get None'\n"
+            "assert svc.authenticate('nope') is None, 'unknown user must get None'\n"
+            "assert repo.calls == ['u1', 'u2', 'nope'], 'must look users up via the injected repository'\n"
+            "print('MULTIFILE_BEHAVIOR_VERIFIED', __import__('os').environ['EVAL_RUN_ID'])\n"
         ),
         "required_symbols": ["AuthenticationService", "get_by_id", "AuthToken"],
     },
@@ -502,7 +522,7 @@ MULTIFILE_FIXTURES = {
 # 3. TEST 22: SECURITY REVIEW & OWASP VULNERABILITY AUDIT FIXTURES
 # ============================================================================
 
-SECURITY_FIXTURES = {
+SECURITY_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "prompt": (
             "Perform a rigorous security code review of the following three Python pull request snippets.\n\n"
@@ -525,9 +545,10 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```python\n"
-            "def log_access(logger, user_id, ip_address):\n"
-            "    clean_ip = ip_address.strip()\n"
-            "    logger.info(\"User %s accessed system from IP %s\", user_id, clean_ip)\n"
+            "def get_user_email(cursor, user_id: int):\n"
+            "    cursor.execute(\"SELECT email FROM users WHERE id = %s\", (user_id,))\n"
+            "    row = cursor.fetchone()\n"
+            "    return row[0] if row else None\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
         ),
@@ -556,9 +577,9 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```typescript\n"
-            "function logAccess(logger: any, userId: string, ip: string) {\n"
-            "    const safeIp = ip.trim();\n"
-            "    logger.info('User access', { userId, ip: safeIp });\n"
+            "async function getUserEmail(db: Pool, userId: number): Promise<string | null> {\n"
+            "    const res = await db.query('SELECT email FROM users WHERE id = $1', [userId]);\n"
+            "    return res.rows.length ? res.rows[0].email : null;\n"
             "}\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
@@ -589,9 +610,10 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```go\n"
-            "func LogAccess(logger *log.Logger, userID, ip string) {\n"
-            "    cleanIP := strings.TrimSpace(ip)\n"
-            "    logger.Printf(\"User %s accessed from IP %s\", userID, cleanIP)\n"
+            "func GetUserEmail(db *sql.DB, userID int64) (string, error) {\n"
+            "    var email string\n"
+            "    err := db.QueryRow(\"SELECT email FROM users WHERE id = $1\", userID).Scan(&email)\n"
+            "    return email, err\n"
             "}\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
@@ -623,9 +645,13 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```java\n"
-            "public void logAccess(Logger logger, String userId, String ip) {\n"
-            "    String cleanIp = ip.strip();\n"
-            "    logger.info(\"User {} accessed from IP {}\", userId, cleanIp);\n"
+            "public Optional<String> getUserEmail(Connection conn, long userId) throws SQLException {\n"
+            "    try (PreparedStatement ps = conn.prepareStatement(\"SELECT email FROM users WHERE id = ?\")) {\n"
+            "        ps.setLong(1, userId);\n"
+            "        try (ResultSet rs = ps.executeQuery()) {\n"
+            "            return rs.next() ? Optional.of(rs.getString(\"email\")) : Optional.empty();\n"
+            "        }\n"
+            "    }\n"
             "}\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
@@ -658,9 +684,11 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```rust\n"
-            "pub fn log_access(user_id: &str, ip: &str) {\n"
-            "    let clean_ip = ip.trim();\n"
-            "    println!(\"User {} accessed system from IP {}\", user_id, clean_ip);\n"
+            "use rusqlite::{Connection, OptionalExtension};\n"
+            "\n"
+            "pub fn get_user_email(conn: &Connection, user_id: i64) -> rusqlite::Result<Option<String>> {\n"
+            "    conn.query_row(\"SELECT email FROM users WHERE id = ?1\", [user_id], |row| row.get(0))\n"
+            "        .optional()\n"
             "}\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
@@ -692,9 +720,10 @@ SECURITY_FIXTURES = {
             "```\n\n"
             "Snippet C:\n"
             "```csharp\n"
-            "public void LogAccess(ILogger logger, string userId, string ip) {\n"
-            "    string cleanIp = ip.Trim();\n"
-            "    logger.LogInformation(\"User {UserId} accessed from IP {IP}\", userId, cleanIp);\n"
+            "public string? GetUserEmail(SqlConnection conn, int userId) {\n"
+            "    using var cmd = new SqlCommand(\"SELECT Email FROM Users WHERE Id = @id\", conn);\n"
+            "    cmd.Parameters.AddWithValue(\"@id\", userId);\n"
+            "    return cmd.ExecuteScalar() as string;\n"
             "}\n"
             "```\n\n"
             "For each snippet, state whether it is VULNERABLE or SAFE. If VULNERABLE, specify the exact vulnerability name."
@@ -707,7 +736,7 @@ SECURITY_FIXTURES = {
 # 4. TEST 23: UNIT TEST SYNTHESIS WITH MOCKS FIXTURES
 # ============================================================================
 
-UNIT_TEST_FIXTURES = {
+UNIT_TEST_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "source": (
             "class StripeGateway:\n"
@@ -923,7 +952,7 @@ UNIT_TEST_FIXTURES = {
 # 5. TEST 24: STRICT TYPING & GENERICS FIXTURES
 # ============================================================================
 
-TYPING_FIXTURES = {
+TYPING_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "prompt": (
             "Write a generic, immutable data transformation pipeline class in Python with 100% strict type annotations.\n"
@@ -1011,7 +1040,7 @@ TYPING_FIXTURES = {
 # 6. TEST 25: SAFE REFACTORING INVARIANT FIXTURES
 # ============================================================================
 
-REFACTOR_FIXTURES = {
+REFACTOR_FIXTURES: Dict[str, Dict[str, Any]] = {
     "python": {
         "legacy": (
             "def process_order_data(records):\n"
@@ -1170,6 +1199,191 @@ REFACTOR_FIXTURES = {
 
 
 # ============================================================================
+# POLYGLOT PROMPTS (generated from the execution test packs)
+# ============================================================================
+# For TypeScript, Go, Java, Rust and C#, Tests 21, 23, 24 and 25 are graded by
+# compiling and running the answer against data/polyglot/<test>/<lang>/. The
+# prompts are built from those same pack files so the model always sees the
+# exact code the harness compiles against.
+
+_POLYGLOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "polyglot")
+_FENCE = {"typescript": "typescript", "go": "go", "java": "java", "rust": "rust", "csharp": "csharp"}
+
+
+def _pack_file(test_key: str, lang: str, part: str, name: str) -> str:
+    with open(os.path.join(_POLYGLOT_DIR, test_key, lang, part, name), encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def _files_block(test_key: str, lang: str, names) -> str:
+    fence = _FENCE[lang]
+    return "\n\n".join(f"File `{n}`:\n```{fence}\n{_pack_file(test_key, lang, 'support', n)}\n```" for n in names)
+
+
+# Test 20: the null-safety requirement is stated precisely so a behavior check is fair.
+DIFF_FIXTURES["typescript"]["prompt"] = DIFF_FIXTURES["typescript"]["prompt"].replace(
+    "Fix the off-by-one loop boundary and add null safety.",
+    "Fix the off-by-one loop boundary and add null safety: a null/undefined `employees` argument must be treated as an "
+    "empty list (return only the bonus pool), and null entries in the list must be skipped.")
+DIFF_FIXTURES["go"]["prompt"] = DIFF_FIXTURES["go"]["prompt"].replace(
+    "Fix the out-of-bounds loop and handle nil pointers safely.",
+    "Fix the out-of-bounds loop and handle nil pointers safely: nil `*Employee` entries must be skipped, and a nil "
+    "slice must return only the bonus pool.")
+DIFF_FIXTURES["java"]["prompt"] = DIFF_FIXTURES["java"]["prompt"].replace(
+    "Fix the off-by-one loop and add null safety.",
+    "Fix the off-by-one loop and add null safety: a null `employees` list must be treated as empty (return only the "
+    "bonus pool), and null entries in the list must be skipped.")
+DIFF_FIXTURES["csharp"]["prompt"] = DIFF_FIXTURES["csharp"]["prompt"].replace(
+    "Fix the index boundary and null handling.",
+    "Fix the index boundary and null handling: a null `employees` list must be treated as empty (return only the "
+    "bonus pool), and null entries in the list must be skipped.")
+
+# Test 21: multi-file dependency injection.
+_MULTIFILE_SPECS = {
+    "typescript": (["models.ts", "repository.ts"], "authService.ts",
+        "Implement and export `class AuthenticationService` with:\n"
+        "1. Constructor dependency injection: `constructor(userRepo: IUserRepository, config: TenantConfig)`.\n"
+        "2. `async authenticate(userId: string): Promise<AuthToken | null>`: resolve the user via `userRepo.getById(userId)`; "
+        "if the user exists and `isActive`, return `{ token: `tok_${user.id}`, expiresIn: config.maxTokenTtlSeconds }`; otherwise return null.\n"
+        "Import the types from './models' and './repository'."),
+    "go": (["models.go", "repository.go"], "auth_service.go",
+        "In package `authsvc` (same package as the files above), implement:\n"
+        "1. `type AuthService struct` and the constructor `NewAuthService(repo UserRepository, config TenantConfig) *AuthService`.\n"
+        "2. `func (s *AuthService) Authenticate(userID string) (*AuthToken, error)`: resolve the user via `repo.GetByID(userID)`; "
+        "if that returns an error, return nil and the error; if the user exists and `IsActive`, return "
+        "`&AuthToken{Token: \"tok_\" + user.ID, ExpiresIn: config.MaxTokenTTLSeconds}, nil`; otherwise return nil, nil."),
+    "java": (["User.java", "TenantConfig.java", "AuthToken.java", "UserRepository.java"], "AuthenticationService.java",
+        "In the same (default) package, implement `public class AuthenticationService` with:\n"
+        "1. Constructor dependency injection: `public AuthenticationService(UserRepository userRepo, TenantConfig config)`.\n"
+        "2. `public Optional<AuthToken> authenticate(String userId)`: resolve the user via `userRepo.getById(userId)`; if present "
+        "and `isActive()`, return an AuthToken with token `\"tok_\" + user.id()` and `config.maxTokenTtlSeconds()`; otherwise `Optional.empty()`."),
+    "rust": (["models.rs", "repository.rs"], "auth_service.rs",
+        "The crate declares `mod models; mod repository; mod auth_service;`. Implement `AuthenticationService<R: UserRepository>` with:\n"
+        "1. `pub fn new(user_repo: R, config: TenantConfig) -> Self` (constructor dependency injection).\n"
+        "2. `pub fn authenticate(&self, user_id: &str) -> Option<AuthToken>`: resolve the user via `self.user_repo.get_by_id(user_id)`; "
+        "if it exists and `is_active`, return `Some(AuthToken { token: format!(\"tok_{}\", user.id), expires_in: self.config.max_token_ttl_seconds })`; "
+        "otherwise `None`. Use `crate::models` and `crate::repository` for the types."),
+    "csharp": (["Models.cs", "IUserRepository.cs"], "AuthenticationService.cs",
+        "Implement `public class AuthenticationService` (global namespace, like the files above) with:\n"
+        "1. Constructor dependency injection: `public AuthenticationService(IUserRepository userRepo, TenantConfig config)`.\n"
+        "2. `public async Task<AuthToken?> AuthenticateAsync(string userId)`: resolve the user via `GetByIdAsync(userId)`; "
+        "if the user exists and `IsActive`, return `new AuthToken($\"tok_{user.Id}\", config.MaxTokenTtlSeconds)`; otherwise null."),
+}
+for _lang, (_support, _answer, _spec) in _MULTIFILE_SPECS.items():
+    MULTIFILE_FIXTURES[_lang]["prompt"] = (
+        "You are working across multiple files in a repository. These files already exist:\n\n"
+        + _files_block("multifile_context", _lang, _support)
+        + f"\n\nWrite the missing file `{_answer}`.\n{_spec}\n"
+        f"Output only the complete `{_answer}` in a ```{_FENCE[_lang]} code block."
+    )
+
+# Test 23: unit-test synthesis (graded by running the tests and by mutation testing).
+_UNIT_TEST_SPECS = {
+    "typescript": ("paymentProcessor.ts", "payment.test.ts",
+        "Generate a complete Vitest test file `payment.test.ts` (import `describe`, `it`, `expect`, `vi` from 'vitest' and "
+        "`PaymentProcessor` from './paymentProcessor'). Use `vi.fn()` mocks for the gateway and notifier."),
+    "go": ("payment.go", "payment_test.go",
+        "Generate a complete Go test file `payment_test.go` in package `payment` using the standard `testing` package. "
+        "Implement your own mock structs for `StripeGateway` and `NotificationClient`."),
+    "java": ("PaymentProcessor.java", "PaymentProcessorTest.java",
+        "Generate a complete JUnit 5 test class `PaymentProcessorTest` in package `com.payment`, using Mockito "
+        "(`mock(...)`, `when(...).thenReturn(...)`, `verify(...)`)."),
+    "rust": ("payment.rs", "tests",
+        "Generate a `#[cfg(test)] mod tests { use super::*; ... }` block that will be appended to the end of this file. "
+        "Implement your own mock structs for `StripeGateway` and `NotificationClient` (use `Cell`/`RefCell` to record calls)."),
+    "csharp": ("PaymentProcessor.cs", "PaymentProcessorTests.cs",
+        "Generate a complete xUnit test class `PaymentProcessorTests` using Moq (`new Mock<IStripeGateway>()`, "
+        "`.Setup(...)`, `.ReturnsAsync(...)`, `.Verify(...)`). Add `using Payments;`."),
+}
+_UNIT_TEST_REQUIREMENTS = (
+    "Requirements (each must be a separate test):\n"
+    "1. Successful charge (status \"succeeded\"): returns true AND the receipt is sent exactly once with the customer's "
+    "email and the charge id returned by the gateway.\n"
+    "2. Declined charge (status \"declined\"): returns false AND no receipt is sent.\n"
+    "3. Non-positive amount: fails with the documented error AND the gateway is never charged.\n"
+    "Your tests are run against this code and against subtly broken versions of it; they must pass on the correct code "
+    "and catch the broken ones."
+)
+for _lang, (_src, _answer, _framework) in _UNIT_TEST_SPECS.items():
+    UNIT_TEST_FIXTURES[_lang]["source"] = _pack_file("unit_test_synthesis", _lang, "support", _src)
+    UNIT_TEST_FIXTURES[_lang]["prompt"] = (
+        f"Given the production code in `{_src}`:\n\n```{_FENCE[_lang]}\n{UNIT_TEST_FIXTURES[_lang]['source']}\n```\n\n"
+        f"{_framework}\n{_UNIT_TEST_REQUIREMENTS}\n"
+        f"Output ONLY the test code in a ```{_FENCE[_lang]} block."
+    )
+UNIT_TEST_FIXTURES["python"]["prompt"] = UNIT_TEST_FIXTURES["python"]["prompt"].replace(
+    "2. Test successful charge (`status == 'succeeded'`) verifies `send_receipt` was called and returns True.",
+    "2. Test successful charge (`status == 'succeeded'`) verifies `send_receipt` was called exactly once with the "
+    "customer email and the charge id, and returns True.").replace(
+    "4. Test negative amount raises `ValueError`.",
+    "4. Test negative amount raises `ValueError` and the gateway is never charged.\n"
+    "The code above is the module `payment_processor` (`from payment_processor import PaymentProcessor`).\n"
+    "Your tests are run against this code and against subtly broken versions of it; they must pass on the correct "
+    "code and catch the broken ones.")
+UNIT_TEST_FIXTURES["python"]["mutants"] = [
+    {"name": "any_status_treated_as_success", "replace": ["if resp.get('status') == 'succeeded':", "if resp.get('status'):"]},
+    {"name": "amount_guard_removed", "replace": ["if amount <= 0:", "if amount < -10**9:"]},
+    {"name": "receipt_sent_with_wrong_charge_id", "replace": ["self.notifier.send_receipt(email, resp['id'])", "self.notifier.send_receipt(email, token)"]},
+]
+
+# Test 24: strict typing (compiled in each language's strictest practical mode).
+TYPING_FIXTURES["typescript"]["prompt"] = TYPING_FIXTURES["typescript"]["prompt"].replace(
+    "5. Implement `execute(): T[]`.",
+    "5. Implement `execute(): T[]` returning a new array (callers must not be able to mutate the pipeline).\n"
+    "Export the class from `pipeline.ts` (`export class Pipeline<T>`). It is compiled with `tsc --strict`.")
+TYPING_FIXTURES["go"]["prompt"] = TYPING_FIXTURES["go"]["prompt"].replace(
+    "1. Define `type Pipeline[T any] struct { data []T }`.",
+    "Use package `pipeline`. The pipeline is immutable: the constructor copies its input, Filter returns a new pipeline, "
+    "and Execute returns a copy. Do not use `interface{}`/`any` values or reflection outside type-parameter constraints.\n"
+    "1. Define `type Pipeline[T any] struct { data []T }`.").replace(
+    "Output ONLY the Go code", "The code must pass `go vet`. Output ONLY the Go code")
+TYPING_FIXTURES["java"]["prompt"] = TYPING_FIXTURES["java"]["prompt"].replace(
+    "1. `public class Pipeline<T>` with an immutable `List<T> data`.",
+    "1. `public class Pipeline<T>` with an immutable `List<T> data` and constructor `public Pipeline(List<T> data)` that "
+    "copies its input; `execute()` must not let callers mutate the pipeline.").replace(
+    "Output ONLY the Java code", "It is compiled with `javac -Xlint:all -Werror`. Output ONLY the Java code")
+TYPING_FIXTURES["rust"]["prompt"] = TYPING_FIXTURES["rust"]["prompt"].replace(
+    "Output ONLY the Rust code", "It is compiled as module `pipeline` with `rustc -D warnings`; no `unsafe`. Output ONLY the Rust code")
+TYPING_FIXTURES["csharp"]["prompt"] = TYPING_FIXTURES["csharp"]["prompt"].replace(
+    "1. `public class Pipeline<T>` with `IReadOnlyList<T>`.",
+    "1. `public class Pipeline<T>` with `IReadOnlyList<T>` and constructor `public Pipeline(IEnumerable<T> data)` that "
+    "copies its input; `Execute()` must not let callers mutate the pipeline.").replace(
+    "Output ONLY the C# code", "It is compiled with nullable reference types enabled and warnings as errors; no `dynamic`. "
+    "Output ONLY the C# code")
+
+# Test 25: safe refactoring (graded by differential testing against the legacy code).
+_REFACTOR_SPECS = {
+    "typescript": (_pack_file("refactor_invariants", "typescript", "support", "legacy.ts"),
+        "Keep the exported names `OrderRecord`, `ProcessedOrder` and `processOrderData` and the same signature."),
+    "go": ("package orders\n\n" + _pack_file("refactor_invariants", "go", "reference", "orders.go").split("func ProcessOrderData")[0]
+           .replace("package orders\n\n", "")
+           + _pack_file("refactor_invariants", "go", "support", "legacy.go").split("\n", 3)[3].replace("legacyProcessOrderData", "ProcessOrderData"),
+        "Keep package `orders`, the `Record` and `ProcessedOrder` types and the `ProcessOrderData` signature."),
+    "java": (_pack_file("refactor_invariants", "java", "support", "OrderRecord.java") + "\n"
+             + _pack_file("refactor_invariants", "java", "support", "ProcessedOrder.java") + "\n\n"
+             + _pack_file("refactor_invariants", "java", "support", "LegacyOrderProcessor.java")
+               .replace("/** The original implementation, kept for differential testing. */\n", "")
+               .replace("public final class LegacyOrderProcessor", "public final class OrderProcessor"),
+        "The records `OrderRecord` and `ProcessedOrder` already exist in their own files; output only `OrderProcessor.java` "
+        "with the same `public static List<ProcessedOrder> processOrderData(List<OrderRecord> records)` method."),
+    "rust": (_pack_file("refactor_invariants", "rust", "support", "legacy.rs"),
+        "Keep the `Record` and `ProcessedOrder` structs (same public fields) and the `process_order_data` signature."),
+    "csharp": (_pack_file("refactor_invariants", "csharp", "support", "Legacy.cs").replace("namespace Legacy;", "namespace Orders;"),
+        "Keep `namespace Orders;`, the `Record` and `ProcessedOrder` records and the "
+        "`OrderProcessor.ProcessOrderData` signature."),
+}
+for _lang, (_legacy, _keep) in _REFACTOR_SPECS.items():
+    REFACTOR_FIXTURES[_lang]["legacy"] = _legacy
+    REFACTOR_FIXTURES[_lang]["prompt"] = (
+        f"Refactor the following deeply nested legacy code into clean, idiomatic, modern code with guard clauses and early "
+        f"returns:\n\n```{_FENCE[_lang]}\n{_legacy}\n```\n\n"
+        f"Requirements:\n1. Maintain EXACT input/output behavior for every input (null/empty inputs, missing or invalid "
+        f"fields, discount boundaries, rounding).\n2. {_keep}\n"
+        f"Output ONLY the complete refactored code in a ```{_FENCE[_lang]} block."
+    )
+
+
+# ============================================================================
 # CODE EXTRACTION & EVALUATION VERIFICATION HELPERS
 # ============================================================================
 
@@ -1270,109 +1484,332 @@ def extract_unified_diff(text: str, file_name: str = "") -> str:
         else:
             cleaned_lines.append(line)
 
-    return "\n".join(cleaned_lines).strip()
+    # Not .strip(): a hunk may end with a blank context line (" "), and
+    # stripping it made a correct patch "corrupt" (one line short).
+    return "\n".join(fit_hunk_lengths(cleaned_lines)).strip("\n")
 
 
-def verify_git_diff(diff_text: str, original_code: str, file_name: str) -> dict:
-    """Verifies unified git diff syntax and cleanly tests patch application with git apply."""
-    valid_syntax = bool(re.search(r"^--- .+?\n\+\+\+ .+?\n@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", diff_text.strip(), re.MULTILINE)) or (f"--- a/{file_name}" in diff_text and f"+++ b/{file_name}" in diff_text) or ("--- a/" in diff_text and "+++ b/" in diff_text)
+# Longest error text sent back to the model on a retry (Tests 14, 17, 20-21, 23-25).
+MAX_FEEDBACK_CHARS = 2000
+NO_CODE_FEEDBACK = "No code block was found in your answer."
+
+
+def timeout_feedback(seconds: float) -> str:
+    """What the model is told when its code ran past the time limit."""
+    return f"Your code did not finish within {seconds:g} s (an infinite loop, deadlock or blocking call?)."
+
+
+def tool_feedback(res: dict) -> str:
+    """The error a developer would read from a failed compile-and-run grade."""
+    return f"{res['stage']} failed:\n" + str(res.get("output") or res.get("detail") or "")[:MAX_FEEDBACK_CHARS]
+
+
+def output_tail(text: str, lines: int = 20) -> str:
+    """The last lines of a Python run's output (the traceback ends there)."""
+    return "\n".join(text.strip().splitlines()[-lines:])[:MAX_FEEDBACK_CHARS]
+
+_HUNK_HEADER = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+MAX_BLANK_PAD = 3
+
+
+def fit_hunk_lengths(lines: list) -> list:
+    """Repairs only the blank lines at the end of each hunk, so the hunk has
+    the line counts its header declares: extra trailing blank context lines
+    (from the blank line before a closing code fence) are dropped, and up to
+    MAX_BLANK_PAD missing ones (lost when the fence was cut off) are added
+    back. Nothing else changes, and git apply still checks every context line
+    against the file, so this cannot turn a wrong patch into one that applies."""
+    out: list = []
+    i = 0
+    while i < len(lines):
+        m = _HUNK_HEADER.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+        want_old = int(m.group(1)) if m.group(1) is not None else 1
+        want_new = int(m.group(2)) if m.group(2) is not None else 1
+        out.append(lines[i])
+        i += 1
+        body = []
+        while i < len(lines) and not _HUNK_HEADER.match(lines[i]) and not lines[i].startswith(("--- ", "+++ ")):
+            body.append(lines[i])
+            i += 1
+
+        def counts(b):
+            return (sum(1 for x in b if x[:1] in (" ", "-")), sum(1 for x in b if x[:1] in (" ", "+")))
+        old, new = counts(body)
+        while body and body[-1].strip() == "" and old > want_old and new > want_new:
+            body.pop()
+            old, new = counts(body)
+        pad = want_old - old
+        if 0 < pad <= MAX_BLANK_PAD and want_new - new == pad:
+            body += [" "] * pad
+        out += body
+    return out
+
+
+def _polyglot_grade(test_key: str, lang: str, code: str, execute_code: bool):
+    """Compile-and-run grading for a non-Python answer, or None when it cannot
+    run (execution disabled, no test pack, toolchain not installed, or a build
+    step timed out). Callers treat None as unverified and never award a PASS
+    for it. A build timeout is also recorded for eval's infra guard
+    (polyglot.take_infra_events), which marks the test an infra failure."""
+    if not execute_code:
+        return None
+    import polyglot
+    if not polyglot.has_pack(test_key, lang) or not polyglot.toolchain_available(lang):
+        return None
+    res = polyglot.grade_answer(test_key, lang, code)
+    return None if res["stage"] == "infra" else res
+
+
+_UNVERIFIED_NOTE = "toolchain not available (run inside the Docker image); structural check only, capped at PARTIAL"
+_EXECUTION_DISABLED_NOTE = "execution disabled (--no-execute / EVAL_SAFE=1); structural check only, capped at PARTIAL"
+
+
+def verify_git_diff(diff_text: str, original_code: str, file_name: str,
+                    behavior_check: Optional[str] = None, execute_code: bool = True, language: str = "python") -> dict:
+    """Verifies a unified diff: it must apply cleanly with `git apply`, and when
+    the fixture has a behavior check (Python), the patched file must actually
+    fix the bug. A patch that applies but changes nothing useful is PARTIAL.
+
+    "feedback" is the error to show the model when the failure is the
+    model's (no diff, git apply rejected it, or the patched code failed to
+    compile or failed its tests), so it can try again; None otherwise."""
+    valid_syntax = bool(re.search(r"^--- .+?\n\+\+\+ .+?\n@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", diff_text.strip(), re.MULTILINE))
     git_apply_passed = False
+    behavior_verified = None  # None = not checked (no check for this language / execution disabled)
+    detail = ""
+    feedback = None
 
-    if valid_syntax and diff_text:
+    if not valid_syntax:
+        detail = "no well-formed unified diff hunk"
+        feedback = "No unified diff was found in your answer (expected ---/+++ headers and an @@ hunk)."
+    elif not shutil.which("git"):
+        detail = "git not installed; patch application unverified"
+    else:
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 file_path = os.path.join(tmpdir, file_name)
                 with open(file_path, "w") as f:
                     f.write(original_code)
-                patch_path = os.path.join(tmpdir, "fix.patch")
-                with open(patch_path, "w") as f:
-                    f.write(diff_text.strip() + "\n")
-
-                if shutil.which("git"):
-                    subprocess.run(["git", "init"], cwd=tmpdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                    subprocess.run(["git", "config", "user.email", "eval@bench.local"], cwd=tmpdir, check=True)
-                    subprocess.run(["git", "config", "user.name", "Eval Bench"], cwd=tmpdir, check=True)
-                    subprocess.run(["git", "add", file_name], cwd=tmpdir, check=True)
-                    subprocess.run(["git", "commit", "-m", "init"], cwd=tmpdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-                    proc = subprocess.run(["git", "apply", "--check", "fix.patch"], cwd=tmpdir, capture_output=True, text=True, timeout=10)
-                    if proc.returncode == 0:
-                        git_apply_passed = True
-                else:
-                    git_apply_passed = valid_syntax and ("-" in diff_text and "+" in diff_text)
-        except Exception:
+                with open(os.path.join(tmpdir, "fix.patch"), "w") as f:
+                    f.write(diff_text.strip("\n") + "\n")  # keep a final blank context line (" ")
+                git = ["git", "-c", "user.email=eval@bench.local", "-c", "user.name=Eval Bench"]
+                subprocess.run(git + ["init"], cwd=tmpdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                subprocess.run(git + ["add", file_name], cwd=tmpdir, check=True)
+                subprocess.run(git + ["commit", "-m", "init"], cwd=tmpdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                proc = subprocess.run(["git", "apply", "fix.patch"], cwd=tmpdir, capture_output=True, text=True, timeout=10)
+                git_apply_passed = (proc.returncode == 0)
+                if not git_apply_passed:
+                    detail = (proc.stderr.strip().splitlines() or ["git apply failed"])[0][:200]
+                    feedback = "`git apply` rejected your patch:\n" + (proc.stderr.strip() or "git apply failed")[:MAX_FEEDBACK_CHARS]
+                elif normalize_language(language) != "python":
+                    with open(file_path) as f:
+                        patched = f.read()
+                    res = _polyglot_grade("surgical_git_diff", normalize_language(language), patched, execute_code)
+                    if res is None:
+                        detail = _UNVERIFIED_NOTE if execute_code else _EXECUTION_DISABLED_NOTE
+                    else:
+                        behavior_verified = res["ok"]
+                        if not behavior_verified:
+                            detail = f"{res['stage']}: {res['detail']}"[:200]
+                            feedback = "The patch applied, but the patched code failed. " + tool_feedback(res)
+                elif behavior_check and not execute_code:
+                    detail = _EXECUTION_DISABLED_NOTE
+                elif behavior_check:
+                    with open(file_path) as f:
+                        patched = f.read()
+                    try:
+                        run = run_model_code([sys.executable, "-c", patched + "\n\n" + behavior_check], 15, cwd=tmpdir)
+                    except subprocess.TimeoutExpired:
+                        run = subprocess.CompletedProcess([], 1, "", timeout_feedback(15))
+                    behavior_verified = run.returncode == 0 and harness_passed(run, "DIFF_BEHAVIOR_VERIFIED")
+                    if not behavior_verified:
+                        lines = (run.stderr or run.stdout).strip().splitlines()
+                        detail = (lines[-1] if lines else "behavior check failed")[:200]
+                        feedback = ("The patch applied, but the patched code failed its tests:\n"
+                                    + output_tail(run.stderr or run.stdout))
+        except Exception as e:
             git_apply_passed = False
+            detail = f"verification error: {e}"[:200]
 
-    status = "PASS" if git_apply_passed else ("PARTIAL" if valid_syntax else "FAIL")
+    # A behavior check that could not run (no toolchain, or execution disabled)
+    # leaves the patch unverified: PARTIAL at most.
+    unverified = behavior_verified is None and (normalize_language(language) != "python" or bool(behavior_check))
+    if git_apply_passed and behavior_verified is not False and not unverified:
+        status = "PASS"
+    elif valid_syntax:
+        status = "PARTIAL"
+    else:
+        status = "FAIL"
     return {
         "valid_diff_syntax": valid_syntax,
         "git_apply_passed": git_apply_passed,
+        "behavior_verified": behavior_verified,
+        "detail": detail,
+        "feedback": feedback,
         "status": status,
     }
 
 
-def verify_multifile_context(code: str, language: str) -> dict:
-    """Verifies multi-file context cross-referencing and dependency injection."""
+def _prompt_support_files(prompt: str) -> dict:
+    """Splits the '# File N: name.py' sections of a multi-file prompt into
+    {file_name: source}, skipping the file the model is asked to write."""
+    files = {}
+    parts = re.split(r"^# File \d+: (\S+)(.*)$", prompt, flags=re.MULTILINE)
+    for k in range(1, len(parts) - 2, 3):
+        name, suffix, body = parts[k], parts[k + 1], parts[k + 2]
+        if "INCOMPLETE" not in suffix:
+            files[name] = body.strip() + "\n"
+    return files
+
+
+def verify_multifile_context(code: str, language: str, execute_code: bool = True) -> dict:
+    """Verifies multi-file context cross-referencing and dependency injection.
+    For Python with execution enabled, the generated module is imported next
+    to the prompt's real sibling files and exercised against a fake repository;
+    otherwise the required symbols must be defined or called (AST)."""
     lang = normalize_language(language)
     fixture = MULTIFILE_FIXTURES.get(lang, MULTIFILE_FIXTURES["python"])
     req_symbols = fixture.get("required_symbols", [])
 
     syntax_valid = False
     symbols_resolved = 0
+    behavior_verified = None
+    feedback = None  # the error to show the model on a retry (see verify_git_diff)
 
     if lang == "python":
         try:
             tree = ast.parse(code)
             syntax_valid = True
-            for sym in req_symbols:
-                found = False
-                for node in ast.walk(tree):
-                    if isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name == sym:
-                        found = True
-                        break
-                    elif isinstance(node, ast.Call):
-                        fn_name = getattr(node.func, "id", "") or getattr(node.func, "attr", "")
-                        if fn_name == sym:
-                            found = True
-                            break
-                if found or sym in code:
-                    symbols_resolved += 1
-        except Exception:
-            symbols_resolved = sum(1 for sym in req_symbols if sym in code)
-            syntax_valid = len(code.strip()) > 20
+        except SyntaxError as e:
+            tree = None
+            feedback = f"SyntaxError: {e}" if code.strip() else NO_CODE_FEEDBACK
+        if tree is not None:
+            defined_or_called = set()
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+                    defined_or_called.add(node.name)
+                elif isinstance(node, ast.Call):
+                    defined_or_called.add(getattr(node.func, "id", "") or getattr(node.func, "attr", ""))
+            symbols_resolved = sum(1 for sym in req_symbols if sym in defined_or_called)
+            check = fixture.get("behavior_check")
+            if check and execute_code:
+                behavior_verified = False
+                try:
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        for name, body in _prompt_support_files(fixture["prompt"]).items():
+                            with open(os.path.join(tmpdir, name), "w") as f:
+                                f.write(body)
+                        with open(os.path.join(tmpdir, "auth_service.py"), "w") as f:
+                            f.write(code)
+                        run = run_model_code([sys.executable, "-c", check], 15, cwd=tmpdir)
+                        behavior_verified = harness_passed(run, "MULTIFILE_BEHAVIOR_VERIFIED")
+                        if not behavior_verified:
+                            feedback = ("Running your module against the real sibling files failed:\n"
+                                        + output_tail(run.stderr + run.stdout))
+                except subprocess.TimeoutExpired:
+                    behavior_verified = False
+                    feedback = timeout_feedback(15)
+                except Exception:
+                    behavior_verified = False
     else:
-        # Non-python languages: check bracket balance and symbol containment
-        open_braces = code.count("{")
-        close_braces = code.count("}")
-        syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
-        symbols_resolved = sum(1 for sym in req_symbols if sym in code)
+        symbols_resolved = sum(1 for sym in req_symbols if re.search(rf"\b{re.escape(sym)}\b", code))
+        res = _polyglot_grade("multifile_context", lang, code, execute_code)
+        if res is None:
+            open_braces = code.count("{")
+            close_braces = code.count("}")
+            syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
+        else:
+            syntax_valid = res["stage"] not in ("compile", "unavailable")
+            behavior_verified = res["ok"]
+            if not res["ok"]:
+                feedback = tool_feedback(res) if code.strip() else NO_CODE_FEEDBACK
 
     total_symbols = len(req_symbols)
-    status = "PASS" if (syntax_valid and symbols_resolved >= total_symbols) else ("PARTIAL" if (syntax_valid and symbols_resolved >= 1) else "FAIL")
+    if behavior_verified is not None:
+        # Execution is authoritative: the module must actually work.
+        status = "PASS" if behavior_verified else ("PARTIAL" if (syntax_valid and symbols_resolved >= 1) else "FAIL")
+    elif lang != "python" or fixture.get("behavior_check"):
+        # Unverified (no toolchain, or execution disabled): never PASS.
+        status = "PARTIAL" if (syntax_valid and symbols_resolved >= 1) else "FAIL"
+    else:
+        status = "PASS" if (syntax_valid and symbols_resolved >= total_symbols) else ("PARTIAL" if (syntax_valid and symbols_resolved >= 1) else "FAIL")
     return {
         "syntax_valid": syntax_valid,
         "symbols_resolved": symbols_resolved,
         "total_symbols": total_symbols,
+        "behavior_verified": behavior_verified,
+        "feedback": None if status == "PASS" else feedback,
         "status": status,
     }
 
 
-def verify_security_review(text: str) -> dict:
-    """Universal OWASP vulnerability detection verification."""
-    text_lower = text.lower()
-    sqli_detected = any(k in text_lower for k in [
-        "sql injection", "sqli", "string formatting", "concatenation",
-        "parameterized", "prepared statement", "sql-injection", "injection vulnerability"
-    ])
-    race_detected = any(k in text_lower for k in [
-        "race condition", "toctou", "concurrency", "thread-safe",
-        "thread safe", "atomic", "synchronization", "mutex", "lock", "data race"
-    ])
+_SNIPPET_MENTION = re.compile(r"snippet\s*\(?([abc])\b", re.IGNORECASE)
+# A mention that opens a line ('### Snippet A', '**Snippet B**', '2. Snippet C:').
+_SNIPPET_HEADING = re.compile(r"^[ \t>#*_\-\d.)|]*snippet\s*\(?([abc])\b", re.IGNORECASE | re.MULTILINE)
+# Verdict words in priority order of appearance. Word boundaries keep 'safe'
+# from matching inside 'unsafe' and 'secure' inside 'insecure'.
+_VERDICT = re.compile(
+    r"\b(not\s+vulnerable|no\s+vulnerabilit(?:y|ies)|not\s+safe|vulnerable|unsafe|insecure|safe|secure)\b",
+    re.IGNORECASE,
+)
+_SAFE_VERDICTS = {"not vulnerable", "no vulnerability", "no vulnerabilities", "safe", "secure"}
+_SQLI_EVIDENCE = re.compile(r"sql[\s-]*injection|\bsqli\b", re.IGNORECASE)
+# The vulnerability must be named: generic words like 'lock' or 'atomic' also
+# appear in remediation advice and do not show the race was identified.
+_RACE_EVIDENCE = re.compile(
+    r"race[\s-]*condition|data[\s-]*race|\btoctou\b|time[\s-]*of[\s-]*check|check[\s-]*then[\s-]*act",
+    re.IGNORECASE,
+)
 
-    c_part = text_lower.split("snippet c")[-1] if "snippet c" in text_lower else text_lower
-    safe_passed = any(k in c_part for k in [
-        "safe", "no vulnerability", "no vulnerabilities", "not vulnerable",
-        "clean", "secure", "no issue", "no security issue"
-    ]) or ("vulnerable" not in c_part)
+
+def _snippet_sections(text: str) -> dict:
+    """Splits a review into per-snippet sections keyed 'a'/'b'/'c'.
+
+    Line-opening headings are preferred over passing mentions, so an intro
+    such as "I'll review Snippet A, Snippet B and Snippet C." does not make
+    the Snippet C section swallow the whole review. Each snippet's section
+    starts at its first boundary and runs to the next boundary of another snippet.
+    """
+    boundaries = [(m.start(), m.group(1).lower()) for m in _SNIPPET_HEADING.finditer(text)]
+    if not boundaries:
+        boundaries = [(m.start(), m.group(1).lower()) for m in _SNIPPET_MENTION.finditer(text)]
+    sections = {}
+    for i, (pos, key) in enumerate(boundaries):
+        if key in sections:
+            continue
+        end = next((p for p, k in boundaries[i + 1:] if k != key), len(text))
+        sections[key] = text[pos:end]
+    return sections
+
+
+def _snippet_verdict(section: str):
+    """'SAFE', 'VULNERABLE', or None from the first verdict word in a section."""
+    m = _VERDICT.search(section)
+    if not m:
+        return None
+    word = re.sub(r"\s+", " ", m.group(1).lower())
+    return "SAFE" if word in _SAFE_VERDICTS else "VULNERABLE"
+
+
+def verify_security_review(text: str) -> dict:
+    """Grades the three-snippet OWASP review per snippet: A must be flagged
+    VULNERABLE as SQL injection, B VULNERABLE as a race condition, and the
+    clean snippet C must be judged SAFE (the false-positive check)."""
+    sections = _snippet_sections(text)
+    sec_a = sections.get("a", "")
+    sec_b = sections.get("b", "")
+    sec_c = sections.get("c")
+
+    # Naming the vulnerability is a finding even without the word VULNERABLE;
+    # an explicit SAFE verdict for the snippet overrides it.
+    sqli_detected = _snippet_verdict(sec_a) != "SAFE" and bool(_SQLI_EVIDENCE.search(sec_a))
+    race_detected = _snippet_verdict(sec_b) != "SAFE" and bool(_RACE_EVIDENCE.search(sec_b))
+    # An unlabeled review cannot show snippet C was cleared.
+    safe_passed = sec_c is not None and _snippet_verdict(sec_c) == "SAFE"
 
     status = "PASS" if (sqli_detected and race_detected and safe_passed) else ("PARTIAL" if (sqli_detected or race_detected) else "FAIL")
     return {
@@ -1383,8 +1820,82 @@ def verify_security_review(text: str) -> dict:
     }
 
 
+def parse_unittest_summary(output: str):
+    """Parses unittest's final summary into (tests_ran, tests_passed).
+
+    'Ran 0 tests ... OK' (Python < 3.12) and 'NO TESTS RAN' both mean zero
+    tests. Skipped and expected-failure tests are not counted as passed.
+    """
+    m = re.search(r"Ran (\d+) tests? in", output)
+    ran = int(m.group(1)) if m else 0
+    not_passed = 0
+    for key in ("failures", "errors", "skipped", "expected failures", "unexpected successes"):
+        km = re.search(rf"{key}=(\d+)", output)
+        if km:
+            not_passed += int(km.group(1))
+    return ran, max(0, ran - not_passed)
+
+
+_SOURCE_CLASSES = ("PaymentProcessor", "StripeGateway", "NotificationClient")
+
+
+def _imported_source_modules(code: str):
+    """Module names the tests import the production classes from
+    (`from production_code import PaymentProcessor`, `import payment`...)."""
+    names = {"payment_processor"}
+    for module, imported in re.findall(r"^\s*from\s+([\w.]+)\s+import\s+\(?([^)\n]+)", code, re.MULTILINE):
+        if any(cls in imported for cls in _SOURCE_CLASSES):
+            names.add(module)
+    return sorted(names)
+
+
+def _run_python_unit_tests(code: str, source_code: str, output: Optional[list] = None):
+    """Runs a generated unittest suite against `source_code`.
+    Returns (tests_ran, tests_passed), or (None, 0) if it could not run.
+    The run's output is appended to `output` when given.
+    The production classes are served under whatever module name the tests
+    import them from, so a reasonable module name is never a failure."""
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registrations = "".join(f"sys.modules[{m!r}] = pp_mod\n" for m in _imported_source_modules(code))
+            preamble = (
+                "import sys, os, types\n"
+                f"sys.path.insert(0, r'{tmpdir}')\n"
+                f"{source_code}\n"
+                "pp_mod = types.ModuleType('payment_processor')\n"
+                "pp_mod.PaymentProcessor = PaymentProcessor\n"
+                "pp_mod.StripeGateway = StripeGateway\n"
+                "pp_mod.NotificationClient = NotificationClient\n"
+                + registrations
+            )
+            harness = (
+                "if __name__ == '__main__':\n"
+                "    import unittest\n"
+                "    unittest.main(exit=False)\n"
+            )
+            t_file = os.path.join(tmpdir, "test_suite.py")
+            with open(t_file, "w") as f:
+                f.write(assemble_python_script(code, preamble=preamble, harness=harness))
+            try:
+                proc = run_model_code([sys.executable, t_file], 15, cwd=tmpdir)
+            except subprocess.TimeoutExpired:
+                if output is not None:
+                    output.append(timeout_feedback(15))
+                return 0, 0  # ran, but no test finished
+            if output is not None:
+                output.append(proc.stderr + proc.stdout)
+            return parse_unittest_summary(proc.stderr + proc.stdout)
+    except Exception:
+        return None, 0
+
+
 def verify_unit_test(code: str, language: str, source_code: str, execute_code: bool = True) -> dict:
-    """Verifies unit test synthesis with mocks and assertions."""
+    """Verifies unit test synthesis by running the generated suite.
+
+    PASS requires at least 3 tests, all passing against the real code, AND
+    every seeded mutant (a subtly broken version of the code) caught by at
+    least one failing test -- tests that pass but assert nothing do not pass.
+    """
     lang = normalize_language(language)
     fixture = UNIT_TEST_FIXTURES.get(lang, UNIT_TEST_FIXTURES["python"])
     mock_keywords = fixture.get("mock_keywords", [])
@@ -1392,77 +1903,85 @@ def verify_unit_test(code: str, language: str, source_code: str, execute_code: b
 
     syntax_valid = False
     tests_passed = 0
-    total_tests = 3
+    tests_ran = None  # set only when the suite was actually executed
+    total_tests = 3  # minimum number of passing tests the prompt asks for
+    mutants_total = 0
+    mutants_killed = None  # None = mutation testing not performed
+    execution_verified = False
+    run_output: list = []
+    feedback = None  # the error to show the model on a retry (see verify_git_diff)
 
     if lang == "python":
         try:
             ast.parse(code)
             syntax_valid = True
-        except Exception:
-            pass
+        except SyntaxError as e:
+            feedback = f"SyntaxError: {e}" if code.strip() else NO_CODE_FEEDBACK
 
         if syntax_valid and execute_code:
-            try:
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    mod_path = os.path.join(tmpdir, "payment_processor.py")
-                    with open(mod_path, "w") as f:
-                        f.write(source_code)
-
-                    preamble = (
-                        "import sys, os, types\n"
-                        f"sys.path.insert(0, r'{tmpdir}')\n"
-                        f"{source_code}\n"
-                        "pp_mod = types.ModuleType('payment_processor')\n"
-                        "pp_mod.PaymentProcessor = PaymentProcessor\n"
-                        "pp_mod.StripeGateway = StripeGateway\n"
-                        "pp_mod.NotificationClient = NotificationClient\n"
-                        "sys.modules['payment_processor'] = pp_mod\n"
-                    )
-                    harness = (
-                        "if __name__ == '__main__':\n"
-                        "    import unittest\n"
-                        "    unittest.main(exit=False)\n"
-                    )
-                    test_harness = assemble_python_script(code, preamble=preamble, harness=harness)
-                    t_file = os.path.join(tmpdir, "test_suite.py")
-                    with open(t_file, "w") as f:
-                        f.write(test_harness)
-
-                    proc = subprocess.run([sys.executable, t_file], capture_output=True, text=True, timeout=15)
-                    output = proc.stderr + proc.stdout
-                    if re.search(r"\bOK\b", output) and "FAILED" not in output:
-                        tests_passed = total_tests
-                    else:
-                        m = re.search(r"Ran (\d+) tests in", output)
-                        fails = re.search(r"failures=(\d+)", output)
-                        errs = re.search(r"errors=(\d+)", output)
-                        total_ran = int(m.group(1)) if m else 0
-                        n_failed = (int(fails.group(1)) if fails else 0) + (int(errs.group(1)) if errs else 0)
-                        if total_ran > 0:
-                            tests_passed = max(0, min(total_tests, total_ran - n_failed))
-            except Exception:
-                pass
+            tests_ran, tests_passed = _run_python_unit_tests(code, source_code, run_output)
+            execution_verified = tests_ran is not None
+            mutants = fixture.get("mutants", [])
+            mutants_total = len(mutants)
+            if tests_ran and tests_passed == tests_ran:
+                mutants_killed = 0
+                for mutant in mutants:
+                    old, new = mutant["replace"]
+                    m_ran, m_passed = _run_python_unit_tests(code, source_code.replace(old, new, 1))
+                    # A mutant the suite hangs or crashes on (nothing ran) is caught.
+                    mutants_killed += (m_ran is None) or (m_ran == 0) or (m_passed < m_ran)
         elif syntax_valid:
             has_mock = any(k.lower() in code_lower for k in mock_keywords)
             if has_mock and "test" in code_lower:
                 tests_passed = total_tests
     else:
-        # Non-python languages: structural verification
-        open_braces = code.count("{")
-        close_braces = code.count("}")
-        syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
-        has_mock = any(k.lower() in code_lower for k in mock_keywords)
-        has_assertions = any(k in code_lower for k in ["assert", "expect", "verify", "should"])
-        if has_mock and has_assertions:
-            tests_passed = total_tests
-        elif has_mock or has_assertions:
-            tests_passed = 1
+        res = _polyglot_grade("unit_test_synthesis", lang, code, execute_code)
+        if res is None:
+            open_braces = code.count("{")
+            close_braces = code.count("}")
+            syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
+            has_mock = any(k.lower() in code_lower for k in mock_keywords)
+            has_assertions = any(k in code_lower for k in ["assert", "expect", "verify", "should"])
+            tests_passed = 1 if (has_mock and has_assertions) else 0
+        else:
+            execution_verified = True
+            syntax_valid = res["stage"] != "compile"
+            tests_ran = res["tests_ran"] or 0
+            tests_passed = res["tests_passed"] or 0
+            mutants_total = res.get("mutants_total", 0)
+            mutants_killed = len(res.get("mutants_killed", [])) if res["ok"] else None
+            if not res["ok"]:
+                feedback = tool_feedback(res) if code.strip() else NO_CODE_FEEDBACK
 
-    status = "PASS" if tests_passed >= total_tests else ("PARTIAL" if (syntax_valid and tests_passed > 0) else "FAIL")
+    all_green = tests_ran is None or tests_passed == tests_ran
+    mutation_ok = mutants_total == 0 or mutants_killed == mutants_total
+    if execution_verified and feedback is None:
+        # What a test run and a mutation-testing tool report; never which
+        # bug was seeded.
+        if lang == "python" and run_output and not (tests_ran and all_green):
+            feedback = "Your test suite did not pass against the real code:\n" + output_tail(run_output[0])
+        elif tests_ran is not None and tests_passed < total_tests and all_green:
+            feedback = f"Only {tests_passed} test(s) ran; at least {total_tests} are required."
+        elif not mutation_ok and mutants_killed is not None:
+            feedback = (f"Mutation testing: your tests pass on the real code, but {mutants_total - mutants_killed} of "
+                        f"{mutants_total} subtly broken versions of the code also pass them, so the tests do not "
+                        "check enough of the behaviour.")
+    if not execution_verified:
+        status = "PARTIAL" if tests_passed > 0 else "FAIL"  # unverified: never PASS
+    elif tests_passed >= total_tests and all_green and mutation_ok:
+        status = "PASS"
+    elif syntax_valid and tests_passed > 0:
+        status = "PARTIAL"
+    else:
+        status = "FAIL"
     return {
         "syntax_valid": syntax_valid,
         "unit_tests_passed_count": tests_passed,
-        "unit_tests_total_count": total_tests,
+        "unit_tests_total_count": total_tests if tests_ran is None else max(total_tests, tests_ran),
+        "mutants_total": mutants_total,
+        "mutants_killed": mutants_killed,
+        "execution_verified": execution_verified,
+        "feedback": None if status == "PASS" else feedback,
         "status": status,
     }
 
@@ -1477,7 +1996,10 @@ def verify_strict_typing(code: str, language: str, execute_code: bool = True) ->
     all_annotated = False
     annotated_methods = 0
     total_methods = 0
-    tool_verified = False
+    mypy_ran = False
+    mypy_passed = False
+    tool_detail = ""
+    feedback = None  # the error to show the model on a retry (see verify_git_diff)
 
     if lang == "python":
         try:
@@ -1491,97 +2013,147 @@ def verify_strict_typing(code: str, language: str, execute_code: bool = True) ->
                     if has_return and args_typed:
                         annotated_methods += 1
 
-            if shutil.which("mypy") and execute_code:
+            # mypy only reads the code; it runs even with execution disabled.
+            if shutil.which("mypy"):
                 with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
                     f.write(code)
                     tmp_path = f.name
                 try:
                     proc = subprocess.run(["mypy", "--strict", "--ignore-missing-imports", tmp_path],
                                           capture_output=True, text=True, timeout=15)
-                    if proc.returncode == 0:
-                        tool_verified = True
+                    mypy_ran = True
+                    mypy_passed = (proc.returncode == 0)
+                    if not mypy_passed:
+                        feedback = "mypy --strict reported:\n" + proc.stdout.replace(tmp_path, "module.py")[:MAX_FEEDBACK_CHARS]
                 finally:
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
-            else:
-                tool_verified = (total_methods > 0 and annotated_methods == total_methods)
+        except SyntaxError as e:
+            feedback = f"SyntaxError: {e}" if code.strip() else NO_CODE_FEEDBACK
         except Exception:
             pass
 
         all_annotated = (total_methods > 0 and annotated_methods == total_methods)
-        type_compliant = tool_verified or all_annotated
+        # When mypy --strict ran, its verdict is authoritative: full annotation
+        # coverage does not make code with type errors compliant. Without mypy
+        # (not installed) the AST annotation audit is the check.
+        type_compliant = mypy_passed if mypy_ran else all_annotated
     else:
-        open_braces = code.count("{")
-        close_braces = code.count("}")
-        syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
         matches = [bool(re.search(pat, code)) for pat in req_patterns]
-        matched_count = sum(1 for m in matches if m)
-        all_annotated = (matched_count == len(req_patterns))
-        type_compliant = all_annotated
+        all_annotated = all(matches) if matches else False
+        res = _polyglot_grade("strict_typing", lang, code, execute_code)
+        if res is None:
+            # Unverified: never PASS (see _UNVERIFIED_NOTE).
+            open_braces = code.count("{")
+            close_braces = code.count("}")
+            syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
+            type_compliant = False
+        else:
+            # Compiled in the language's strict mode, behavior-checked, and
+            # scanned for type escape hatches (any / interface{} / dynamic / raw types).
+            syntax_valid = res["stage"] != "compile"
+            type_compliant = res["ok"]
+            tool_detail = f"{res['stage']}: {res['detail']}"
+            if not res["ok"]:
+                feedback = tool_feedback(res) if code.strip() else NO_CODE_FEEDBACK
+        if res is None and syntax_valid and all_annotated:
+            annotated_methods = 1  # structural evidence only -> PARTIAL below
 
     status = "PASS" if type_compliant else ("PARTIAL" if (syntax_valid and (annotated_methods > 0 or all_annotated)) else "FAIL")
     return {
         "syntax_valid": syntax_valid,
         "all_annotated": all_annotated,
         "type_compliant": type_compliant,
+        "mypy_verified": mypy_ran and mypy_passed,
+        "compiler_verified": lang != "python" and type_compliant,
+        "detail": tool_detail,
+        "feedback": None if status == "PASS" else feedback,
         "status": status,
     }
 
 
+_PY_REFACTOR_CASES = (
+    "[None, [], [None], [{}], [{'qty': 0, 'price': 10}], [{'id': '1', 'qty': 2, 'price': 50.0}],"
+    " [{'qty': 2, 'price': 3}], [{'id': 'm', 'price': 3}], [{'id': 'n', 'qty': 3}],"
+    " [{'id': 'q', 'qty': -1, 'price': 5}], [{'id': 'p', 'qty': 2, 'price': -1}], [{'id': 'z', 'qty': 2, 'price': 0}],"
+    " [{'id': '2', 'qty': 4, 'price': 25.0, 'discount': 0.1}], [{'id': 'd0', 'qty': 4, 'price': 2.5, 'discount': 0}],"
+    " [{'id': 'd1', 'qty': 3, 'price': 7, 'discount': 1}], [{'id': 'd15', 'qty': 3, 'price': 7, 'discount': 1.5}],"
+    " [{'id': 'dn', 'qty': 3, 'price': 7, 'discount': -0.2}], [{'id': 'r', 'qty': 1, 'price': 2.675}],"
+    " [{'id': 'r2', 'qty': 7, 'price': 1.115, 'discount': 0.1}, {'id': None, 'qty': 1, 'price': 1}]]"
+)
+
+
 def verify_refactoring(code: str, language: str, execute_code: bool = True) -> dict:
-    """Verifies safe refactoring and preservation of behavioral invariants."""
+    """Verifies safe refactoring by differential testing: the refactored code
+    and the original legacy code must return identical results for every
+    input in a battery covering null/empty input, missing and invalid fields,
+    discount boundaries and rounding."""
     lang = normalize_language(language)
-    fixture = REFACTOR_FIXTURES.get(lang, REFACTOR_FIXTURES["python"])
-    fn_name = fixture.get("function_name", "process_order_data")
 
     syntax_valid = False
     invariants_passed = False
+    execution_verified = False
+    feedback = None  # the error to show the model on a retry (see verify_git_diff)
 
     if lang == "python":
         try:
             ast.parse(code)
             syntax_valid = True
-        except Exception:
-            pass
+        except SyntaxError as e:
+            feedback = f"SyntaxError: {e}" if code.strip() else NO_CODE_FEEDBACK
 
         if syntax_valid and execute_code:
-            assertions = (
-                "assert process_order_data(None) == []\n"
-                "assert process_order_data([]) == []\n"
-                "assert process_order_data([{'qty': 0, 'price': 10}]) == []\n"
-                "assert process_order_data([{'id': '1', 'qty': 2, 'price': 50.0}]) == [{'id': '1', 'total': 100.0}]\n"
-                "assert process_order_data([{'id': '2', 'qty': 4, 'price': 25.0, 'discount': 0.1}]) == [{'id': '2', 'total': 90.0}]\n"
-                "print('INVARIANTS_OK')\n"
+            legacy = REFACTOR_FIXTURES["python"]["legacy"].replace("def process_order_data(", "def _legacy_process_order_data(")
+            harness = (
+                legacy + "\n"
+                f"for _case in {_PY_REFACTOR_CASES}:\n"
+                "    _before = _legacy_process_order_data(_case)\n"
+                "    _after = process_order_data(_case)\n"
+                "    assert _before == _after, f'behavior changed for {_case!r}: legacy {_before!r} vs refactored {_after!r}'\n"
+                "print('INVARIANTS_OK', __import__('os').environ['EVAL_RUN_ID'])\n"
             )
-            test_harness = assemble_python_script(code, harness=assertions)
+            test_harness = assemble_python_script(code, harness=harness)
             try:
                 with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
                     f.write(test_harness)
                     tmp_path = f.name
                 try:
-                    proc = subprocess.run([sys.executable, tmp_path], capture_output=True, text=True, timeout=10)
-                    if proc.returncode == 0 and "INVARIANTS_OK" in proc.stdout:
+                    proc = run_model_code([sys.executable, tmp_path], 10, cwd=os.path.dirname(tmp_path))
+                    execution_verified = True
+                    if harness_passed(proc, "INVARIANTS_OK"):
                         invariants_passed = True
+                    else:
+                        feedback = ("The refactored code does not behave like the original:\n"
+                                    + output_tail(proc.stderr + proc.stdout, lines=6).replace(tmp_path, "refactored.py"))
                 finally:
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
+            except subprocess.TimeoutExpired:
+                execution_verified = True  # it ran: the model's code never finished
+                feedback = timeout_feedback(10)
             except Exception:
                 pass
-        elif syntax_valid:
-            invariants_passed = f"def {fn_name}" in code
+        # Without execution the invariants are unverified: invariants_passed
+        # stays False, so a parseable answer is PARTIAL at most.
     else:
-        # Non-python languages: structural invariant check
-        open_braces = code.count("{")
-        close_braces = code.count("}")
-        syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
-        has_fn = fn_name in code
-        has_guard = any(k in code for k in ["return", "continue", "break", "filter", "if"])
-        invariants_passed = has_fn and has_guard
+        res = _polyglot_grade("refactor_invariants", lang, code, execute_code)
+        if res is None:
+            # Unverified: never PASS (see _UNVERIFIED_NOTE).
+            open_braces = code.count("{")
+            close_braces = code.count("}")
+            syntax_valid = (len(code.strip()) > 30 and abs(open_braces - close_braces) <= 2)
+        else:
+            execution_verified = True
+            syntax_valid = res["stage"] != "compile"
+            invariants_passed = res["ok"]
+            if not res["ok"]:
+                feedback = tool_feedback(res) if code.strip() else NO_CODE_FEEDBACK
 
     status = "PASS" if invariants_passed else ("PARTIAL" if syntax_valid else "FAIL")
     return {
         "syntax_valid": syntax_valid,
         "invariants_preserved": invariants_passed,
+        "execution_verified": execution_verified,
+        "feedback": None if status == "PASS" else feedback,
         "status": status,
     }
-

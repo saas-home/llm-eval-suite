@@ -1,0 +1,33 @@
+{
+  "mode": "unit_tests",
+  "answer_file": "lib.rs",
+  "prepend_support": "payment.rs",
+  "min_tests": 3,
+  "mutants": [
+    {
+      "name": "any_status_treated_as_success",
+      "file": "payment.rs",
+      "replace": [
+        "if res.status == \"succeeded\" {",
+        "if !res.status.is_empty() {"
+      ]
+    },
+    {
+      "name": "amount_guard_removed",
+      "file": "payment.rs",
+      "replace": [
+        "if amount <= 0 {",
+        "if amount < -1_000_000_000 {"
+      ]
+    },
+    {
+      "name": "receipt_sent_with_wrong_charge_id",
+      "file": "payment.rs",
+      "replace": [
+        "self.notifier.send_receipt(email, &res.id);",
+        "self.notifier.send_receipt(email, token);"
+      ]
+    }
+  ],
+  "prepend_support_unless": "impl<'a,\\s*G:\\s*StripeGateway"
+}

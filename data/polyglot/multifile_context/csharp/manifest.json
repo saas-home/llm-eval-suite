@@ -1,0 +1,9 @@
+{
+  "mode": "program",
+  "answer_file": "AuthenticationService.cs",
+  "csharp_namespace_using": "Program.cs",
+  "skip_support_if_defined": {
+    "Models.cs": "record\\s+User\\b",
+    "IUserRepository.cs": "interface\\s+IUserRepository\\b"
+  }
+}

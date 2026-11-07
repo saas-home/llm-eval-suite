@@ -1,0 +1,9 @@
+{
+  "mode": "program",
+  "answer_file": "pipeline.rs",
+  "strict": true,
+  "forbidden_patterns": [
+    "\\bunsafe\\b",
+    "dyn\\s+(?:std::any::)?Any\\b"
+  ]
+}

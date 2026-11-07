@@ -1,412 +1,566 @@
 # LLM Eval Suite
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.8+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+" />
-  <img src="https://img.shields.io/badge/Dependencies-Zero_External-brightgreen?style=for-the-badge" alt="Zero Dependencies" />
-  <img src="https://img.shields.io/badge/Docker-Multi--Arch-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker Ready" />
-  <img src="https://img.shields.io/badge/Tests-31_Enterprise_Benchmarks-blueviolet?style=for-the-badge" alt="31 Benchmarks" />
-  <img src="https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge" alt="Apache 2.0" />
-</p>
+[![Python 3.8+](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)](#run-on-the-host)
+[![Zero dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)](AGENTS.md#zero-external-dependencies)
+[![Docker x86_64 | aarch64](https://img.shields.io/badge/Docker-x86__64%20%7C%20aarch64-2496ED?logo=docker&logoColor=white)](#quick-start-docker)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue)](LICENSE)
 
-An enterprise-grade evaluation suite, benchmarking tool, and cross-model comparison engine for **any OpenAI-compatible LLM inference server** ([vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [Ollama](https://github.com/ollama/ollama), [llama.cpp](https://github.com/ggerganov/llama.cpp), [TGI](https://github.com/huggingface/text-generation-inference), or commercial APIs).
+Benchmark and qualify any OpenAI-compatible LLM server before you put it into production.
 
-Evaluates **serving runtime performance** (latency, continuous batching throughput, prefix caching, socket teardown, multi-adapter / multi-LoRA routing & memory containment) and **frontier intelligence** across long-context scaling, multi-hop reasoning, security defense, **verifiable instruction following (Google IFEval)**, **medical diagnosis & biomedical literature (MedQA / PubMedQA)**, **multi-step mathematics (GSM8K)**, **historical analysis (MMLU History)**, and **polyglot software engineering** in 6 industry toolchains.
+One command tests two things:
 
----
+- **The server:** verified parallel capacity, prefill and decode speed, prefix caching, abort recovery, and recall at the full configured context.
+- **The model:** coding in six languages (compiled and run), reasoning, math, science, medicine, law, writing, tool calling and prompt-injection defense.
 
-## Key Highlights
+It works with [vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [llama.cpp](https://github.com/ggerganov/llama.cpp), [Ollama](https://github.com/ollama/ollama), [TGI](https://github.com/huggingface/text-generation-inference), exllama-based servers and commercial APIs. The output is a terminal scorecard, a JSON report and a log file.
 
-- **Zero External Runtime Dependencies**: 100% Python 3.8+ standard library (`urllib`, `json`, `concurrent.futures`, `threading`, `socket`, `subprocess`). No `pip install` required.
-- **Decoupled Cognitive & Serving Scorecards**: Separates pure model intelligence & cognitive capability (independent of GPU decode speed) from hosting infrastructure throughput & serving efficiency.
-- **Multi-Adapter & Multi-LoRA Certification**: Validates dynamic adapter routing, concurrent multi-adapter execution under slot contention, and bit-level activation/memory containment (e.g. for vLLM EMR Merging or S-LoRA).
-- **Live Prometheus Server Telemetry (`/metrics`)**: Auto-harvests server resident memory (RSS MB), active running requests, waiting queue depth, KV cache utilization %, EMR LoRA deferred queues, and engine preemptions directly from server Prometheus endpoints.
-- **Declarative Configuration (`config.json`)**: Configure benchmarks declaratively via JSON or `.env` files for zero-CLI-variance CI/CD pipelines.
-- **Model Purpose Qualification**: Automatically maps benchmark performance to an enterprise **Task Suitability Matrix**, determining which production workloads (Coding, Agents, Math, Clinical, Writing, High-Throughput Serving) the model is ready for.
-- **Industry-Standard Open Datasets**: Built-in canonical test banks from **Google IFEval**, **OpenAI GSM8K**, **USMLE / MedQA**, **PubMedQA**, **CruxEval**, **AIME Olympiad**, **GPQA Diamond**, and **MMLU History**. Runs 100% offline out-of-the-box.
-- **Polyglot SWE Benchmarking**: Evaluates coding capabilities across **Python**, **TypeScript**, **Go**, **Java**, **Rust**, and **C# (.NET 10 LTS)**.
-- **Zero Host Impact (Docker)**: Pre-packaged multi-arch container (`x86_64` & `aarch64`) bundling official LTS compilers with dual persistent volume mounts (`./results` and `./logs`).
-- **Honest Scoring Architecture**: Distinguishes infrastructure failures (timeouts, 5xx, 429 rate limits) from model accuracy failures. Network flakiness is tracked under **Completion Rate** without dragging down model effectiveness.
-- **Token Economy Metric**: Measures solution conciseness (tokens spent per victory). Concise models save latency, compute, and context window budget.
-- **Head-to-Head & N-Way Analysis**: Compare 2 or more model benchmark reports offline or run real-time side-by-side Live Arena benchmarks.
+## Contents
 
----
+- [What makes this suite different](#what-makes-this-suite-different)
+- [Quick start (Docker)](#quick-start-docker)
+- [Latest result](#latest-result)
+- [What gets tested](#what-gets-tested)
+- [How a run works](#how-a-run-works)
+- [Decision report](#decision-report)
+- [Qualification suites (Tests 32-48)](#qualification-suites-tests-32-48)
+- [Options](#options)
+- [Reading the results](#reading-the-results)
+- [Running model code safely](#running-model-code-safely)
+- [Repository layout](#repository-layout)
+- [Development](#development)
 
-## 🏆 Latest Certified Result
+## What makes this suite different
 
-**`Qwen3.8-Flash-Next-FP4`** served by vLLM `v0.33.0rc1.dev848` on an NVIDIA DGX Spark (GB10, 128 GB) achieved a **perfect 30/30 (100%)** run — **Grade A+ (Frontier Intelligence)**, ⭐⭐⭐⭐⭐, **100% pure capability**, with all 9 enterprise workload domains rated **EXCELLENT**.
+| Feature | What it means for you |
+|---|---|
+| **Measured capacity** | Test 3 sends 1 to 2× the advertised slots at once and reads the server's queue counters. The report states how many requests run in parallel. |
+| **Full-context proof** | Test 12 climbs to 98% of the configured context and checks recall at every step. It stops at the first failure and names the error (context rejected, out of memory, timeout). |
+| **Code is compiled and run** | Answers in Python, TypeScript, Go, Java, Rust and C# run against test harnesses in the Docker image. Unit tests the model writes must catch seeded bugs (mutation testing). |
+| **Self-checked graders** | Every coding test pack has a known-good answer that must pass and a known-bad answer that must fail. CI checks both. |
+| **Final answer only** | Graders read the model's final answer, not its reasoning. A truncated answer cannot pass. |
+| **No unverified PASS** | If a grader cannot run the code (for example, no compiler), the result is PARTIAL at most. |
+| **Server faults are kept separate** | Timeouts, HTTP 5xx and 429 lower the completion rate. They do not lower the model score. If the server goes down, the run stops and the report is marked incomplete. |
+| **Phased runs** | Timing tests run alone on an idle server. The other tests then run in parallel, limited to the capacity that Test 3 measured. A full run takes about half the sequential time. |
+| **Decision report** | A Markdown report for three readers: which use cases the model suits (ranked, with evidence and wrong-answer examples), how it compares with other runs and vendor-published scores, and how many servers your workload needs. |
+| **Your workload, measured** | Test 46 sends your scenario (default: 4 users, new 200K-token documents, thinking on, ~2,000-token answers, users arriving 3-10 s apart) and reports what each user waits for against workable-speed gates. |
+| **Statistics for qualification** | Qualification suites use seeded samples, repeats and 95% confidence intervals, with pass marks from published scores of comparable models. |
+| **Zero dependencies, offline** | Python 3.8+ standard library only. All datasets and test frameworks are bundled. The Docker image grades code with no network access. |
 
-👉 **[Full Certification Report →](results/EVAL_REPORT.md)** · [Machine-readable JSON →](results/enterprise_eval_127.0.0.1_8080_20261105_141137.json)
+## Quick start (Docker)
 
----
+The Docker image contains every compiler and test framework that the coding tests need. Use it for full grading.
 
-## 31-Stage Benchmark Catalog
-
-The suite is organized into **5 core capability pillars** spanning 31 standardized tests:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                             LLM EVAL SUITE                                  │
-├─────────────────────┬─────────────────────┬─────────────────────────────────┤
-│  Serving Runtime    │ API Contracts & IF  │ Long Context & Attention        │
-│  (Tests 1, 2, 3, 7, │ (Tests 5,6,9,10, 27)│ (Tests 12, 13, 15)              │
-│   8, 11, 31)        │                     │                                 │
-├─────────────────────┴─────────────────────┼─────────────────────────────────┤
-│  Polyglot Software Engineering (SWE)      │ Cognitive Reasoning, STEM & Life│
-│  (Tests 4, 14, 17, 20, 21, 22, 23, 24, 25)│ (Tests 16, 18, 19, 26, 28, 29,30)│
-└───────────────────────────────────────────┴─────────────────────────────────┘
-```
-
-| # | Benchmark Domain | Key Capabilities Evaluated | Pillar Suite |
-|:---:|:---|:---|:---:|
-| **1** | **Streaming & TTFT** | Time-To-First-Token latency, chunk delivery consistency, and decode speed. | `serving` |
-| **2** | **Multimodal Vision** | Invoice document layout reasoning and key-value financial extraction (`assets/invoice.png`). | `serving` |
-| **3** | **Concurrency & Saturation** | Continuous batching throughput under simultaneous parallel client load (`1, 2, 4+`). | `serving` |
-| **4** | **4-Task Architecture Suite** | AVL Trees, concurrency deadlock isolation, distributed rate limiting, and hidden constraints. | `swe` |
-| **5** | **Agent Tool Calling** | Multi-turn function calling with simulated live quota error and autonomous recovery. | `contract` |
-| **6** | **JSON Schema Mode** | Strict constrained JSON decoding via `response_format={"type": "json_object"}`. | `contract` |
-| **7** | **Prefix Caching Reuse** | RadixAttention / KV cache reuse: measures cold vs. warm prompt prefill speedup. | `serving` |
-| **8** | **Client Socket Abort** | Aborts TCP socket mid-generation to verify server GPU slot deallocation and recovery. | `serving` |
-| **9** | **Stop Sequences & Sampling** | Enforces exact multi-token stop word suppression and greedy determinism (`temp=0.0`). | `contract` |
-| **10** | **Precision Arithmetic** | Multi-stage accounting ledger reconciliation with exact decimal precision. | `contract` |
-| **11** | **API Error Compliance** | Validates HTTP 400/422 handling on invalid schemas and missing payload boundaries. | `serving` |
-| **12** | **Dynamic Context Scaling** | Stepwise context prefill scaling up to model limits with 85% depth needle retrieval. | `context` |
-| **13** | **Adversarial Graph Search** | Multi-hop routing through 32k context with deprecated and revoked temporal distractors. | `context` |
-| **14** | **Novel Algorithm (5k Fuzz)** | Synthesizes custom algorithms; executes 5,000-op dynamic property fuzz tests. | `swe` |
-| **15** | **Frontier Needle Depth** | Composite arithmetic across needles buried at 0.5%, 50.0%, and 99.5% context depth. | `context` |
-| **16** | **CruxEval Mental Tracing** | Mental execution tracing of intricate code to predict exact state transitions. | `reasoning` |
-| **17** | **SWE-bench Bug Patching** | Synthesizes production regression bug fixes verified against dynamic unit test suites. | `swe` |
-| **18** | **AIME Olympiad Math** | High-tier competition discrete mathematics ($17^{2026} + 13^{2026} \pmod{1000} = 978$). | `reasoning` |
-| **19** | **GPQA Diamond Science** | Graduate-level PhD scientific deduction across Quantum Mechanics, Spectroscopy, and Kinetics. | `reasoning` |
-| **20** | **Surgical Unified Diff** | Strict patch synthesis validated by syntax parser and `git apply --check`. | `swe` |
-| **21** | **Multi-File Cross-Ref & DI** | Interface implementation and constructor dependency injection across decoupled modules. | `swe` |
-| **22** | **Security Code Review** | OWASP vulnerability audit: detects SQLi and race conditions with 0 false alarms on clean code. | `swe` |
-| **23** | **Unit Test Synthesis** | Generates regression suites with stubs and test doubles (`mock`, `patch`). | `swe` |
-| **24** | **Strict Type Compliance** | Advanced generics and static type checking verified via type checkers (`mypy` / AST). | `swe` |
-| **25** | **Safe Refactoring** | Idiomatic code simplification guaranteed against behavioral regression test suites. | `swe` |
-| **26** | **Prompt Injection Defense** | Delimiter security protocol thwarting system prompt overrides embedded in untrusted inputs. | `reasoning` |
-| **27** | **Google IFEval Writing** | Deterministic verifiable instruction following (word counts, bullet formatting, start/end anchors, forbidden words). | `contract` |
-| **28** | **Clinical & Medical Research** | USMLE clinical board diagnosis (MedQA) & biomedical research literature consensus (PubMedQA `yes`/`no`/`maybe`). | `reasoning` |
-| **29** | **Multi-Step Math (GSM8K)** | Multi-step word problem deduction and calculation verification from OpenAI GSM8K. | `reasoning` |
-| **30** | **Historical Causality (MMLU)** | Historical cause-and-effect deduction, treaty sovereignty, and anti-hallucination analysis from MMLU History. | `reasoning` |
-| **31** | **Multi-Adapter Routing & Isolation** | Multi-LoRA concurrent execution, dynamic slot migration contention, and cross-talk activation/memory containment. | `serving` |
-
----
-
-## Quick Start
-
-### 1. Zero-Install Native Run (Host)
-
-Requires Python 3.8+ (no `pip install` needed):
+**Requirements:** Docker, and network access from the host to the LLM server.
 
 ```bash
-# 1. Probe server reachability (<5s)
-python3 eval.py --probe -e http://127.0.0.1:8080/v1
-
-# 2. Run full evaluation suite (Tests 1-31)
-python3 eval.py -e http://127.0.0.1:8080/v1 -m Qwen3.8-Flash-Next-FP4
-
-# 3. Fast qualification smoke test
-python3 eval.py -e http://127.0.0.1:8080/v1 -q
-
-# 4. Declarative run with config.json
-python3 eval.py --config config.json
-```
-
----
-
-### 2. Containerized Run (Docker — Recommended)
-
-Run benchmarks with **zero impact on the host machine**. All compiler toolchains are pre-packaged.
-
-```bash
-# Build the multi-arch container image
+git clone git@github.com:saas-home/llm-eval-suite.git
+cd llm-eval-suite
 docker build -t llm-eval-suite:latest .
-
-# Run benchmark with dual volume mounts for reports and diagnostic logs
-docker run --rm \
-  --network host \
-  -v $(pwd)/results:/app/results \
-  -v $(pwd)/logs:/app/logs \
-  llm-eval-suite:latest -e http://127.0.0.1:8080/v1 -m Qwen3.8-Flash-Next-FP4
 ```
 
-> [!TIP]
-> **Testing Multiple Models**: To benchmark multiple models simultaneously, launch separate container instances pointing to each model endpoint. Both instances safely write timestamped reports into `./results/` and execution traces into `./logs/`.
+**1. Check that the server answers** (under 5 s):
 
-#### Using Docker Compose
 ```bash
-# Start evaluation with pre-configured volume mounts
+docker run --rm --network host llm-eval-suite:latest \
+  --probe -e http://127.0.0.1:8080/v1
+```
+
+**2. Run every test and write the decision report** (several hours):
+
+```bash
+docker run --rm --network host \
+  -v "$PWD/results:/app/results" \
+  -v "$PWD/logs:/app/logs" \
+  llm-eval-suite:latest -e http://127.0.0.1:8080/v1 \
+  --judge-endpoint http://127.0.0.1:8888/v1 --hardware "1x NVIDIA RTX PRO 6000"
+```
+
+For the core tests only (about 30 minutes), add `--suite core`.
+
+**3. Run the coding tests in all six languages, with a separate judge model:**
+
+```bash
+docker run --rm --network host \
+  -v "$PWD/results:/app/results" \
+  -v "$PWD/logs:/app/logs" \
+  llm-eval-suite:latest -e http://127.0.0.1:8080/v1 \
+  --language polyglot --judge-endpoint http://127.0.0.1:8888/v1
+```
+
+The JSON report goes to `./results/` and the log to `./logs/`.
+
+> [!NOTE]
+> - `--network host` lets the container reach a server on the host or the LAN.
+> - The model name is discovered from `/v1/models`. Use `-m` to choose one.
+> - For an API key, add `-e OPENAI_API_KEY=...` to `docker run`, or use `-k`.
+> - Without a terminal (`docker run` without `-it`), the tool does not ask questions. It uses the detected or default values.
+
+> [!IMPORTANT]
+> The image declares `/app/results` and `/app/logs` as volumes. If you mount the whole repository as `/app`, also mount `./results` and `./logs`. Otherwise the reports go to anonymous Docker volumes.
+
+### Docker image contents
+
+| Component | Version | Source | Used by |
+|---|---|---|---|
+| Base | Ubuntu 26.04 LTS, `x86_64` and `aarch64` | | |
+| Python | 3.14, mypy 1.19 | Ubuntu | All tests, Test 24 |
+| Java | OpenJDK 25 (LTS), JUnit 6.1, Mockito 5.24 | Ubuntu, Maven Central | Tests 20-25, 32 |
+| Node.js | 26 (LTS) | NodeSource | Tests 20-25, 32 |
+| TypeScript | 7.0, Vitest 5.1 | npm | Tests 20-25, 32 |
+| Go | 1.27 | go.dev (SHA-256 checked) | Tests 20-25, 32 |
+| Rust | 1.99, edition 2024 | rustup (SHA-256 checked) | Tests 20-25, 32 |
+| C# | .NET 10 SDK (LTS), xUnit v3 4.0, Moq 4.21 | Microsoft, NuGet | Tests 20-25, 32 |
+| Git | 2.53 | Ubuntu | Test 20 (`git apply`) |
+
+The Go, Rust, Node.js and .NET versions are build arguments at the top of the `Dockerfile`. To upgrade, change the argument, rebuild, and run the [test-pack check](#development).
+
+> [!NOTE]
+> The Ubuntu 26.04 image runs on any Linux host with Docker 20.10.10 or newer, including Ubuntu 24.04 servers. The container uses the host kernel only.
+
+The frameworks are pinned and installed at build time (`scripts/setup_polyglot_toolchains.sh`). Grading needs no network.
+
+### Docker Compose
+
+`compose.yaml` mounts `./results`, `./logs` and `./config.json`. Create `config.json` first (see [Configuration](#configuration)).
+
+```bash
 docker compose run --rm eval -e http://127.0.0.1:8080/v1
 ```
 
----
+### Run on the host
 
-## Polyglot SWE Benchmark Mode
-
-Tests 20 through 25 support the 6 primary enterprise software ecosystems:
-
-| Language | Default Runtime Toolchain | Verification Strategy |
-|:---|:---|:---|
-| **Python** | Python 3.12 LTS + `mypy` | AST parser + dynamic harness execution |
-| **TypeScript** | Node.js 22 Active LTS + `tsc` | AST grammar parser + compiler diagnostics |
-| **Go** | Go `1.22` | Grammar structural parser + go vet |
-| **Java** | OpenJDK 21 LTS | AST grammar parser + JUnit validation |
-| **Rust** | Rustc / Cargo `1.75` | Grammar balance + invariant preservation |
-| **C#** | Microsoft .NET 10 SDK (LTS) | Grammar balance + type compliance |
+Requires Python 3.8+. No `pip install`.
 
 ```bash
-# Run SWE benchmarks in TypeScript
-python3 eval.py -e http://127.0.0.1:8080/v1 -s swe -l typescript
-
-# Run SWE benchmarks in Rust
-python3 eval.py -e http://127.0.0.1:8080/v1 -s swe -l rust
-
-# Run SWE benchmarks in C# (.NET 10)
-python3 eval.py -e http://127.0.0.1:8080/v1 -s swe -l csharp
-
-# Polyglot Matrix Mode: runs Tests 20-25 across ALL 6 languages simultaneously
-python3 eval.py -e http://127.0.0.1:8080/v1 -s swe -l polyglot
+python3 eval.py --probe -e http://127.0.0.1:8080/v1
+python3 eval.py -e http://127.0.0.1:8080/v1
+python3 eval.py -e http://127.0.0.1:8080/v1 -q     # short smoke test
 ```
 
-When running in Polyglot Matrix mode, an executive cross-language scorecard is displayed:
+> [!WARNING]
+> On the host, the compilers for TypeScript, Go, Java, Rust and C# are usually missing. Tests 20-25 then use a structural check for those languages, and the result is PARTIAL at most.
 
-```text
-========================================================================================
- POLYGLOT SWE BENCHMARK MATRIX (Tests 20-25 across 6 Industry Toolchains) 
-========================================================================================
-Language     | Diff(20)   | Multi(21)  | Sec(22)    | Test(23)   | Type(24)   | Refactor(25) | Pass Rate
-----------------------------------------------------------------------------------------
-Python       | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-TypeScript   | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-Go           | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-Java         | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-Rust         | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-C#           | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
-========================================================================================
+## Latest result
+
+`Qwen3.8-Flash-Next-FP4` on vLLM (524,288-token context), 2026-11-06:
+
+| | |
+|---|---|
+| Core tests | 25 PASS, 2 PARTIAL, 0 FAIL of 27 scored |
+| Capability score | 95.2%, grade A+ |
+| Verified parallel requests | 4 |
+| Peak prefill | 2,676 tok/s |
+| Decode | 34 tok/s for one stream, 88 tok/s total for 4 streams |
+| Full context | Recall at every step up to 513,800 tokens (98%) |
+| Run time | 1,307 s phased, 2,421 s sequential |
+
+[Full report](results/EVAL_REPORT.md)
+
+## What gets tested
+
+### Core tests (1-31)
+
+Each test has a number, a name for `--test`, and a group for `--suite`. `--suite core` runs these only. Tests 15, 16, 18, 19 and 27-30 were removed on 2026-11-07: larger tests replaced them, or they had too few questions to score (2-10). Their numbers are not reused, so older reports still compare.
+
+#### Serving (`--suite serving`)
+
+| # | Test | What it checks |
+|:---:|---|---|
+| 1 | Streaming | Time to first token, chunk delivery, decode speed |
+| 2 | Vision | Reads 12 fields from an invoice image (`assets/invoice.png`) |
+| 3 | Serving capacity | Peak prefill (one request at a time, 2k to 32k tokens). Parallel sweep to 2× the reported slots. Finds requests that wait for a slot. Reports the verified maximum parallel requests and the decode speed for one stream and in total. |
+| 7 | Prefix cache | Time to first token for a cold and a warm request with the same prefix |
+| 8 | Client abort | Closes the socket during generation, then checks that the next request is served |
+| 11 | API errors | Invalid requests get HTTP 400/422, not 5xx |
+| 31 | Multi-adapter | Routes to several LoRA adapters at once, with no cross-talk. SKIPPED on a single-model server. |
+
+#### Long context (`--suite context`)
+
+| # | Test | What it checks |
+|:---:|---|---|
+| 12 | Full context | Steps from 4k tokens to 98% of the configured context. Each step hides a value at 85% depth, and the final answer must repeat it. Reports prefill and decode per step. A report-only check then sends long prompts to every verified slot at once and reads the KV-cache size. If the reported KV cache cannot hold every slot at full context, that attempt is not sent, and only the context ÷ slots attempt runs. |
+| 13 | Graph search | Multi-hop route through 32k tokens with outdated and revoked distractors: the model must pick the current version, as with an amended contract clause |
+
+#### API contract and instruction following (`--suite contract`)
+
+| # | Test | What it checks |
+|:---:|---|---|
+| 5 | Tool calling | Multi-turn function calls with an injected quota error that the model must recover from |
+| 6 | JSON schema | Output that matches a schema with `response_format` |
+| 9 | Stop words & sampling | The stop word ends the output. Temperature 0 gives the same output 3 times. |
+| 10 | Precision | Ledger reconciliation with exact decimals |
+
+#### Coding (`--suite swe`)
+
+| # | Test | What it checks |
+|:---:|---|---|
+| 4 | Four-task suite | AVL tree, deadlock fix, payment client (each run against a harness), rate-limiter design (rubric) |
+| 14 | Algorithm fuzz | Writes a new algorithm, then 5,000 random operations run against it |
+| 17 | SWE-bench patch | Fixes a bug. Regression tests must pass. |
+| 20 | Surgical diff | A unified diff that `git apply` accepts and that fixes the behavior |
+| 21 | Multi-file | Implements an interface with constructor injection, compiled with the real sibling files |
+| 22 | Security review | Finds the SQL injection and the race condition. Marks the safe snippet as safe. |
+| 23 | Unit-test writing | Tests with mocks must pass on the real code and catch 3 seeded bugs |
+| 24 | Strict typing | The strict compiler or `mypy --strict` must accept the code |
+| 25 | Safe refactor | Old and new code must give the same output on 10 to 20 inputs |
+
+Tests 20-25 run in one language (`-l python`, the default) or in all six (`-l polyglot`):
+
+| Language | Grading in the Docker image |
+|:---|:---|
+| Python | Runs the harness, `mypy --strict` |
+| TypeScript | `tsc --strict`, Vitest |
+| Go | `go test`, `go vet` |
+| Java | `javac -Xlint:all -Werror`, JUnit 6 + Mockito |
+| Rust | `rustc --test`, `rustc -D warnings` (edition 2024) |
+| C# | `dotnet build`, xUnit v3 + Moq, nullable warnings as errors |
+
+**Self-correction (Tests 14, 17, 20, 21, 23, 24, 25).** When an answer fails for a reason that is the model's (a rejected patch, a compile or type error, a failing test), the model gets the error a developer would read and tries again, up to 2 times. A fix on the first try, after 1 retry or after 2 retries is a PASS scored 1.0, 0.9 or 0.8. Not fully fixed after 2 retries is a FAIL. An answer that could not be checked, or a failed request, is not retried. Tests 22 (security review) and 32 (MultiPL-E) are graded on the first answer only.
+
+#### Safety
+
+| # | Test | What it checks |
+|:---:|---|---|
+| 26 | Prompt injection | Ignores instructions hidden in untrusted input. Counts as a safety check in every use case. |
+
+Reasoning, medical and writing skills are measured by the qualification suites below (MMLU-Pro, MATH-500, BBH, MedQA and others, full IFEval), with 50 questions each instead of 2-10.
+
+### Qualification and workload tests (32-48)
+
+Suites that qualify a model for a use: coding, medical, academic, writing, personal assistant and legal. Test 47 (contract review on full contracts) and Test 48 (summarisation) add document work. Test 46 measures your own workload. They run by default; each also runs alone with `--suite <name>`. See [Qualification suites](#qualification-suites-tests-32-48).
+
+## How a run works
+
+```mermaid
+flowchart LR
+    A["Detect model,<br/>context size,<br/>server slots"] --> B["Isolated phase<br/>Tests 3, 12, 46, 1, 7,<br/>8, 13, 9, 11, 31<br/>one at a time"]
+    B --> C["Request limit =<br/>parallel count<br/>verified by Test 3"]
+    C --> D["Parallel phase<br/>all other tests<br/>under the limit"]
+    D --> E["Scorecards,<br/>JSON report,<br/>log file"]
 ```
 
----
+1. **Detection.** The tool reads the model list, the context size and the server's slot count. It reads slots from `/health` (`parallel` or `max_slots`), then llama.cpp `/props` (`total_slots`), then `/slots`.
+2. **Isolated phase.** Tests that measure time, memory or cache state run one at a time on an idle server. Test 3 runs first and measures how many requests the server runs in parallel.
+3. **Parallel phase.** All other tests run at the same time under one limit on requests to the tested model. The limit is `--parallel` or config.json if set. Otherwise it is the count that Test 3 verified, then the server's reported slots.
+4. **Report.** The tool prints the scorecards and writes the JSON report and the log.
 
-## Selective Testing & Filtering
+More rules for the parallel phase:
 
-Execute specific slices of the evaluation suite to save time:
+- Judge requests have a separate limit: `--judge-parallel`, else the judge server's reported slots, else 2.
+- With `--language polyglot`, each language of Tests 20-25 is a separate job.
+- The output of each test prints as one block when the test ends.
+- C# builds (restore and compile) run one at a time, because they share the NuGet folder; the built programs run in parallel.
+- Speeds measured in this phase have `measured_under_load: true`. The summary averages use only the isolated tests.
+
+`--sequential` runs every test one at a time in catalog order. The report records the schedule under `schedule`: phases, limits, limit sources, and wall time per phase.
+
+Every test logs when it starts and when it ends, with its duration:
+
+    << finished Test 4 capabilities -> PASS | 20:41:03 to 20:59:09 (18m 06s)
+
+At the end of the run, a **TEST TIMINGS** table lists every test in start order. The report stores the same data under `test_timings`: `started_at`, `finished_at` (ISO 8601 with the UTC offset) and `duration_s` for each job. In the parallel phase, tests overlap, so their durations add up to more than the wall time.
+
+## Decision report
+
+Every run writes `<report>.md` next to the JSON report. It is written for three readers:
+
+| Section | Reader | What it answers |
+|---|---|---|
+| Summary | Everyone | Use cases ranked from best suited to not recommended, and whether your workload is workable on this server |
+| Choosing a model | Someone choosing between models | Verdicts side by side with earlier runs, paired differences on the same questions (with 95% CIs), and scores the vendor publishes |
+| Sizing hardware | Someone sizing hardware | Server and version (read from its API), prefill and decode for one user and under load, the workload per user, goodput and servers needed |
+| Approving for a team | Someone approving the model for a use | Per use case: verdict, evidence, accuracy with CI, share of questions right on every repeat, checks, and examples of wrong answers |
+
+**Verdicts.** Each of 11 use cases gets one:
+- **Recommended** needs every scored test's 95% CI lower bound at or above its pass mark, at least 85% of questions right on every repeat (pass^k), no failed check, and at least 40 scored questions.
+- **Usable with human review** needs every mean at or above its floor.
+- **Not recommended** is anything below that.
+
+A use case is as strong as its weakest scored test. Next to the verdict, each use case shows its **low, average and high**: the tests furthest below and above their own pass marks (tests use different scales: 10% is par on SimpleQA, not on MedQA), and the item-weighted average accuracy. Public benchmarks are labelled, because their items may be in training data. A use case graded without a judge cannot be Recommended.
+
+**Workload (Test 46).** One user alone, then all users with random 3-10 s gaps (fixed seed). Each user sends a new set of contracts (a unique tag at the start, so nothing is cached), asks for one lawyer-labelled clause and a review of about 1,500 words. A user meets the gates when the first token, the complete answer and the decode speed are within the limits. Goodput is the number of users who meet them; "servers needed" assumes identical servers behind a load balancer.
+
+**Comparison.** `--compare-with results/old.json` (or `compare_reports` in config.json) adds earlier runs. Vendor-published scores come from `data/reference/published_scores.json` when the model family matches. They use the vendor's own harness, so they compare models with each other, not with a run here.
+
+**Sampling.** `--sampling "temperature=1.0,top_p=0.95,top_k=20"` (or `sampling` in config.json) sets the model card's recommended settings for the repeated benchmarks and Test 46. The report records them.
+
+**Judge check.** With a judge configured, the run checks it against public expert ratings (SummEval, LLMBar) and the report states the agreement next to every judged result. Optionally, list your own verdicts for judged criteria in a JSON file (`[{"test", "item", "criterion", "human": true}]`) and set `judge_labels`; the report then also states how often the judge agreed with you.
+
+To rebuild the report, or to compare after the fact:
 
 ```bash
-# 1. Run a specific Pillar Suite
-python3 eval.py --suite serving       # Tests 1, 2, 3, 7, 8, 11 (Latency, Batching, Caching)
-python3 eval.py --suite contract      # Tests 5, 6, 9, 10, 27 (Tools, Schema, Stops, IFEval)
-python3 eval.py --suite swe           # Tests 4, 14, 17, 20-25 (Coding & Toolchains)
-python3 eval.py --suite reasoning     # Tests 16, 18, 19, 26, 28, 29, 30 (Math, Science, Medicine, History)
-python3 eval.py --suite multi_adapter # Test 31 (Multi-LoRA & multi-adapter routing & isolation)
-
-# 2. Run specific tests by number or alias
-python3 eval.py --test multi_adapter  # Multi-adapter routing & memory isolation (Test 31)
-python3 eval.py --test ifeval         # Google IFEval verifiable instruction following (Test 27)
-python3 eval.py --test medical        # MedQA (USMLE) & PubMedQA clinical reasoning (Test 28)
-python3 eval.py --test gsm8k          # OpenAI GSM8K multi-step algebra math (Test 29)
-python3 eval.py --test history        # MMLU History causal deduction (Test 30)
-python3 eval.py --test 20-25          # Full SWE polyglot series
-python3 eval.py --test gpqa,aime      # Frontier Olympiad math & science
-
-# 3. Exclude tests
-python3 eval.py --exclude 2        # Skip vision if endpoint is text-only
-python3 eval.py --exclude 12,13,15 # Skip heavy context tests
+python3 report_md.py results/run.json --compare-with results/older.json
+python3 report_md.py results/run.json --hardware "Nvidia DGX Spark - 128 GB"   # record the GPUs afterwards
 ```
 
----
+## Qualification suites (Tests 32-48)
 
-## Declarative Configuration (`config.json` & `.env`)
+These suites use seeded samples of official benchmarks and original task sets. Each score has a 95% confidence interval and the share of questions answered right on every repeat. They run by default (`--suite all`); `--suite core` leaves them out.
 
-Execute reproducible benchmark runs without CLI flag sprawl using a declarative `config.json` or `.env` file:
+| Suite | Tests | What it measures |
+|---|---|---|
+| `coding` | 4, 14, 17, 20-25, 32 | Code that compiles and passes tests in six languages (MultiPL-E and the coding tests) |
+| `medical` | 28, 33-36 | MedQA (USMLE), MedMCQA, PubMedQA, MMLU medical subjects |
+| `academic` | 16, 18, 19, 29, 37-39 | MMLU-Pro, MATH-500, BIG-Bench Hard and the reasoning tests |
+| `writing` | 27, 40, 41, 48 | Full IFEval, emails, texts and social posts, summaries of US bills (BillSum) |
+| `personal` | 42-44 | SimpleQA (facts without search), XSTest (over-refusal), everyday assistant tasks |
+| `legal` | 45, 47 | LegalBench CC-BY-4.0 tasks; clause questions on full contracts (CUAD, lawyer-labelled; a third ask for a clause the contract does not have) |
+| `qualification` | all of the above | |
+| `workload` | 46 | Your workload: concurrent users with long new documents, against speed gates (runs alone, before the parallel phase) |
+
+```bash
+# Medical, 50 items × 3 repeats (defaults)
+docker run --rm --network host -v "$PWD/results:/app/results" llm-eval-suite:latest \
+    -e http://127.0.0.1:8080/v1 --suite medical
+
+# Writing with a separate judge, smaller sample
+docker run --rm --network host -v "$PWD/results:/app/results" llm-eval-suite:latest \
+    -e http://127.0.0.1:8080/v1 --suite writing --samples 20 --repeats 1 \
+    --judge-endpoint http://judge-host:8080/v1
+```
+
+- **Run time.** Each benchmark asks `samples × repeats` questions. MultiPL-E asks that many per language. On a local 30B reasoning model, the full `qualification` suite at the defaults takes several hours. `--samples 10 --repeats 1` is faster, with wider intervals.
+- **Judge.** The LLM judge scores only writing tasks, personal-assistant tasks, summaries, SimpleQA answers that are not an exact match, and long XSTest refusals. Code, medical, academic and legal scores never use it. The tested model never grades its own answers.
+- **Without a judge** (no `--judge-endpoint`), or once the judge goes down or stops responding (no answer for 120 s), judged items are graded objectively:
+
+  | Test | Objective grading |
+  |---|---|
+  | 41, 44 writing and personal tasks | Code checks only (length, format, required words). Items with no code check are left out and counted as unscored. |
+  | 42 SimpleQA | Correct only if every word of the gold answer is in the answer (paraphrases count as wrong) |
+  | 43 XSTest | The refusal phrase decides, as in the XSTest paper's string match |
+  | 48 Summarisation | A reference point counts as covered when half of its content words appear. Invented statements are not detected. |
+
+  Results graded this way say "no judge" or "partly no judge", and their use case cannot be Recommended.
+- **Judge check.** With a judge, the run also checks it against expert ratings in the background: 40 SummEval summaries (faithfulness) and 40 LLMBar answer pairs (instruction following), both MIT-licensed and bundled. The report states how often the judge agreed.
+- **Data** is in `data/suites/`. Sources, licenses and checksums are in [`data/suites/SOURCES.md`](data/suites/SOURCES.md). To download it again, run `python3 scripts/fetch_benchmark_data.py`.
+
+<details>
+<summary><b>Pass marks per benchmark</b></summary>
+
+The marks come from published scores of comparable models (`PASS_MARKS` in `suites.py`). Each result records its marks and their source. The summary scores each benchmark as accuracy ÷ pass mark, with a maximum of 100%. The published scores use full test sets and few-shot prompts. This suite uses zero-shot prompts on a sample, so the marks are approximate.
+
+| Benchmark | PASS at | PARTIAL at | Reference |
+|---|---|---|---|
+| MultiPL-E | 75% | 55% | Qwen2.5-72B-Instruct 75.1; Qwen2.5-32B base 59.4 |
+| MedQA (USMLE) | 75% | 60% | Med-PaLM 2 86.5, GPT-4 86.1; USMLE pass mark about 60% |
+| MedMCQA | 65% | 50% | Med-PaLM 2 72.3 |
+| PubMedQA | 72% | 60% | Med-PaLM 2 81.8, human expert 78.0; majority baseline about 55% |
+| MMLU medical | 80% | 65% | GPT-4 / Med-PaLM 2 about 87 to 95 |
+| MMLU-Pro | 65% | 45% | Gemma 3 27B 67.5, Qwen2.5-72B 71.1, GPT-4o 72.6 |
+| MATH-500 | 80% | 60% | Gemma 3 27B 89.0, Qwen2.5-72B 83.1 |
+| BIG-Bench Hard | 80% | 60% | GPT-4 83.1 |
+| IFEval (prompt, strict) | 75% | 60% | GPT-4 76.9, Gemma 3 27B 90.4 |
+| SimpleQA (correct) | 10% | 5% | Gemma 3 27B 10.0, GPT-4o-mini 8.6, GPT-4o 38.2 |
+| XSTest | 90% | 80% | Well-calibrated chat models above 90% |
+| LegalBench | 75% | 60% | GPT-4 about 77 |
+| Contract review (CUAD) | 80% | 60% | No published score for this format: at most 1 in 5 clauses missed or invented |
+| Summarisation (BillSum) | 70% | 50% | No published score for this format: most reference points, nothing invented |
+| Writing and personal tasks | 80% | 50% | Original items, no published reference |
+
+</details>
+
+## Options
+
+### Selecting tests
+
+```bash
+--suite all          # default: every test, the full decision report
+--suite core         # Tests 1-31 only
+--suite serving | contract | context | swe | multi_adapter               # core groups
+--suite coding | medical | academic | writing | personal | legal | qualification | workload
+--test 3,12          # by number
+--test 20-25         # by range (removed numbers are skipped)
+--test context_scaling,workload   # by name
+--exclude 2          # text-only endpoint: skip vision
+--exclude 12,13,46   # skip the long-context tests
+-l polyglot          # Tests 20-25 in all six languages
+-q                   # short smoke test
+```
+
+### Parallel and judge
+
+```bash
+--parallel 8                       # request limit (default: verified by Test 3)
+--sequential                       # one test at a time
+--judge-endpoint http://host/v1    # separate judge model
+--judge-parallel 2                 # judge request limit
+```
+
+### Configuration
+
+Put run settings in `config.json` (or `.env`). A CLI flag overrides the file.
 
 ```json
 {
-  "_comment": "llm-eval-suite enterprise certification configuration",
-  "endpoint": "http://127.0.0.1:8000/v1",
+  "endpoint": "http://127.0.0.1:8080/v1",
   "model": "Qwen3.8-27B",
   "max_context": 32768,
-  "max_model_len": 32768,
   "parallel": 4,
   "suite": "all",
   "exclude": "2",
-  "adapters": ["finance-lora", "legal-lora", "medical-lora"]
+  "language": "polyglot",
+  "judge": {"endpoint": "http://127.0.0.1:8888/v1"},
+  "adapters": ["finance-lora", "legal-lora", "medical-lora"],
+  "hardware": "1x NVIDIA RTX PRO 6000 96 GB",
+  "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "source": "Qwen model card, thinking mode"},
+  "max_output_tokens": 32768,
+  "workload": {"prompt_tokens": 200000, "users": 4, "answer_tokens": 2000, "stagger_s": [3, 10],
+               "gates": {"first_token_s": 90, "complete_s": 300, "per_user_tok_s": 15}},
+  "compare_reports": ["results/previous_run.json"],
+  "judge_labels": "data/judge_labels.json"
 }
 ```
 
-```bash
-# Execute using default config.json or custom path
-python3 eval.py --config config.json
+`max_output_tokens` (or `--max-output-tokens`) is the output budget per answer, thinking included, for the coding and accuracy tests. The default is 32,768. Thinking models can need more: Qwen3.8-Flash-Next's card allows 262,144 reasoning tokens. Each request is capped so the prompt and the answer fit the context window. Test 46 uses its `workload` setting.
 
-# Override any config parameter on-the-fly from the CLI
+The Docker image does not contain `config.json`. Mount it (`-v "$PWD/config.json:/app/config.json:ro"`) or use the flags `--sampling`, `--hardware`, `--max-output-tokens` and `--compare-with`.
+
+```bash
+python3 eval.py --config config.json
 python3 eval.py --config config.json --quick --suite serving
 ```
 
----
+`config.json.example` shows the two-server form for `compare.py --live`. git ignores `config.json` because it can contain API keys.
 
-## Model Workload Suitability & Purpose Qualification
-
-Rather than presenting raw scores alone, `llm-eval-suite` automatically projects performance onto an enterprise **Workload Qualification Matrix** to determine where a model is production-ready and where human oversight or guardrails are mandatory:
-
-```text
-========================================================================================
-             MODEL WORKLOAD SUITABILITY & PURPOSE QUALIFICATION                         
-========================================================================================
-  Workload Domain                             | Score    | Rating       | Deployment Status
-  --------------------------------------------------------------------------------------
-  Deep Reasoning, Science & Math              | 100.0%   | EXCELLENT    | Highly Recommended
-  High-Throughput Serving & Low-Latency APIs  | 100.0%   | EXCELLENT    | Highly Recommended
-  Software Engineering & Code Intelligence    |  88.9%   | EXCELLENT    | Highly Recommended
-  Autonomous Agents & Tool Execution          |  75.0%   | COMPETENT    | Recommended with Guardrails
-  Long-Context Retrieval & RAG Pipelines      |  75.0%   | COMPETENT    | Recommended with Guardrails
-  Verifiable Instruction & Structured Writing |  50.0%   | MARGINAL     | Human Review Required
-  Clinical & Medical Life-Sciences Research   |  50.0%   | MARGINAL     | Human Review Required
-  Historical Causality & Humanities Research  |   0.0%   | NOT RECOMMENDED | Not Recommended
-========================================================================================
-```
-
-Each evaluated domain provides explicit recommendations:
-* **Recommended Enterprise Purposes (Best Suited For):** Identifies tasks where the model consistently succeeds (e.g. multi-step algebra, code refactoring, SQLi detection, streaming APIs).
-* **Operational Limitations & Workload Cautions:** Pinpoints specific failure modes (e.g. medical hallucination risks, word-count violations, or chronological conflations).
-
----
-
-## Open Benchmark Datasets & Offline Evaluation
-
-All evaluation data is bundled directly under the [`data/`](data/) directory in lightweight JSON format:
-* **`data/writing/ifeval_instructions.json`**: Standardized prompts with deterministic regex rules (word limits, bullet counts, forbidden words, starters/closers).
-* **`data/medical/usmle_clinical.json`**: Verified clinical board examination vignettes with 4-choice diagnostic options.
-* **`data/medical/biomedical_pubmed.json`**: Clinical research questions based on PubMed abstracts with gold-standard decisions (`yes`, `no`, `maybe`).
-* **`data/math/gsm8k_reasoning.json`**: Multi-step word problems from OpenAI Grade School Math with verified numeric solutions.
-* **`data/history/history_causality.json`**: Historical questions evaluating causal relationships and treaty sovereignty from MMLU History.
-
-To download additional raw test sets from official repositories, use the zero-dependency utility script:
-```bash
-# Download official open datasets directly from GitHub / Hugging Face
-python3 scripts/download_open_benchmarks.py --all
-```
-
----
-
-## Cross-Model Comparison & Live Arena
-
-Compare two or more evaluated benchmark reports offline with zero additional GPU overhead, or benchmark two active servers concurrently in real time:
+### Comparing models
 
 ```bash
-# 1. Live Arena Mode: concurrent side-by-side benchmark of two live servers
+# Two saved reports, or three or more
+python3 compare.py results/modelA.json results/modelB.json -o comparison.md
+
+# Two live servers, side by side
 python3 compare.py --live \
-  --endpoint1 http://127.0.0.1:8080/v1 --model1 Qwen3.8-Flash-Next-FP4 \
-  --endpoint2 http://10.0.0.2:8000/v1 --model2 Llama-3.3-70B-Instruct \
-  -o arena.md
-
-# 2. Offline Report Comparison: Model A vs Model B (outputs terminal table and Markdown report)
-python3 compare.py results/eval_modelA.json results/eval_modelB.json -o comparison.md
-
-# 3. N-Way Comparison Matrix (3+ models)
-python3 compare.py results/run1.json results/run2.json results/run3.json -o comparison.md
+  --endpoint1 http://127.0.0.1:8080/v1 --model1 model-a \
+  --endpoint2 http://10.0.0.2:8000/v1 --model2 model-b -o arena.md
 ```
 
-<details>
-<summary><b>Click to preview sample Head-to-Head Comparison Table</b></summary>
+### Other commands
 
-```text
-====================================================================================================
-          CROSS-MODEL HEAD-TO-HEAD EFFICIENCY & EFFECTIVENESS BENCHMARK REPORT          
-====================================================================================================
-  Model A : Qwen3.8-Flash-Next-FP4 (http://127.0.0.1:8080/v1)
-  Model B : Llama-3.3-70B-Instruct (http://10.0.0.2:8000/v1)
-
-Core Performance Metric             | Model A (Qwen3.8-Flash-N)  | Model B (Llama-3.3-70B-I)  | Advantage
-----------------------------------------------------------------------------------------------------
-Pure Cognitive Capability           | 96.0% (A+)                 | 88.0% (A )                 | Model A (+8.0%)
-Overall Task Effectiveness          | 29/30 (96.7%)              | 27/30 (90.0%)              | Model A (+6.7%)
-Token Economy (tok/task)            | 650.2 tok/task             | 910.4 tok/task             | Model A (1.40x leaner)
-Total Solution Tokens Consumed      | 18,855 tokens              | 24,580 tokens              | Model A (5,725 fewer)
-Mean Decode Speed (tok/s)           | 92.40 tok/s                | 48.15 tok/s                | Model A (1.92x faster)
-Mean Prefill TTFT (ms)              | 28.4 ms                    | 45.2 ms                    | Model A (16.8 ms faster)
-Total Benchmark Wall Time           | 64.20 s                    | 112.50 s                   | Model A (48.30 s faster)
-Hardware Serving Efficiency Index   | 93.4 / 100.0               | 81.2 / 100.0               | Model A (+12.2 pts)
-====================================================================================================
+```bash
+python3 eval.py --history       # list earlier runs in results/
+python3 eval.py --leaderboard   # rank earlier runs by efficiency index
+python3 eval.py --help          # all options
 ```
-</details>
 
----
+## Reading the results
 
-## Understanding the Results
-
-At the conclusion of each benchmark run, distinct **Cognitive Capability** and **Hosting Infrastructure** scorecards are displayed and saved to `results/`:
+Each run prints a model-quality scorecard and a serving scorecard. Output from the 2026-11-06 run:
 
 ```text
-========================================================================================
-             MODEL COGNITIVE CAPABILITY & INTELLIGENCE SCORECARD                        
-========================================================================================
+             MODEL COGNITIVE CAPABILITY & INTELLIGENCE SCORECARD
   Model Under Test        : Qwen3.8-Flash-Next-FP4
   Intelligence Grade      : A+ (Frontier Intelligence)
-  Pure Capability Score   : 100.0%  [24/24 Tasks Solved (100.0%)]
-  Overall Task Accuracy   : 30/30 Passed (100.0%)
-  Solution Conciseness    : 1573.4 tokens/passed task (Token Economy)
-  Evaluation Methodology  : Open Benchmark Standard (GPQA / AIME / SWE / IFEval / CruxEval)
-========================================================================================
+  Pure Capability Score   : 95.2%  [19/21 Tasks Solved (95.2%)]
+  Overall Task Accuracy   : 25/27 Passed (96.3%)
+  Solution Conciseness    : 4150.5 tokens/passed task (Token Economy)
 
-========================================================================================
-             HOSTING INFRASTRUCTURE & SERVING PERFORMANCE SCORECARD                     
-========================================================================================
-  Target Serving Endpoint : http://127.0.0.1:8080/v1
-  Mean Decode Throughput  : 49.14 tok/s
-  Mean Prefill TTFT       : 5633.0 ms
+             HOSTING INFRASTRUCTURE & SERVING PERFORMANCE SCORECARD
+  Target Serving Endpoint : http://<model-server>:8080/v1
+  Mean Decode Throughput  : 50.16 tok/s
+  Mean Prefill TTFT       : 386.9 ms
   Concurrent Clients      : 4 active parallel stream(s)
-  Total Suite Wall Time   : 1703.92 s
-  Total Solution Tokens   : 47,203 tokens consumed
-  Serving Efficiency Idx  : 88.0 / 100.0 (Throughput & conciseness rating)
-  Live Engine Telemetry   : RSS Memory 18.2 GB | Running: 4 | Waiting: 0 | KV Cache: 12.4%
-========================================================================================
+  Total Suite Wall Time   : 1307.33 s
+  Total Solution Tokens   : 118,536 tokens consumed
+  Serving Efficiency Idx  : 80.2 / 100.0 (Throughput & conciseness rating)
 ```
 
-### Metrics Breakdown
+With `-l polyglot`, a language matrix follows:
 
-- **Intelligence Grade & Pure Capability Score (%)**: Evaluates pure cognitive problem solving across all intelligence benchmarks (Tests 6-30: SWE-bench, CruxEval, AIME Olympiad, GPQA Diamond, IFEval, polyglot coding, USMLE, PubMedQA, GSM8K, and MMLU History) completely decoupled from hardware decode speed.
-  - Grades: `A+` (Frontier, $\ge 90\%$), `A` (High Enterprise, $\ge 80\%$), `B+` (Competent, $\ge 70\%$), `B` (Moderate, $\ge 60\%$), `C` (Marginal, $\ge 50\%$), `F` (Unsuitable).
-- **Completion Rate (%)**: Fraction of tests that completed without infrastructure failures (network drops, HTTP 5xx, or 429 rate limits).
-- **Overall Task Accuracy (Pass@1)**: Percentage of successfully passed tasks scored **strictly over completed tests**.
-- **Token Economy (`tok/task`)**: Emitted tokens divided by passed victories. Measures conciseness vs. verbosity. Lower is superior.
-- **Mean Decode Throughput (`tok/s`)**: Average generation speed across all tasks.
-- **Mean Prefill TTFT (`ms`)**: Time-To-First-Token responsiveness across single-turn, tool-calling, and streaming prompts.
-- **Serving Efficiency Index (`0–100`)**: A hardware infrastructure index balancing **Accuracy (60%)**, **Token Economy (20%)**, **Throughput (10%)**, and **TTFT (10%)**.
-- **Live Server Telemetry**: When Prometheus `/metrics` is exposed by the server (e.g. vLLM or SGLang), resident set size (RSS MB), active running requests, waiting queue depth, KV cache utilization %, EMR LoRA deferred queue count, and engine preemptions are captured and reported.
-- **Multi-Adapter Isolation**: Evaluates bit-level activation containment and concurrent throughput without cross-adapter interference (Test 31).
+```text
+Language     | Diff(20)   | Multi(21)  | Sec(22)    | Test(23)   | Type(24)   | Refactor(25) | Pass Rate
+Python       | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
+TypeScript   | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
+Go           | PARTIAL    | PASS       | PASS       | PARTIAL    | PASS       | PASS         | 4/6 (67%)
+Java         | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
+Rust         | PARTIAL    | PASS       | PASS       | PASS       | PASS       | PASS         | 5/6 (83%)
+C#           | PASS       | PASS       | PASS       | PASS       | PASS       | PASS         | 6/6 (100%)
+```
 
----
+The report also has a workload matrix. It rates the model for agents, coding, math and science, medical, writing, long context, vision and serving.
 
-## Security Sandbox
+<details>
+<summary><b>Metric definitions</b></summary>
+
+- **Test score.** PASS is 1, PARTIAL is 0.5, FAIL is 0. A test with several items scores its accuracy (8 of 10 correct is 0.8).
+- **Capability score and grade.** The average score of the model-quality tests. These are all tests except 1, 3, 7, 8, 9, 11 and 31. Decode speed has no effect on it. Grades: A+ at 90% or more, A at 80%, B+ at 70%, B at 60%, C at 50%, else F.
+- **Effectiveness ("Overall Task Accuracy").** The average test score over completed tests. Tests with server faults are left out.
+- **Completion rate.** The share of tests that finished without a server fault (network error, HTTP 5xx, 429).
+- **Token economy.** Tokens generated by passed tests ÷ (passed tests + 0.5 × PARTIAL tests). Lower means more concise.
+- **Mean decode throughput and mean TTFT.** Averages over the tests that report them. In a phased run, only isolated tests count.
+- **Efficiency index (0 to 100).** The sum of three parts, with a maximum of 100:
+  - 0.6 × effectiveness
+  - 0.25 × speed score (1.5 × decode tok/s, maximum 100)
+  - 15 × conciseness factor (1,000 ÷ token economy, from 0.2 to 2)
+- **Server telemetry.** The report reads Prometheus `/metrics` if the server has it (for example vLLM or SGLang). It records resident memory, running and waiting requests, KV-cache use, LoRA deferred queue and preemptions.
+
+</details>
+
+### If the tested server goes down
+
+When the tested server stops accepting connections during a run (connection refused, host unreachable, name not resolved), the run stops. It does not wait for the server to come back.
+
+1. The log prints `[SERVER DOWN]`. No more requests go to the server.
+2. Tests that are already running end with an infra failure. Tests that have not started are not run.
+3. The JSON report is still written. `"incomplete"` gives the reason and lists the tests that did not run. Those tests show as SKIPPED.
+4. The program exits with code 3, so the container stops.
+
+Timeouts and HTTP 5xx do not stop the run: a busy server can recover from them.
+
+## Running model code safely
 
 > [!WARNING]
-> Tests **14** (5,000-op fuzzing), **17** (SWE-bench fix), **23** (unit test synthesis), and **25** (safe refactor) execute model-generated code in a temporary subprocess to verify correctness.
+> Tests 4, 14, 17, 20, 21, 23, 25 and 32 run code that the model wrote. Run untrusted models in the Docker image.
 
-When benchmarking untrusted models or public endpoints, disable local execution:
+To disable code execution:
 
 ```bash
 python3 eval.py -e http://127.0.0.1:8080/v1 --no-execute
-# or via environment variable:
+# or
 EVAL_SAFE=1 python3 eval.py -e http://127.0.0.1:8080/v1
 ```
 
-When code execution is disabled, all tests safely fall back to static syntax verification and AST structural analysis.
+With execution disabled:
 
----
+- Tests 4, 14, 17, 20, 21, 23 and 25 check only the syntax and structure of the code. A check that does not run the code cannot show that it works, so these tests give PARTIAL at most, never PASS.
+- Test 24 still runs `mypy --strict` on Python answers. mypy reads the code and does not run it.
+- Test 32 (MultiPL-E) is SKIPPED. It is scored only by running the code, so the suite sends no requests.
 
-## Verification & Testing
+Scores from a run with `--no-execute` are not comparable with scores from a run that executes code.
 
-The evaluation suite includes a standalone `unittest` suite with **zero third-party test runners required**:
+## Repository layout
+
+| Path | Content |
+|---|---|
+| `eval.py` | Main program: core tests, scheduler, CLI |
+| `suites.py`, `judge.py`, `ifeval.py` | Qualification suites (Tests 32-45, 47-48), LLM judge, IFEval verifier |
+| `workload.py` | Test 46: your workload of concurrent users with long documents |
+| `usecases.py`, `report_md.py` | Use-case verdicts and the Markdown decision report |
+| `judge_validation.py` | Checks the judge against expert-rated SummEval and LLMBar data |
+| `languages.py`, `polyglot.py` | Prompts and compile-and-run graders for six languages |
+| `client.py` | HTTP client, retries, request limit, logging, server metrics |
+| `reporting.py` | Scoring, scorecards, comparison |
+| `compare.py` | Compares reports or live servers |
+| `data/` | Bundled datasets and coding test packs |
+| `scripts/` | Data download, toolchain setup, test-pack check |
+| `tests/` | Unit tests (`unittest`) |
+| `results/`, `logs/` | Run output (git ignores it, except the report) |
+
+[AGENTS.md](AGENTS.md) has the rules for contributors. [CHANGELOG.md](CHANGELOG.md) lists the changes.
+
+## Development
 
 ```bash
-# Run complete test suite (133 unit tests)
+# Unit tests (standard library unittest)
 python3 -m unittest discover -s tests -v
 
-# Run syntax compilation check across all modules
+# Syntax check of all modules
 python3 -m py_compile *.py benchmarks/*.py tests/*.py
-```
 
----
+# Check that every coding test pack passes good code and fails bad code
+docker run --rm --network none -v "$PWD:/app" --entrypoint python3 \
+    llm-eval-suite:latest scripts/verify_polyglot_packs.py
+```
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+[Apache License, Version 2.0](LICENSE).

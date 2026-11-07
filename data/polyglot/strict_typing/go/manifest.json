@@ -1,0 +1,12 @@
+{
+  "mode": "program",
+  "answer_file": "pipeline.go",
+  "go_package": "pipeline",
+  "strict": true,
+  "forbidden_patterns": [
+    "interface\\s*\\{\\s*\\}",
+    "\\bany\\b",
+    "\\breflect\\b"
+  ],
+  "forbidden_ignore_brackets": true
+}

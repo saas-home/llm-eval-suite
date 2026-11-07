@@ -1,0 +1,167 @@
+{
+ "reference_sets": [
+  {
+   "applies_to": [
+    "Qwen3.8-Flash-Next"
+   ],
+   "title": "Qwen3.8-Flash-Next model card",
+   "source": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next",
+   "retrieved": "2026-11-06",
+   "note": "Vendor-reported scores for the full-precision models, with the vendor's own harnesses and settings (see the card's footnotes). They are not comparable to this suite's numbers: use them to compare the models with each other, not with a run here.",
+   "models": [
+    "Qwen3.8-Flash-Next",
+    "Qwen3.8-27B",
+    "Qwen3.7-Plus",
+    "DeepSeek-V4-Flash-0731",
+    "Claude-Opus-4.6 (Max)"
+   ],
+   "parameters": {
+    "Params": {
+     "Qwen3.8-Flash-Next": "125B",
+     "Qwen3.8-27B": "27B",
+     "Qwen3.7-Plus": "397B",
+     "DeepSeek-V4-Flash-0731": "284B",
+     "Claude-Opus-4.6 (Max)": "--"
+    },
+    "Activated params": {
+     "Qwen3.8-Flash-Next": "6B",
+     "Qwen3.8-27B": "27B",
+     "Qwen3.7-Plus": "17B",
+     "DeepSeek-V4-Flash-0731": "13B",
+     "Claude-Opus-4.6 (Max)": "--"
+    }
+   },
+   "benchmarks": [
+    {
+     "name": "DeepSWE 1.1",
+     "use_case": "coding",
+     "scores": {
+      "Qwen3.8-Flash-Next": 58.7,
+      "Qwen3.8-27B": 42.2,
+      "Qwen3.7-Plus": 16.5,
+      "DeepSeek-V4-Flash-0731": 54.4,
+      "Claude-Opus-4.6 (Max)": null
+     }
+    },
+    {
+     "name": "SWE-bench Pro",
+     "use_case": "coding",
+     "scores": {
+      "Qwen3.8-Flash-Next": 62.5,
+      "Qwen3.8-27B": 61.7,
+      "Qwen3.7-Plus": 55.8,
+      "DeepSeek-V4-Flash-0731": 56.0,
+      "Claude-Opus-4.6 (Max)": 53.4
+     }
+    },
+    {
+     "name": "SWE-bench Multilingual",
+     "use_case": "coding",
+     "scores": {
+      "Qwen3.8-Flash-Next": 81.0,
+      "Qwen3.8-27B": 73.8,
+      "Qwen3.7-Plus": 75.8,
+      "DeepSeek-V4-Flash-0731": null,
+      "Claude-Opus-4.6 (Max)": 77.5
+     }
+    },
+    {
+     "name": "NL2Repo-Bench",
+     "use_case": "coding",
+     "scores": {
+      "Qwen3.8-Flash-Next": 48.1,
+      "Qwen3.8-27B": 42.3,
+      "Qwen3.7-Plus": 41.1,
+      "DeepSeek-V4-Flash-0731": 54.2,
+      "Claude-Opus-4.6 (Max)": 47.6
+     }
+    },
+    {
+     "name": "CoWorkBench",
+     "use_case": "agent",
+     "scores": {
+      "Qwen3.8-Flash-Next": 73.9,
+      "Qwen3.8-27B": 70.7,
+      "Qwen3.7-Plus": 65.1,
+      "DeepSeek-V4-Flash-0731": 45.1,
+      "Claude-Opus-4.6 (Max)": 68.2
+     }
+    },
+    {
+     "name": "JobBench",
+     "use_case": "agent",
+     "scores": {
+      "Qwen3.8-Flash-Next": 55.7,
+      "Qwen3.8-27B": 33.4,
+      "Qwen3.7-Plus": 27.6,
+      "DeepSeek-V4-Flash-0731": 41.3,
+      "Claude-Opus-4.6 (Max)": 36.6
+     }
+    },
+    {
+     "name": "Toolathlon Verified (Pass@1)",
+     "use_case": "agent",
+     "scores": {
+      "Qwen3.8-Flash-Next": 73.5,
+      "Qwen3.8-27B": 67.1,
+      "Qwen3.7-Plus": 50.6,
+      "DeepSeek-V4-Flash-0731": 70.3,
+      "Claude-Opus-4.6 (Max)": null
+     }
+    },
+    {
+     "name": "IFBench",
+     "use_case": "drafting",
+     "scores": {
+      "Qwen3.8-Flash-Next": 81.3,
+      "Qwen3.8-27B": 79.5,
+      "Qwen3.7-Plus": 79.1,
+      "DeepSeek-V4-Flash-0731": 79.2,
+      "Claude-Opus-4.6 (Max)": 62.5
+     }
+    },
+    {
+     "name": "GPQA Diamond",
+     "use_case": "medical",
+     "scores": {
+      "Qwen3.8-Flash-Next": 91.7,
+      "Qwen3.8-27B": 89.2,
+      "Qwen3.7-Plus": 90.3,
+      "DeepSeek-V4-Flash-0731": 90.8,
+      "Claude-Opus-4.6 (Max)": 91.3
+     }
+    },
+    {
+     "name": "HLE",
+     "use_case": "reasoning",
+     "scores": {
+      "Qwen3.8-Flash-Next": 35.9,
+      "Qwen3.8-27B": 30.8,
+      "Qwen3.7-Plus": 34.7,
+      "DeepSeek-V4-Flash-0731": 33.8,
+      "Claude-Opus-4.6 (Max)": 40.0
+     }
+    },
+    {
+     "name": "LiveCodeBench v6",
+     "use_case": "coding",
+     "scores": {
+      "Qwen3.8-Flash-Next": 91.9,
+      "Qwen3.8-27B": 90.3,
+      "Qwen3.7-Plus": 89.6,
+      "DeepSeek-V4-Flash-0731": 90.6,
+      "Claude-Opus-4.6 (Max)": 88.8
+     }
+    }
+   ],
+   "quantisations": [
+    {
+     "model": "unsloth/Qwen3.8-Flash-Next-GGUF (UD-Q4_K_XL)",
+     "source": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF",
+     "scores": {},
+     "note": "Unsloth Dynamic 4-bit quantisation of Qwen/Qwen3.8-Flash-Next. The card publishes no benchmark scores; no local run report is available."
+    }
+   ]
+  }
+ ]
+}
