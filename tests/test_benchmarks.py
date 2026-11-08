@@ -260,6 +260,26 @@ class TestStandaloneClients(unittest.TestCase):
         ]
         self.assertAlmostEqual(reasoning_benchmark.aggregate_decode_rate(results), 10 / 3)
 
+    def test_aggregate_decode_rate_handles_missing_tokens_and_zero_span(self):
+        cases = (
+            ([], 0.0),
+            ([{"_decode_start": 1.0, "_decode_end": 1.0, "completion_tokens": 5}], 0.0),
+            ([{"_decode_start": 1.0, "_decode_end": 3.0, "completion_tokens": None}], 0.0),
+            ([{"_decode_start": 1.0, "_decode_end": 3.0}], 0.0),
+        )
+        for results, expected in cases:
+            with self.subTest(results=results):
+                self.assertEqual(common.aggregate_decode_rate(results), expected)
+
+    def test_declared_money_formats(self):
+        from decimal import Decimal
+        self.assertEqual(common.declared_money("ENDING_BALANCE: $1,234.56", "ENDING_BALANCE"), Decimal("1234.56"))
+        self.assertEqual(common.declared_money("ENDING_BALANCE: -$1,234.56", "ENDING_BALANCE"), Decimal("-1234.56"))
+        self.assertEqual(common.declared_money("ENDING_BALANCE: $-1,234.56", "ENDING_BALANCE"), Decimal("-1234.56"))
+        self.assertEqual(common.declared_money("ENDING_BALANCE: +$50.00", "ENDING_BALANCE"), Decimal("50.00"))
+        self.assertIsNone(common.declared_money("ENDING_BALANCE: 1234.56", "ENDING_BALANCE"))
+        self.assertIsNone(common.declared_money("ENDING_BALANCE: $1,234.5", "ENDING_BALANCE"))
+
     def test_reasoning_task_annotation_supports_python38(self):
         annotation = typing.get_type_hints(reasoning_benchmark.build_parallel_tasks)["return"]
         self.assertEqual(annotation, typing.List[dict])

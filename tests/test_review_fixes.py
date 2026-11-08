@@ -194,6 +194,28 @@ class TestRetryEdges(unittest.TestCase):
         res = eval_module.run_test_novel_algorithmic_fuzz(c)
         self.assertEqual((res["status"], res["score"], res["retries"]), ("FAIL", 0.0, 1))
 
+    def test_retries_beyond_retry_scores_tuple_does_not_index_error(self):
+        c = MagicMock()
+        c.call.side_effect = [
+            {"content": "first attempt", "error": None, "completion_tokens": 5},
+            {"content": "second attempt", "error": None, "completion_tokens": 5},
+            {"content": "third attempt", "error": None, "completion_tokens": 5},
+            {"content": "fourth attempt", "error": None, "completion_tokens": 5},
+        ]
+        attempts_seen = []
+        def grade(text, res):
+            attempts_seen.append(text)
+            if len(attempts_seen) == 4:
+                return {"status": "PASS", "feedback": None}
+            return {"status": "FAIL", "feedback": "wrong"}
+
+        with mock.patch.object(eval_module, "CODE_MAX_RETRIES", 5), \
+             mock.patch.object(eval_module, "log"):
+            run = eval_module.run_with_retries(c, "prompt", grade, 100, "retry")
+        self.assertEqual(run["fields"]["status"], "PASS")
+        self.assertEqual(run["fields"]["retries"], 3)
+        self.assertEqual(run["fields"]["score"], 0.7)
+
 
 class TestTransientErrors(unittest.TestCase):
     def test_temporary_dns_failure_is_not_server_down(self):

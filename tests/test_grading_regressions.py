@@ -234,6 +234,19 @@ class TestStrictTypingGrading(unittest.TestCase):
         self.assertTrue(v["mypy_verified"])
         self.assertEqual(v["status"], "PASS")
 
+    def test_untyped_kwonly_and_async_methods(self):
+        # Without mypy, fallback AST audit:
+        # Untyped keyword-only argument must not pass all_annotated
+        with mock.patch.object(languages.shutil, "which", return_value=None):
+            untyped_kw = "def f(self, *, x) -> int:\n    return 1\n"
+            v1 = languages.verify_strict_typing(untyped_kw, "python")
+            self.assertFalse(v1["all_annotated"])
+
+            # Async def with full types must be counted and pass
+            typed_async = "async def f(self, x: int) -> int:\n    return x\n"
+            v2 = languages.verify_strict_typing(typed_async, "python")
+            self.assertTrue(v2["all_annotated"])
+
 
 class TestInfraFailureSeparation(unittest.TestCase):
     """AGENTS.md: infra failures are excluded from model scoring."""

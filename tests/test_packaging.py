@@ -16,6 +16,7 @@ if ROOT not in sys.path:
 import client  # noqa: E402
 import languages  # noqa: E402
 import polyglot  # noqa: E402
+import report_md  # noqa: E402
 import suites  # noqa: E402
 
 
@@ -25,6 +26,7 @@ class TestResourcePaths(unittest.TestCase):
         self.assertEqual(suites.SUITE_DIR, os.path.join(client.DATA_DIR, "suites"))
         self.assertEqual(polyglot.FIXTURE_ROOT, os.path.join(client.DATA_DIR, "polyglot"))
         self.assertEqual(languages._POLYGLOT_DIR, polyglot.FIXTURE_ROOT)
+        self.assertEqual(report_md.DEFAULT_REFERENCE, os.path.join(client.DATA_DIR, "reference", "published_scores.json"))
 
     def test_installed_import_needs_no_write_access_to_site_packages(self):
         with tempfile.TemporaryDirectory() as td:

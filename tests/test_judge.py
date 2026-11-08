@@ -23,6 +23,14 @@ class TestParseChecklist(unittest.TestCase):
         text = 'Here you go:\n```json\n{"1": "no", "2": "yes"}\n```'
         self.assertEqual(judge.parse_checklist(text, 2), [False, True])
 
+    def test_fenced_json_preceded_by_prose_with_braces(self):
+        text = 'Evaluation summary for set {}: \n```json\n{"1": "yes", "2": "no"}\n```'
+        self.assertEqual(judge.parse_checklist(text, 2), [True, False])
+
+    def test_empty_json_falls_back_to_numbered_lines(self):
+        text = '{}\n1. yes\n2. no'
+        self.assertEqual(judge.parse_checklist(text, 2), [True, False])
+
     def test_missing_criterion_is_none(self):
         self.assertEqual(judge.parse_checklist('{"1": "yes"}', 2), [True, None])
 

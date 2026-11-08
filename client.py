@@ -1151,10 +1151,16 @@ def _give_work_dir(path: str, uid: int, gid: int) -> None:
         return
     if os.path.commonpath([real, tmp_root]) != tmp_root:
         raise ValueError(f"model code must run in a folder inside {tmp_root}, not {path}")
-    os.chown(real, uid, gid, follow_symlinks=False)
+    try:
+        os.chown(real, uid, gid, follow_symlinks=False)
+    except FileNotFoundError:
+        return
     for _root, dirs, files, dir_fd in os.fwalk(real, follow_symlinks=False):
         for name in dirs + files:
-            os.chown(name, uid, gid, dir_fd=dir_fd, follow_symlinks=False)
+            try:
+                os.chown(name, uid, gid, dir_fd=dir_fd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
 
 
 def run_model_code(cmd, timeout: float, cwd: Optional[str] = None,

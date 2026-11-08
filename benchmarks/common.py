@@ -27,11 +27,13 @@ class ChunkMetrics:
 def aggregate_decode_rate(results, start_key="_decode_start", end_key="_decode_end"):
     timed = [r for r in results if not r.get("error")
              and r.get(start_key) is not None and r.get(end_key) is not None
-             and r[end_key] > r[start_key] and r["completion_tokens"] > 1]
+             and r[end_key] > r[start_key] and (r.get("completion_tokens") or 0) > 1]
     if not timed:
         return 0.0
     span = max(r[end_key] for r in timed) - min(r[start_key] for r in timed)
-    return sum(r["completion_tokens"] - 1 for r in timed) / span
+    if span <= 0:
+        return 0.0
+    return sum((r.get("completion_tokens") or 0) - 1 for r in timed) / span
 
 
 def benchmark_response(result):
@@ -104,8 +106,12 @@ def declared_integer(text, name):
 
 def declared_money(text, name):
     value = declared_value(text, name)
-    if value and re.fullmatch(r"\$[+-]?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}", value):
-        return Decimal(value[1:].replace(",", ""))
+    if not value or value.count("$") != 1:
+        return None
+    sign = "-" if "-" in value else ("+" if "+" in value else "")
+    raw = value.replace("$", "").replace("+", "").replace("-", "")
+    if re.fullmatch(r"(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}", raw):
+        return Decimal(f"{sign}{raw.replace(',', '')}")
     return None
 
 

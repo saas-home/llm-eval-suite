@@ -202,19 +202,25 @@ def parse_checklist(text: str, n: int) -> List[Optional[bool]]:
     Falls back to '1. yes' style lines. Unanswered criteria are None."""
     verdicts: List[Optional[bool]] = [None] * n
     obj = None
-    match = re.search(r"\{[^{}]*\}", text or "", re.DOTALL)
+    cleaned = text or ""
+    if "```json" in cleaned:
+        cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+    elif "```" in cleaned:
+        cleaned = cleaned.split("```")[1].split("```")[0].strip()
+    match = re.search(r"\{[^{}]*\}", cleaned, re.DOTALL)
     if match:
         try:
             obj = json.loads(match.group(0))
         except ValueError:
             obj = None
-    if isinstance(obj, dict):
+    if isinstance(obj, dict) and obj:
         for key, value in obj.items():
             idx = re.sub(r"\D", "", str(key))
             if idx and 1 <= int(idx) <= n:
                 word = str(value).strip().lower()
                 verdicts[int(idx) - 1] = True if word.startswith("y") else (False if word.startswith("n") else None)
-        return verdicts
+        if any(v is not None for v in verdicts):
+            return verdicts
     for m in re.finditer(r"(?m)^\s*(\d+)[.):]\s*(yes|no)\b", text or "", re.IGNORECASE):
         num = int(m.group(1))
         if 1 <= num <= n:

@@ -33,7 +33,7 @@ import workload
 from client import DATA_DIR
 from reporting import REPORTABLE_CATALOG, extract_test_metrics, format_duration
 
-DEFAULT_REFERENCE = os.path.join("data", "reference", "published_scores.json")
+DEFAULT_REFERENCE = os.path.join(DATA_DIR, "reference", "published_scores.json")
 USE_CASE_NAMES = {uc["key"]: uc["name"] for uc in usecases.USE_CASES}
 TEST_NAMES = {key: name for _num, key, name in REPORTABLE_CATALOG}
 TEST_NUMBERS = {key: num for num, key, _name in REPORTABLE_CATALOG}

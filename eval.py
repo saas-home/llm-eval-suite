@@ -1983,7 +1983,7 @@ def run_with_retries(client, prompt: str, grade, max_tokens: int, retry_request:
         # (an infra error is marked separately by _infra_guarded).
         status, score = "FAIL", 0.0
     elif status == "PASS":
-        score = RETRY_SCORES[retries]
+        score = RETRY_SCORES[retries] if retries < len(RETRY_SCORES) else 0.7
     elif attempts[-1]["feedback"]:
         status, score = "FAIL", 0.0  # still the model's failure after every retry
     else:

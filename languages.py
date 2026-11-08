@@ -2006,10 +2006,15 @@ def verify_strict_typing(code: str, language: str, execute_code: bool = True) ->
             tree = ast.parse(code)
             syntax_valid = True
             for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     total_methods += 1
                     has_return = node.returns is not None
-                    args_typed = all(arg.annotation is not None for arg in node.args.args if arg.arg not in ("self", "cls"))
+                    all_args = list(getattr(node.args, "posonlyargs", [])) + node.args.args + node.args.kwonlyargs
+                    args_typed = all(arg.annotation is not None for arg in all_args if arg.arg not in ("self", "cls"))
+                    if node.args.vararg and node.args.vararg.annotation is None:
+                        args_typed = False
+                    if node.args.kwarg and node.args.kwarg.annotation is None:
+                        args_typed = False
                     if has_return and args_typed:
                         annotated_methods += 1
 

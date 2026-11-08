@@ -4,6 +4,15 @@ This file records notable changes. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Fixed: code review findings and edge cases
+
+- **Strict typing AST audit:** `verify_strict_typing` inspects `ast.AsyncFunctionDef` methods and checks type annotations across positional-only, keyword-only (`kwonlyargs`), `vararg` (`*args`), and `kwarg` (`**kwargs`) parameters, preventing unannotated keyword-only parameters from passing as fully typed.
+- **Judge checklist parsing:** `parse_checklist` extracts JSON from markdown fences when present before parsing, preventing preceding prose with braces from failing the parse, and falls back to numbered lines when matched JSON objects yield no criteria.
+- **Standalone benchmark decode rates & money parsing:** `aggregate_decode_rate` guards against missing or null `completion_tokens` and non-positive spans; `declared_money` supports currency values formatted with leading minus signs (`-$1,234.56` as well as `$-1,234.56`).
+- **Decision report reference path:** `report_md.DEFAULT_REFERENCE` uses `DATA_DIR` so installed packages correctly locate published reference scores.
+- **Model code directory ownership:** `_give_work_dir` safely ignores `FileNotFoundError` during `os.fwalk` if ephemeral files are unlinked concurrently.
+- **Retry scoring bound:** `run_with_retries` caps the retry score gracefully if retry counts exceed the `RETRY_SCORES` tuple.
+
 ### Added: interactive Docker startup
 
 - `scripts/start_eval.sh` asks for model and optional independent-judge details, test mode, language and hardware, then probes the endpoint and runs the Docker evaluation with persistent reports and logs. API-key entry is hidden, model settings are passed by environment variable name, and no credential files are saved or mounted. Missing images are built only with approval.
