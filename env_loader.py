@@ -9,7 +9,9 @@ import os
 import json
 import sys
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from client import OUTPUT_BASE_DIR
+
+BASE_DIR = OUTPUT_BASE_DIR
 DEFAULT_CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 
@@ -115,54 +117,53 @@ def load_config(config_file=None):
             s1 = data.get("server1") or data.get("server_1") or data.get("server")
             s2 = data.get("server2") or data.get("server_2")
 
+            nested_first = set()
             if isinstance(s1, dict):
-                config["endpoint1"] = s1.get("endpoint") or s1.get("url") or s1.get("base_url")
-                config["model1"] = s1.get("model")
-                config["api_key1"] = s1.get("api_key")
-                config["max_context1"] = s1.get("max_context")
-                config["endpoint"] = config["endpoint"] or config["endpoint1"]
-                config["model"] = config["model"] or config["model1"]
-                config["api_key"] = config["api_key"] or config["api_key1"]
-                config["max_context"] = config["max_context"] or config["max_context1"]
+                for key, value in (
+                    ("endpoint", s1.get("endpoint") or s1.get("url") or s1.get("base_url")),
+                    ("model", s1.get("model")),
+                    ("api_key", s1.get("api_key")),
+                    ("max_context", s1.get("max_context")),
+                ):
+                    if value:
+                        config[key + "1"] = value
+                        config[key] = value
+                        nested_first.add(key)
 
             if isinstance(s2, dict):
-                config["endpoint2"] = s2.get("endpoint") or s2.get("url") or s2.get("base_url")
-                config["model2"] = s2.get("model")
-                config["api_key2"] = s2.get("api_key")
-                config["max_context2"] = s2.get("max_context")
+                for key, value in (
+                    ("endpoint", s2.get("endpoint") or s2.get("url") or s2.get("base_url")),
+                    ("model", s2.get("model")),
+                    ("api_key", s2.get("api_key")),
+                    ("max_context", s2.get("max_context")),
+                ):
+                    if value:
+                        config[key + "2"] = value
 
-            # Check flat keys
-            if data.get("endpoint") or data.get("base_url") or data.get("url"):
-                config["endpoint"] = data.get("endpoint") or data.get("base_url") or data.get("url")
-            if data.get("model"):
-                config["model"] = data.get("model")
-            if "api_key" in data and data["api_key"]:
-                config["api_key"] = data.get("api_key")
-            if data.get("max_context"):
-                config["max_context"] = data.get("max_context")
+            for key, value in (
+                ("endpoint", data.get("endpoint") or data.get("base_url") or data.get("url")),
+                ("model", data.get("model")),
+                ("api_key", data.get("api_key")),
+                ("max_context", data.get("max_context") or data.get("max_model_len")),
+            ):
+                if value:
+                    config[key] = value
+                    if key not in nested_first and not data.get(key + "1"):
+                        config[key + "1"] = value
 
-            if data.get("endpoint1"):
-                config["endpoint1"] = data.get("endpoint1")
-            if data.get("model1"):
-                config["model1"] = data.get("model1")
-            if data.get("api_key1"):
-                config["api_key1"] = data.get("api_key1")
+            for key in ("endpoint", "model", "api_key", "max_context"):
+                if data.get(key + "1"):
+                    config[key + "1"] = data[key + "1"]
+                    aliases = ("endpoint", "base_url", "url") if key == "endpoint" else (
+                        ("max_context", "max_model_len") if key == "max_context" else (key,))
+                    if not any(data.get(alias) for alias in aliases):
+                        config[key] = data[key + "1"]
+                if data.get(key + "2"):
+                    config[key + "2"] = data[key + "2"]
 
-            if data.get("endpoint2"):
-                config["endpoint2"] = data.get("endpoint2")
-            if data.get("model2"):
-                config["model2"] = data.get("model2")
-            if data.get("api_key2"):
-                config["api_key2"] = data.get("api_key2")
-
-            if data.get("max_model_len") and not config.get("max_context"):
-                config["max_context"] = data.get("max_model_len")
-
-            for opt_key in ("tests", "test", "suite", "exclude", "parallel", "quick",
-                            "language", "adapters", "multi_adapter", "metrics",
-                            "timeout", "max_tokens"):
-                if opt_key in data:
-                    config[opt_key] = data[opt_key]
+            for key, value in data.items():
+                if key not in config:
+                    config[key] = value
 
             loaded_from_file = True
         except Exception as e:

@@ -11,83 +11,21 @@ Tests:
 
 import sys
 import os
-import time
 import json
-import re
-import urllib.request
-import urllib.error
 import argparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from benchmarks.common import benchmark_error, call_nonstream, declared_integer, strict_json_loads  # noqa: E402
+from domain_benchmarks import final_content  # noqa: E402
+
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
 def call_model(url, messages, max_tokens=1500, temperature=0.0, enable_thinking=False, timeout=600, model="default", api_key=""):
-    payload = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": False,
-    }
-    if enable_thinking:
-        payload["chat_template_kwargs"] = {"enable_thinking": True}
-
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=req_data, headers=headers)
-    
-    t0 = time.perf_counter()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        if "chat_template_kwargs" in payload:
-            payload.pop("chat_template_kwargs", None)
-            req_retry = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            try:
-                with urllib.request.urlopen(req_retry, timeout=timeout) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-            except Exception as e2:
-                print(f"HTTP error during model call: {e2}")
-                return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e2)}
-        else:
-            print(f"HTTP error during model call: {e}")
-            return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e)}
-    except Exception as e:
-        print(f"Request error during model call: {e}")
-        return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e)}
-
-    tt = time.perf_counter() - t0
-    
-    choices = data.get("choices") or [{}]
-    choice = choices[0]
-    msg = choice.get("message", {})
-    content = msg.get("content") or ""
-    reasoning = (
-        msg.get("reasoning_content")
-        or msg.get("reasoning")
-        or msg.get("thought")
-        or ""
-    )
-    usage = data.get("usage") or {}
-    prompt_tokens = usage.get("prompt_tokens", 0)
-    completion_tokens = usage.get("completion_tokens", 0)
-    tok_per_sec = completion_tokens / tt if tt > 0 else 0.0
-    
-    return {
-        "content": content,
-        "reasoning": reasoning,
-        "text": (reasoning + "\n" + content) if reasoning.strip() else content,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_time_s": tt,
-        "tok_per_sec": tok_per_sec
-    }
+    return call_nonstream(url, messages, max_tokens, temperature, enable_thinking, timeout, model, api_key)
 
 FILLER_BLOCK = (
     "The Linux kernel page cache caches pages of files to optimize disk I/O performance. "
@@ -165,14 +103,24 @@ def test_high_entropy_kv_recall(url, model="default", api_key=""):
     
     print(f"  Ingesting ~50,000 tokens with 25 associative high-entropy key-value pairs...")
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=1000, temperature=0.0, model=model, api_key=api_key)
+    name = "High-Entropy KV Recall (8/8)"
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s)")
     
-    out = res["content"]
-    # Parse json or match keys
+    try:
+        output = strict_json_loads(final_content(res).strip())
+    except ValueError as exc:
+        print(f"  Invalid JSON: {exc}")
+        output = None
+    if not isinstance(output, dict):
+        print("  The answer is not a JSON object.")
+        output = {}
     passed_keys = 0
     for t in targets:
         exp_v = expected_map[t]
-        if exp_v in out:
+        if output.get(t) == exp_v:
             passed_keys += 1
             print(f"  - {t}: {exp_v} -> MATCH")
         else:
@@ -180,7 +128,7 @@ def test_high_entropy_kv_recall(url, model="default", api_key=""):
             
     success = (passed_keys == len(targets))
     print(f"  [Result]: {passed_keys}/{len(targets)} exact high-entropy matches. {'PASS' if success else 'FAIL'}")
-    return {"name": "High-Entropy KV Recall (8/8)", "passed": success, "score": f"{passed_keys}/{len(targets)}"}
+    return {"name": name, "passed": success, "score": f"{passed_keys}/{len(targets)}"}
 
 def test_multi_hop_variable_tracking(url, model="default", api_key=""):
     print("\n" + "="*80)
@@ -207,7 +155,7 @@ def test_multi_hop_variable_tracking(url, model="default", api_key=""):
     vf = ve - 3959
     vg = vf * 2 + 77
     vh = vg ^ 4095
-    expected_final = vh  # 73930
+    expected_final = vh  # 72898
     
     stage_map = dict(stages)
     total_blocks = 500
@@ -228,13 +176,16 @@ def test_multi_hop_variable_tracking(url, model="default", api_key=""):
     
     print(f"  Ingesting ~50,000 tokens with 8 sequential multi-hop dependencies...")
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.0, enable_thinking=True, model=model, api_key=api_key)
+    name = "Multi-Hop Dependency (8 Hops)"
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s)")
     
-    text = res["text"]
-    has_expected = str(expected_final) in text
+    has_expected = declared_integer(final_content(res), "FINAL_VALUE") == expected_final
     print(f"  - Ground Truth var_h = {expected_final}: {'MATCH' if has_expected else 'FAIL'}")
     print(f"  [Result]: {'PASS' if has_expected else 'FAIL'}")
-    return {"name": "Multi-Hop Dependency (8 Hops)", "passed": has_expected, "expected": expected_final}
+    return {"name": name, "passed": has_expected, "expected": expected_final}
 
 def main():
     parser = argparse.ArgumentParser()
@@ -245,14 +196,23 @@ def main():
     args = parser.parse_args()
     
     results = []
-    results.append(test_high_entropy_kv_recall(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_multi_hop_variable_tracking(args.url, model=args.model, api_key=args.api_key))
+    checks = [
+        ("High-Entropy KV Recall (8/8)", test_high_entropy_kv_recall),
+        ("Multi-Hop Dependency (8 Hops)", test_multi_hop_variable_tracking),
+    ]
+    for index, (_, check) in enumerate(checks):
+        result = check(args.url, model=args.model, api_key=args.api_key)
+        results.append(result)
+        if result.get("endpoint_unreachable"):
+            results.extend({"name": name, "passed": False, "status": "SKIPPED",
+                            "reason": "Server unreachable"} for name, _ in checks[index + 1:])
+            break
     
     print("\n" + "="*80)
     print("STRESS TEST SUMMARY")
     print("="*80)
     for r in results:
-        status = "PASSED" if r["passed"] else "FAILED"
+        status = r.get("status", "PASSED" if r["passed"] else "FAILED")
         print(f" • {r['name']:<42} : {status}")
     out_dir = os.path.dirname(args.out)
     if out_dir:
@@ -260,6 +220,8 @@ def main():
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     print(f"\nSaved results to {args.out}")
+    if any(result.get("status") == "ERROR" for result in results):
+        sys.exit(3)
 
 if __name__ == "__main__":
     main()

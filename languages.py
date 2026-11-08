@@ -24,7 +24,7 @@ import tempfile
 import subprocess
 from typing import Any, Dict, Optional
 
-from client import assemble_python_script, harness_passed, run_model_code
+from client import DATA_DIR, assemble_python_script, harness_passed, run_model_code
 
 SUPPORTED_LANGUAGES = ["python", "typescript", "go", "java", "rust", "csharp"]
 
@@ -1206,7 +1206,7 @@ REFACTOR_FIXTURES: Dict[str, Dict[str, Any]] = {
 # prompts are built from those same pack files so the model always sees the
 # exact code the harness compiles against.
 
-_POLYGLOT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "polyglot")
+_POLYGLOT_DIR = os.path.join(DATA_DIR, "polyglot")
 _FENCE = {"typescript": "typescript", "go": "go", "java": "java", "rust": "rust", "csharp": "csharp"}
 
 
@@ -2114,20 +2114,19 @@ def verify_refactoring(code: str, language: str, execute_code: bool = True) -> d
             )
             test_harness = assemble_python_script(code, harness=harness)
             try:
-                with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-                    f.write(test_harness)
-                    tmp_path = f.name
-                try:
-                    proc = run_model_code([sys.executable, tmp_path], 10, cwd=os.path.dirname(tmp_path))
+                # Its own work folder: when the suite runs as root, the
+                # model-code user must own the script it runs.
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmp_path = os.path.join(tmpdir, "refactored.py")
+                    with open(tmp_path, "w", encoding="utf-8") as f:
+                        f.write(test_harness)
+                    proc = run_model_code([sys.executable, tmp_path], 10, cwd=tmpdir)
                     execution_verified = True
                     if harness_passed(proc, "INVARIANTS_OK"):
                         invariants_passed = True
                     else:
                         feedback = ("The refactored code does not behave like the original:\n"
                                     + output_tail(proc.stderr + proc.stdout, lines=6).replace(tmp_path, "refactored.py"))
-                finally:
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
             except subprocess.TimeoutExpired:
                 execution_verified = True  # it ran: the model's code never finished
                 feedback = timeout_feedback(10)

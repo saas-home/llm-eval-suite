@@ -83,6 +83,131 @@ class TestAnswerTiming(unittest.TestCase):
         self.assertEqual(res["answer_ttft"], 5.0)
         self.assertEqual((res["reasoning_chunks"], res["content_chunks"]), (2, 1))
 
+    def test_decode_speed_ends_at_last_token_not_delayed_usage(self):
+        chunks = [{"choices": [{"delta": {"content": "first"}}]},
+                  {"choices": [{"delta": {"content": "last"}}]},
+                  {"choices": [{"delta": {}, "finish_reason": "stop"}],
+                   "usage": {"prompt_tokens": 5, "completion_tokens": 5}}]
+        times = iter([0.0, 1.0, 3.0, 13.0])
+        with mock.patch.object(client_module.urllib.request, "urlopen", return_value=_sse(chunks)), \
+                mock.patch.object(client_module.time, "perf_counter", side_effect=lambda: next(times)):
+            res = LLMClient("http://srv/v1", model="m").call([{"role": "user", "content": "q"}], stream=True)
+        self.assertEqual(res["total_time"], 13.0)
+        self.assertEqual(res["decode_speed"], 2.0)
+
+    def test_single_chunk_does_not_use_delayed_trailer_as_decode_time(self):
+        chunks = [{"choices": [{"delta": {"content": "all tokens"}}]},
+                  {"choices": [{"delta": {}, "finish_reason": "stop"}],
+                   "usage": {"prompt_tokens": 5, "completion_tokens": 5}}]
+        times = iter([0.0, 1.0, 13.0])
+        with mock.patch.object(client_module.urllib.request, "urlopen", return_value=_sse(chunks)), \
+                mock.patch.object(client_module.time, "perf_counter", side_effect=lambda: next(times)):
+            res = LLMClient("http://srv/v1", model="m").call([{"role": "user", "content": "q"}], stream=True)
+        self.assertEqual(res["total_time"], 13.0)
+        self.assertEqual(res["decode_speed"], 0.0)
+
+
+class TestStreamIntegrity(unittest.TestCase):
+    def call_with_body(self, body):
+        with mock.patch.object(client_module.urllib.request, "urlopen", return_value=_Resp(body)):
+            return LLMClient("http://srv/v1", model="m").call(
+                [{"role": "user", "content": "q"}], stream=True, retries=0)
+
+    def test_unterminated_stream_is_an_infrastructure_failure(self):
+        body = b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+        res = self.call_with_body(body)
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertIn("ended", res["error"].lower())
+        self.assertEqual(res["content"], "partial")
+
+    def test_malformed_stream_event_is_not_silently_discarded(self):
+        body = (b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+                b'data: {invalid json}\n\n'
+                b'data: [DONE]\n\n')
+        res = self.call_with_body(body)
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertIn("malformed", res["error"].lower())
+        self.assertEqual(res["content"], "partial")
+
+    def test_timeout_after_partial_stream_keeps_content_and_does_not_retry(self):
+        class Interrupted(_Resp):
+            def __iter__(self):
+                yield b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+                raise TimeoutError("stream timed out")
+
+        with mock.patch.object(client_module.urllib.request, "urlopen",
+                               side_effect=lambda *args, **kwargs: Interrupted(b"")) as urlopen, \
+             mock.patch.object(client_module.time, "sleep") as sleep:
+            res = LLMClient("http://srv/v1", model="m").call(
+                [{"role": "user", "content": "q"}], stream=True)
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertEqual(res["content"], "partial")
+        self.assertEqual(urlopen.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_finish_reason_without_done_is_accepted(self):
+        body = (b'data: {"choices":[{"delta":{"content":"complete"}}]}\n\n'
+                b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n')
+        res = self.call_with_body(body)
+        self.assertNotIn("error", res)
+        self.assertEqual((res["content"], res["finish_reason"]), ("complete", "stop"))
+
+    def test_multiline_sse_event_and_keepalive_are_accepted(self):
+        body = (b': keepalive\n\n'
+                b'data: {"choices": [\n'
+                b'data: {"delta": {"content": "joined"}}]}\n\n'
+                b'data: [DONE]\n\n')
+        res = self.call_with_body(body)
+        self.assertNotIn("error", res)
+        self.assertEqual(res["content"], "joined")
+
+    def test_non_object_event_is_an_explicit_stream_failure(self):
+        res = self.call_with_body(b'data: null\n\ndata: [DONE]\n\n')
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertIn("malformed", res["error"].lower())
+
+    def test_done_without_any_completion_choice_is_a_stream_failure(self):
+        body = b'data: {"choices":[],"usage":{"completion_tokens":0}}\n\ndata: [DONE]\n\n'
+        res = self.call_with_body(body)
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertIn("choice", res["error"].lower())
+
+    def test_invalid_utf8_is_not_graded_as_model_output(self):
+        body = (b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+                b'data: {"choices":[{"delta":{"content":"\xff"}}]}\n\n'
+                b'data: [DONE]\n\n')
+        res = self.call_with_body(body)
+        self.assertEqual(res["failure_kind"], "infra")
+        self.assertEqual(res["content"], "partial")
+
+    def test_empty_but_well_formed_completion_is_accepted(self):
+        body = b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+        res = self.call_with_body(body)
+        self.assertNotIn("error", res)
+        self.assertEqual(res["content"], "")
+
+
+class TestResponseIntegrity(unittest.TestCase):
+    def test_nonstream_response_without_a_completion_is_an_infra_failure(self):
+        for response in ({}, {"choices": []}, {"choices": [{}]}, []):
+            with self.subTest(response=response), \
+                 mock.patch.object(client_module.urllib.request, "urlopen",
+                                   return_value=_Resp(json.dumps(response).encode())) as urlopen:
+                res = LLMClient("http://srv/v1", model="m").call(
+                    [{"role": "user", "content": "q"}], stream=False, retries=0)
+                self.assertEqual(res["failure_kind"], "infra")
+                self.assertIn("malformed", res["error"].lower())
+                self.assertEqual(urlopen.call_count, 1)
+
+    def test_empty_but_well_formed_nonstream_completion_is_accepted(self):
+        response = {"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]}
+        with mock.patch.object(client_module.urllib.request, "urlopen",
+                               return_value=_Resp(json.dumps(response).encode())):
+            res = LLMClient("http://srv/v1", model="m").call(
+                [{"role": "user", "content": "q"}], stream=False, retries=0)
+        self.assertNotIn("error", res)
+        self.assertEqual(res["content"], "")
+
 
 class TestCountPromptTokens(unittest.TestCase):
     def test_counts_with_the_chat_template(self):
@@ -199,6 +324,35 @@ class TestReliability(unittest.TestCase):
         self.assertEqual(res["reliability"]["pass_all_repeats_pct"], 50.0)
         self.assertEqual(res["sampling"], {"temperature": 0.6})
 
+    def test_unscored_repeats_beyond_the_tolerance_prevent_pass_and_recommendation(self):
+        class C:
+            max_context = None
+
+            def __init__(self, empty):
+                self.calls, self.empty = 0, empty
+
+            def call(self, *args, **kwargs):
+                self.calls += 1
+                content = "" if self.calls <= self.empty else "Here is the answer."
+                return {"content": content, "completion_tokens": 1}
+
+        judge = mock.Mock()
+        judge.checklist.return_value = {"judged_by": "judge", "verdicts": [False]}
+        items = [{"id": str(i), "prompt": "A safe question", "should_refuse": False} for i in range(40)]
+        # 1 of 120 attempts (0.8%) is within the tolerance; 7 (5.8%) is not.
+        for empty, status in ((1, "PASS"), (7, "PARTIAL")):
+            with self.subTest(empty=empty), mock.patch.object(suites, "log"):
+                result = suites.run_benchmark(
+                    C(empty), "XSTest", items, suites.xstest_messages, suites.make_grade_xstest(judge),
+                    samples=40, repeats=3, workers=1, key="xstest")
+                self.assertEqual((result["unscored_attempts"], result["total_attempts"]), (empty, 120))
+                self.assertEqual(result["status"], status)
+                verdict = next(v for v in usecases.rank_use_cases({"xstest": result}) if v["key"] == "assistant")
+                self.assertTrue(any("xstest" in reason and "unscored attempt" in reason
+                                    for reason in verdict["reasons"]))
+                if status == "PARTIAL":
+                    self.assertEqual(verdict["verdict"], usecases.REVIEW)
+
 
 class TestContractReviewGrader(unittest.TestCase):
     GOV = ("This Agreement shall be governed by and construed in accordance with the laws of the State of "
@@ -285,6 +439,20 @@ class TestWorkloadSettings(unittest.TestCase):
         w = workload.resolve_workload(None, 131072)
         self.assertEqual(w["prompt_tokens"], 131072 - 8192 - workload.PROMPT_MARGIN_TOKENS)
         self.assertEqual(w["requested_prompt_tokens"], 200000)
+
+    def test_context_must_fit_the_output_and_minimum_prompt(self):
+        with self.assertRaisesRegex(ValueError, "context"):
+            workload.resolve_workload(None, 4096)
+        minimum = 8192 + workload.PROMPT_MARGIN_TOKENS + 1000
+        w = workload.resolve_workload(None, minimum)
+        self.assertEqual(w["prompt_tokens"] + w["max_output_tokens"] + workload.PROMPT_MARGIN_TOKENS, minimum)
+
+    def test_impossible_context_is_skipped_before_requesting_the_model(self):
+        server = mock.MagicMock(max_context=4096)
+        result = workload.run_workload(server)
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertIn("context", result["error"])
+        server.call.assert_not_called()
 
     def test_stagger_is_seeded_and_bounded(self):
         a = workload.stagger_offsets(4, 3, 10, 7)
@@ -401,6 +569,33 @@ class TestWorkloadRun(unittest.TestCase):
         with mock.patch.object(suites, "load_contracts", side_effect=self._contracts):
             return workload.run_workload(server, FAST_GATES)
 
+    def test_full_focus_contract_that_exceeds_context_is_not_sent(self):
+        gold = "governed by the laws of state number one"
+        contract = {"id": "c1", "title": "Long contract", "text": gold + " x" * 30000,
+                    "clauses": {"Governing Law": [gold]}, "questions": {"Governing Law": "Which law?"}}
+        server = mock.MagicMock(max_context=12000)
+        server.call.side_effect = lambda messages, **kwargs: {
+            "prompt_tokens": len(messages[0]["content"]) // 3,
+            "completion_tokens": 1,
+            "content": "",
+        }
+        server.count_prompt_tokens.side_effect = lambda messages: len(messages[0]["content"]) // 3
+        with mock.patch.object(suites, "load_contracts", return_value=({"c1": contract}, {})):
+            result = workload.run_workload(server, {"users": 1, "stagger_s": [0, 0]})
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertIn("context", result["error"])
+        self.assertEqual(server.call.call_count, 1)  # tokenizer calibration only
+        self.assertEqual(server.call.call_args.kwargs["max_tokens"], 1)
+
+    def test_dataset_without_labelled_clauses_is_skipped(self):
+        contract = {"id": "c1", "title": "Contract", "text": "No labels.", "clauses": {}}
+        server = mock.MagicMock(max_context=524288)
+        with mock.patch.object(suites, "load_contracts", return_value=({"c1": contract}, {})):
+            result = workload.run_workload(server, {"users": 1})
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertIn("no labelled clauses", result["error"])
+        server.call.assert_not_called()
+
     def test_goodput_counts_users_within_gates(self):
         """Prefill takes 40 ms per request and requests queue: early users see
         their first token within the 90 ms gate, later ones wait for every
@@ -479,6 +674,53 @@ class TestUseCaseVerdicts(unittest.TestCase):
         res = {"summarisation": _scored(100, 95, 100, items=20)}
         v = self.verdict(res, "summarisation")
         self.assertEqual((v["verdict"], v["evidence"]), (usecases.REVIEW, "limited"))
+
+    def test_unscored_items_beyond_the_tolerance_cap_a_strong_result_at_review(self):
+        # 1 unscored of 50 items (2%) is reported but within the tolerance.
+        res = {"legalbench": dict(_scored(92, 85, 97, items=49), unscored_items=1),
+               "contract_review": _scored(90, 82, 96)}
+        v = self.verdict(res, "legal")
+        self.assertEqual(v["verdict"], usecases.RECOMMENDED)
+        self.assertTrue(any("legalbench" in reason and "unscored" in reason for reason in v["reasons"]))
+        # 4 of 53 (7.5%) is not.
+        res["legalbench"] = dict(_scored(92, 85, 97, items=49), unscored_items=4)
+        v = self.verdict(res, "legal")
+        self.assertEqual((v["verdict"], v["evidence"]), (usecases.REVIEW, "strong"))
+        self.assertTrue(any("legalbench" in reason and "unscored" in reason for reason in v["reasons"]))
+        res["contract_review"] = _scored(40, 30, 50)
+        self.assertEqual(self.verdict(res, "legal")["verdict"], usecases.NOT_RECOMMENDED)
+
+    def test_older_reports_with_unscored_repeats_beyond_the_tolerance_are_not_recommended(self):
+        # Older reports have no total_attempts: 50 items x 3 repeats = 150.
+        for unscored, expected in ((1, usecases.RECOMMENDED), (10, usecases.REVIEW)):
+            details = [{"attempt_scores": [1.0, None, 1.0]}] * unscored
+            for key, use_case, extra in (
+                ("xstest", "assistant", {"details": details}),
+                ("multipl_e", "coding", {"per_language": {"python": {"details": details}}}),
+            ):
+                with self.subTest(key=key, unscored=unscored):
+                    result = dict(_scored(100, 100, 100, pass_all=98.0), **extra)
+                    verdict = self.verdict({key: result}, use_case)
+                    self.assertEqual(verdict["verdict"], expected)
+                    self.assertTrue(any("unscored attempt" in reason for reason in verdict["reasons"]))
+
+    def test_skipped_multipl_e_languages_cannot_be_recommended(self):
+        res = {"multipl_e": dict(_scored(95, 90, 99), languages_skipped=["go", "rust"])}
+        v = self.verdict(res, "coding")
+        self.assertEqual((v["verdict"], v["evidence"]), (usecases.REVIEW, "strong"))
+        self.assertTrue(any("multipl_e" in reason and "go" in reason for reason in v["reasons"]))
+
+    def test_older_multipl_e_reports_include_skipped_datasets_in_verdict(self):
+        for reported, expected in (([], ["go", "rust"]), (["rust"], ["rust", "go"])):
+            with self.subTest(reported=reported):
+                result = dict(_scored(100, 100, 100), languages_skipped=reported,
+                              per_language={"python": {"status": "PASS"},
+                                            "go": {"status": "SKIPPED", "error": "dataset missing"},
+                                            "rust": {"status": "SKIPPED", "error": "toolchain missing"}})
+                verdict = self.verdict({"multipl_e": result}, "coding")
+                self.assertEqual(verdict["verdict"], usecases.REVIEW)
+                self.assertEqual(verdict["scored"][0]["languages_skipped"], expected)
+                self.assertTrue(any("go" in reason and "rust" in reason for reason in verdict["reasons"]))
 
     def test_failed_check_caps_at_review(self):
         res = {"multipl_e": _scored(95, 90, 99), "strict_typing": {"status": "FAIL"}}
@@ -814,15 +1056,187 @@ class TestOutputBudget(unittest.TestCase):
         got = suites.output_budget(small, msgs, 32768)
         self.assertLess(got + len(str(msgs)) // 3, 32768)
         self.assertEqual(suites.output_budget(mock.MagicMock(max_context=524288), msgs, 32768), 32768)
-        # Less room than MIN_OUTPUT_TOKENS: ask for what fits, never more than
-        # the window (the old 1,024 floor overflowed it and the server
-        # rejected the request).
+        # Less room than MIN_OUTPUT_TOKENS: the prompt is too large for this
+        # server. A cut-off answer would be scored as the model's failure.
         tight = [{"role": "user", "content": "x" * (3 * (32768 - 512 - 700))}]
-        got = suites.output_budget(small, tight, 32768)
-        self.assertLess(got, suites.MIN_OUTPUT_TOKENS)
-        self.assertLessEqual(got + len(str(tight)) // 3, 32768)
+        with self.assertRaises(suites.PromptTooLargeError):
+            suites.output_budget(small, tight, 32768)
+        fits = [{"role": "user", "content": "x" * (3 * (32768 - 512 - 2000))}]
+        got = suites.output_budget(small, fits, 32768)
+        self.assertGreaterEqual(got, suites.MIN_OUTPUT_TOKENS)
+        self.assertLessEqual(got + len(json.dumps(fits)) // 3, 32768)
         huge = [{"role": "user", "content": "x" * 200000}]
-        self.assertEqual(suites.output_budget(small, huge, 32768), 256)
+        with self.assertRaises(suites.PromptTooLargeError):
+            suites.output_budget(small, huge, 32768)
+
+    def test_budget_never_exceeds_requested_or_remaining_space(self):
+        import suites
+        messages = [{"role": "user", "content": "x" * 1500}]
+        prompt_tokens = len(json.dumps(messages)) // 3
+        base = prompt_tokens + suites.CONTEXT_HEADROOM_TOKENS
+        client = mock.MagicMock(max_context=base + 2000)
+        self.assertEqual(suites.output_budget(client, messages, 4096), 2000)
+        self.assertEqual(suites.output_budget(client, messages, 128), 128)
+        # A small requested budget only needs its own size, not the minimum.
+        client.max_context = base + 128
+        self.assertEqual(suites.output_budget(client, messages, 128), 128)
+        client.max_context = base + 127
+        with self.assertRaises(suites.PromptTooLargeError):
+            suites.output_budget(client, messages, 128)
+        client.max_context = base + suites.MIN_OUTPUT_TOKENS - 1
+        with self.assertRaises(suites.PromptTooLargeError):
+            suites.output_budget(client, messages, 4096)
+
+    def test_retry_that_outgrows_the_context_keeps_the_graded_attempt(self):
+        import eval as ev
+        import suites
+        prompt = "x" * 300
+        first = len(json.dumps([{"role": "user", "content": prompt}])) // 3
+        c = mock.MagicMock(max_context=first + suites.CONTEXT_HEADROOM_TOKENS + 4096)
+        c.call.return_value = {"content": "y" * 12000, "error": None, "finish_reason": "stop"}
+        grade = lambda text, res: {"status": "FAIL", "feedback": "SyntaxError: bad"}  # noqa: E731
+        with mock.patch.object(ev, "log"):
+            out = ev.run_with_retries(c, prompt, grade, 4096, "Fix it.")
+        self.assertEqual(c.call.call_count, 1)
+        self.assertEqual(out["grade"]["status"], "FAIL")
+        self.assertEqual(out["fields"]["score"], 0.0)
+
+    def test_oversized_qualification_items_are_unscored_without_model_calls(self):
+        import suites
+        client = mock.MagicMock(max_context=2048)
+        items = [{"id": "short", "content": "short"}, {"id": "long", "content": "x" * 6000}]
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        grader = mock.Mock(return_value=(1.0, {}))
+        with mock.patch.object(suites, "log"):
+            result = suites.run_benchmark(
+                client, "test", items, lambda item: [{"role": "user", "content": item["content"]}],
+                grader, samples=2, repeats=1, workers=1, max_tokens=128)
+        self.assertEqual(client.call.call_count, 1)
+        self.assertEqual(grader.call_count, 1)
+        self.assertEqual(result["accuracy_pct"], 100.0)
+        self.assertEqual(result["unscored_items"], 1)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertIsNone(result["details"][1]["score"])
+        self.assertIn("context", result["details"][1]["attempts"][0]["error"].lower())
+
+    def test_simpleqa_summary_excludes_oversized_items(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "Answer: Paris", "completion_tokens": 2}
+        judge = mock.MagicMock()
+        items = [{"id": "short", "question": "Capital of France?", "answer": "Paris"},
+                 {"id": "long", "question": "x" * 6000, "answer": "Paris"}]
+        with mock.patch.object(suites, "load_items", return_value=(items, {})):
+            result = suites.run_simpleqa(client, judge, samples=2, repeats=1, workers=1)
+        self.assertEqual(client.call.call_count, 1)
+        self.assertEqual(result["unscored_items"], 1)
+        self.assertEqual(result["correct_pct"], 100.0)
+        self.assertEqual(result["not_attempted_pct"], 0.0)
+
+    def test_ifeval_summary_excludes_oversized_items(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "Paris", "completion_tokens": 1}
+        item = {"instruction_ids": ["punctuation:no_comma"], "kwargs": [{}]}
+        items = [dict(item, id="short", prompt="Say Paris"),
+                 dict(item, id="long", prompt="x" * 6000)]
+        with mock.patch.object(suites, "load_items", return_value=(items, {})):
+            result = suites.run_ifeval_full(client, None, samples=2, repeats=1, workers=1)
+        self.assertEqual(client.call.call_count, 1)
+        self.assertEqual(result["unscored_items"], 1)
+        self.assertEqual(result["prompt_strict_pct"], 100.0)
+        self.assertEqual(result["instruction_strict_pct"], 100.0)
+
+    def test_unscored_judge_errors_remain_infrastructure_failures(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        with mock.patch.object(suites, "log"):
+            result = suites.run_benchmark(
+                client, "test", [{"id": "x"}], lambda _: [{"role": "user", "content": "short"}],
+                lambda *_: (None, {"judge_error": "timeout"}), samples=1, repeats=1, workers=1)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["failure_kind"], "infra")
+        self.assertIn("judge: timeout", result["error"])
+
+    def test_multipl_e_aggregates_scored_and_oversized_items(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        items = [{"id": "short", "prompt": "short"}, {"id": "long", "prompt": "x" * 6000}]
+        with mock.patch.object(suites, "MULTIPL_E_LANGS", ["python"]), \
+             mock.patch.object(suites, "load_items", return_value=(items, {})), \
+             mock.patch.object(suites, "multipl_e_messages",
+                               side_effect=lambda item: [{"role": "user", "content": item["prompt"]}]), \
+             mock.patch.object(suites, "grade_multipl_e", return_value=(1.0, {"stage": "pass"})):
+            result = suites.run_multipl_e(client, None, samples=2, repeats=1, workers=1)
+        self.assertEqual(client.call.call_count, 1)
+        self.assertEqual((result["items"], result["unscored_items"], result["accuracy_pct"]), (1, 1, 100.0))
+        self.assertEqual(result["status"], "PARTIAL")
+
+    def test_multipl_e_propagates_unscored_repeats(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        items = [{"id": "short", "prompt": "short"}]
+        with mock.patch.object(suites, "MULTIPL_E_LANGS", ["python"]), \
+             mock.patch.object(suites, "load_items", return_value=(items, {})), \
+             mock.patch.object(suites, "multipl_e_messages",
+                               side_effect=lambda item: [{"role": "user", "content": item["prompt"]}]), \
+             mock.patch.object(suites, "grade_multipl_e", side_effect=[(1.0, {}), (None, {})]):
+            result = suites.run_multipl_e(client, None, samples=1, repeats=2, workers=1)
+        self.assertEqual((result["items"], result["unscored_items"], result["unscored_attempts"]), (1, 0, 1))
+        self.assertEqual(result["status"], "PARTIAL")
+
+    def test_multipl_e_missing_language_dataset_is_not_a_pass(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        items = [{"id": str(i), "prompt": "short"} for i in range(40)]
+        with mock.patch.object(suites, "MULTIPL_E_LANGS", ["python", "go"]), \
+             mock.patch("polyglot.toolchain_available", return_value=True), \
+             mock.patch.object(suites, "load_items",
+                               side_effect=lambda _, name: (items if name.endswith("_python") else [], {})), \
+             mock.patch.object(suites, "multipl_e_messages",
+                               side_effect=lambda item: [{"role": "user", "content": item["prompt"]}]), \
+             mock.patch.object(suites, "grade_multipl_e", return_value=(1.0, {})):
+            result = suites.run_multipl_e(client, None, samples=40, repeats=1, workers=1)
+        self.assertEqual(result["per_language"]["go"]["status"], "SKIPPED")
+        self.assertEqual(result["languages_skipped"], ["go"])
+        self.assertEqual(result["status"], "PARTIAL")
+        verdict = next(v for v in usecases.rank_use_cases({"multipl_e": result}) if v["key"] == "coding")
+        self.assertEqual(verdict["verdict"], usecases.REVIEW)
+        self.assertTrue(any("go" in reason and "unscored languages" in reason for reason in verdict["reasons"]))
+
+    def test_multipl_e_all_oversized_reports_the_context_reason(self):
+        client = mock.MagicMock(max_context=2048)
+        items = [{"id": "long", "prompt": "x" * 6000}]
+        with mock.patch.object(suites, "MULTIPL_E_LANGS", ["python"]), \
+             mock.patch.object(suites, "load_items", return_value=(items, {})), \
+             mock.patch.object(suites, "multipl_e_messages",
+                               side_effect=lambda item: [{"role": "user", "content": item["prompt"]}]):
+            result = suites.run_multipl_e(client, None, samples=1, repeats=2, workers=1)
+        client.call.assert_not_called()
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertEqual(result["unscored_attempts"], 2)
+        self.assertIn("context", result["error"].lower())
+
+    def test_multipl_e_compiler_infrastructure_failure_is_not_dataset_skip(self):
+        client = mock.MagicMock(max_context=2048)
+        client.call.return_value = {"content": "answer", "completion_tokens": 1}
+        items = [{"id": "short", "prompt": "short"}]
+        with mock.patch.object(suites, "MULTIPL_E_LANGS", ["python"]), \
+             mock.patch.object(suites, "load_items", return_value=(items, {})), \
+             mock.patch.object(suites, "multipl_e_messages",
+                               side_effect=lambda item: [{"role": "user", "content": item["prompt"]}]), \
+             mock.patch.object(suites, "grade_multipl_e",
+                               return_value=(None, {"stage": "infra", "detail": "compiler timed out"})):
+            result = suites.run_multipl_e(client, None, samples=1, repeats=1, workers=1)
+        self.assertEqual((result["status"], result["failure_kind"]), ("FAIL", "infra"))
+        self.assertIn("compiler timed out", result["error"])
+
+    def test_core_test_skips_when_its_prompt_cannot_fit(self):
+        import eval as ev
+        client = mock.MagicMock(max_context=300)
+        with mock.patch.object(ev, "log"):
+            result = ev.run_test_code_review_security(client)
+        client.call.assert_not_called()
+        self.assertEqual(result["status"], "SKIPPED")
+        self.assertIn("context", result["error"].lower())
 
     def test_report_states_the_budget(self):
         import report_md

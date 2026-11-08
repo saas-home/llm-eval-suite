@@ -24,13 +24,26 @@ import functools
 import atexit
 import urllib.request
 import urllib.error
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlparse
 
+try:
+    import pwd
+except ImportError:  # not POSIX: model code runs as the current user
+    pwd = None  # type: ignore[assignment]
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_PACKAGED_DATA_DIR = os.path.join(BASE_DIR, "llm_eval_data")
+_INSTALLED = os.path.isdir(_PACKAGED_DATA_DIR)
+DATA_DIR = _PACKAGED_DATA_DIR if _INSTALLED else os.path.join(BASE_DIR, "data")
+OUTPUT_BASE_DIR = os.getcwd() if _INSTALLED else BASE_DIR
 
 
 def _resolve_image_path():
+    if _INSTALLED:
+        image = os.path.join(BASE_DIR, "llm_eval_assets", "invoice.png")
+        if os.path.exists(image):
+            return image
     for rel in [os.path.join("assets", "invoice.png"), os.path.join("assets", "image.png"), "invoice.png", "image.png"]:
         p = os.path.join(BASE_DIR, rel)
         if os.path.exists(p):
@@ -39,10 +52,8 @@ def _resolve_image_path():
 
 
 IMAGE_PATH = _resolve_image_path()
-DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "results")
-DEFAULT_LOGS_DIR = os.path.join(BASE_DIR, "logs")
-os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
-os.makedirs(DEFAULT_LOGS_DIR, exist_ok=True)
+DEFAULT_RESULTS_DIR = os.path.join(OUTPUT_BASE_DIR, "results")
+DEFAULT_LOGS_DIR = os.path.join(OUTPUT_BASE_DIR, "logs")
 
 # ANSI terminal colors (respect NO_COLOR env and non-TTY pipes)
 NO_COLOR = bool(os.getenv("NO_COLOR")) or not sys.stdout.isatty()
@@ -66,10 +77,13 @@ def init_file_logger(log_file_path: str = None) -> str:
         log_file_path = os.path.join(DEFAULT_LOGS_DIR, f"eval_diag_{time.strftime('%Y%m%d_%H%M%S')}.log")
     try:
         close_file_logger()
-        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+        directory = os.path.dirname(log_file_path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         _LOG_FILE_HANDLE = open(log_file_path, "a", encoding="utf-8")
         return log_file_path
-    except Exception:
+    except (OSError, ValueError) as e:
+        sys.stderr.write(f"Warning: Could not open diagnostic log {log_file_path}: {e}\n")
         return ""
 
 
@@ -160,6 +174,10 @@ _RETRY_CAP_SECONDS = 8.0
 _RATE_LIMIT_BASE_SECONDS = 2.0
 _RATE_LIMIT_CAP_SECONDS = 60.0
 RATE_LIMIT_EXTRA_RETRIES = 4
+# Waits before each retry of a refused / unreachable connection (about 30 s in
+# all), so a server restart or model reload does not end a long run. After
+# them the endpoint is marked down and no more requests are sent.
+UNREACHABLE_RETRY_DELAYS = (5.0, 10.0, 15.0)
 
 
 def _parse_retry_after(http_error):
@@ -343,6 +361,36 @@ def weights_repo_from_path(path: str) -> Optional[str]:
 # the non-OpenAI ones).
 SAMPLING_KEYS = ("temperature", "top_p", "top_k", "min_p", "presence_penalty", "frequency_penalty",
                  "repetition_penalty")
+
+
+def _iter_sse_data(response):
+    """Yield SSE data, including multiline events and unseparated JSON chunks."""
+    pending = []
+    for raw in response:
+        line = raw.decode("utf-8").rstrip("\r\n")
+        if not line.strip():
+            if pending:
+                yield "\n".join(pending)
+                pending = []
+            continue
+        if not line.startswith("data:"):
+            continue
+        value = line[5:]
+        if value.startswith(" "):
+            value = value[1:]
+        if not pending and not value.strip():
+            continue
+        pending.append(value)
+        data = "\n".join(pending)
+        if data != "[DONE]":
+            try:
+                json.loads(data)
+            except json.JSONDecodeError:
+                continue
+        yield data
+        pending = []
+    if pending:
+        yield "\n".join(pending)
 
 
 class LLMClient:
@@ -666,6 +714,7 @@ class LLMClient:
 
         retry_index = 0
         rate_limit_retries = 0
+        unreachable_retries = 0
         while True:
             data = json.dumps(payload).encode("utf-8")
             req = urllib.request.Request(self.completions_url, data=data, headers=self._get_headers())
@@ -675,18 +724,25 @@ class LLMClient:
                     with urllib.request.urlopen(req, timeout=timeout) as resp:
                         res_json = json.loads(resp.read().decode("utf-8"))
                     total_time = time.perf_counter() - t0
-                    if isinstance(res_json, dict) and res_json.get("error"):
+                    if not isinstance(res_json, dict):
+                        return _failure_result("Malformed response: expected a JSON object", "infra",
+                                               total_time, raw=res_json)
+                    if res_json.get("error"):
                         err = res_json["error"]
                         err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
                         return _failure_result(f"API Error: {err_msg}",
                                                "client" if any(w in err_msg.lower() for w in ["invalid", "not found", "bad request"]) else "infra",
                                                total_time, raw=res_json)
-                    choices = res_json.get("choices") or [{}]
-                    choice = choices[0] if choices else {}
+                    choices = res_json.get("choices")
+                    if (not isinstance(choices, list) or not choices or not isinstance(choices[0], dict)
+                            or not isinstance(choices[0].get("message"), dict)):
+                        return _failure_result("Malformed response: expected a completion choice with a message",
+                                               "infra", total_time, raw=res_json)
+                    choice = choices[0]
                     if choice.get("finish_reason") == "error":
                         err_msg = choice.get("message", {}).get("content", "Server error during generation")
                         return _failure_result(f"Server finish_reason error: {err_msg}", "infra", total_time, raw=res_json)
-                    msg = choice.get("message", {})
+                    msg = choice["message"]
                     content = msg.get("content") or ""
                     reasoning = (
                         msg.get("reasoning_content")
@@ -729,19 +785,33 @@ class LLMClient:
                     tool_calls = None
                     tool_calls_acc = {}  # Accumulate streamed tool call deltas by index
                     stream_finish_reason = None
+                    stream_done = False
+                    saw_choice = False
                     with urllib.request.urlopen(req, timeout=timeout) as resp:
-                        for line in resp:
-                            l = line.decode("utf-8", errors="replace").strip()
-                            if not l.startswith("data:"):
-                                continue
-                            d_str = l[5:].strip()
+                        for d_str in _iter_sse_data(resp):
+                            d_str = d_str.strip()
                             if d_str == "[DONE]":
+                                stream_done = True
                                 break
                             try:
                                 c = json.loads(d_str)
-                            except Exception:
-                                continue
-                            if isinstance(c, dict) and c.get("error"):
+                            except json.JSONDecodeError as e:
+                                elapsed = time.perf_counter() - t0
+                                return _failure_result(
+                                    f"Malformed stream event: {e.msg}", "infra", elapsed,
+                                    ttft=(t_first - t0) if t_first is not None else elapsed,
+                                    text="".join(chunks), content="".join(content_chunks),
+                                    reasoning="".join(reasoning_chunks), prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens or token_count, cached_tokens=cached_tokens)
+                            if not isinstance(c, dict):
+                                elapsed = time.perf_counter() - t0
+                                return _failure_result(
+                                    "Malformed stream event: expected a JSON object", "infra", elapsed,
+                                    ttft=(t_first - t0) if t_first is not None else elapsed,
+                                    text="".join(chunks), content="".join(content_chunks),
+                                    reasoning="".join(reasoning_chunks), prompt_tokens=prompt_tokens,
+                                    completion_tokens=completion_tokens or token_count, cached_tokens=cached_tokens)
+                            if c.get("error"):
                                 err = c["error"]
                                 err_msg = err.get("message", str(err)) if isinstance(err, dict) else str(err)
                                 return _failure_result(
@@ -756,6 +826,7 @@ class LLMClient:
                                 cached_tokens = (c["usage"].get("prompt_tokens_details") or {}).get("cached_tokens", 0)
                             choices = c.get("choices", [])
                             if choices:
+                                saw_choice = True
                                 if choices[0].get("finish_reason") == "error":
                                     err_msg = choices[0].get("message", {}).get("content", "Server error during streaming")
                                     return _failure_result(
@@ -815,8 +886,20 @@ class LLMClient:
                                         token_count += 1
                     t_end = time.perf_counter()
                     total_time = t_end - t0
-                    ttft = (t_first - t0) if t_first else total_time
-                    gen_time = (t_end - t_first) if t_first else total_time
+                    ttft = (t_first - t0) if t_first is not None else total_time
+                    if not stream_done and not stream_finish_reason:
+                        return _failure_result(
+                            "Stream ended before a completion marker or finish reason", "infra", total_time,
+                            ttft=ttft, text="".join(chunks), content="".join(content_chunks),
+                            reasoning="".join(reasoning_chunks), prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens or token_count, cached_tokens=cached_tokens)
+                    if not saw_choice:
+                        return _failure_result(
+                            "Stream ended without a completion choice", "infra", total_time,
+                            ttft=ttft, prompt_tokens=prompt_tokens,
+                            completion_tokens=completion_tokens, cached_tokens=cached_tokens)
+                    gen_time = ((t_last - t_first) if t_last is not None and t_first is not None and t_last > t_first
+                                else 0.0)
                     comp_tok = completion_tokens if completion_tokens > 0 else token_count
                     speed = ((comp_tok - 1) / gen_time) if gen_time > 0 and comp_tok > 1 else (comp_tok / gen_time if gen_time > 0 else 0.0)
                     content_str = "".join(content_chunks)
@@ -873,12 +956,30 @@ class LLMClient:
                                        total_time, status_code=e.code)
             except Exception as e:
                 total_time = time.perf_counter() - t0
+                if stream and t_first is not None:
+                    return _failure_result(
+                        f"Stream interrupted: {e}", "infra", total_time, ttft=t_first - t0,
+                        text="".join(chunks), content="".join(content_chunks),
+                        reasoning="".join(reasoning_chunks), prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens or token_count, cached_tokens=cached_tokens,
+                        endpoint_unreachable=is_unreachable_error(e))
+                if is_unreachable_error(e):
+                    # A server restart or model reload refuses connections for
+                    # a few seconds; wait briefly before declaring it down.
+                    if unreachable_retries < len(UNREACHABLE_RETRY_DELAYS):
+                        unreachable_retries += 1
+                        log(f"  [retry] {self.base_url} unreachable ({e}); retry "
+                            f"{unreachable_retries}/{len(UNREACHABLE_RETRY_DELAYS)} in "
+                            f"{UNREACHABLE_RETRY_DELAYS[unreachable_retries - 1]:g}s", color=YELLOW)
+                        time.sleep(UNREACHABLE_RETRY_DELAYS[unreachable_retries - 1])
+                        continue
+                    return _failure_result(str(e), "infra", total_time, endpoint_unreachable=True)
                 # Transient connection/timeout errors use the short backoff.
                 if retry_index < retries:
                     retry_index += 1
                     time.sleep(_backoff_delay(retry_index - 1))
                     continue
-                return _failure_result(str(e), "infra", total_time, endpoint_unreachable=is_unreachable_error(e))
+                return _failure_result(str(e), "infra", total_time, endpoint_unreachable=False)
 
 
 def _failure_result(error: str, kind: str, total_time: float = 0.0, ttft: Optional[float] = None,
@@ -1003,6 +1104,59 @@ def _kill_group(proc) -> None:
     proc.wait()
 
 
+# When the suite runs as root (the Docker image), model code runs as this
+# user instead. That user owns only the run's work folder, so the code cannot
+# read root-only files (a mounted config.json with chmod 600) or write the
+# reports and logs. EVAL_CODE_USER=root keeps the old behavior.
+MODEL_CODE_USER_VAR = "EVAL_CODE_USER"
+DEFAULT_MODEL_CODE_USER = "evalcode"
+# Popen(user=, group=, extra_groups=) exists from Python 3.9. Python 3.8
+# switches the user in a small launcher that then runs the command.
+_POPEN_TAKES_USER = sys.version_info >= (3, 9)
+_SWITCH_USER_LAUNCHER = ("import os, sys; os.setgroups([]); os.setgid(int(sys.argv[2])); "
+                         "os.setuid(int(sys.argv[1])); os.execvp(sys.argv[3], sys.argv[3:])")
+_missing_code_user_warned = False
+
+
+def model_code_account() -> Optional[Tuple[int, int]]:
+    """(uid, gid) of the user that runs model code, or None to run it as the
+    current user: when the suite does not run as root, when the configured
+    user is root, or when the user does not exist (warned once)."""
+    global _missing_code_user_warned
+    if pwd is None or os.geteuid() != 0:
+        return None
+    name = os.environ.get(MODEL_CODE_USER_VAR) or DEFAULT_MODEL_CODE_USER
+    try:
+        entry = pwd.getpwnam(name)
+    except KeyError:
+        if not _missing_code_user_warned:
+            _missing_code_user_warned = True
+            log(f"Warning: user '{name}' does not exist, so model-written code runs as root and can read "
+                f"every file. Create it (see Dockerfile) or set {MODEL_CODE_USER_VAR}.", color=YELLOW)
+        return None
+    if entry.pw_uid == 0:
+        return None
+    return entry.pw_uid, entry.pw_gid
+
+
+def _give_work_dir(path: str, uid: int, gid: int) -> None:
+    """Gives the model-code user ownership of a run's work folder. The folder
+    must be inside the temp folder, so a wrong path never hands over the
+    suite's own files. The shared temp folder itself is left as it is.
+    Links are changed, never followed, and the walk holds each folder open,
+    so a link planted by an earlier run cannot redirect the change."""
+    tmp_root = os.path.realpath(tempfile.gettempdir())
+    real = os.path.realpath(path)
+    if real == tmp_root:
+        return
+    if os.path.commonpath([real, tmp_root]) != tmp_root:
+        raise ValueError(f"model code must run in a folder inside {tmp_root}, not {path}")
+    os.chown(real, uid, gid, follow_symlinks=False)
+    for _root, dirs, files, dir_fd in os.fwalk(real, follow_symlinks=False):
+        for name in dirs + files:
+            os.chown(name, uid, gid, dir_fd=dir_fd, follow_symlinks=False)
+
+
 def run_model_code(cmd, timeout: float, cwd: Optional[str] = None,
                    env: Optional[Dict[str, str]] = None) -> "subprocess.CompletedProcess":
     """Runs a command that executes model-written code (or builds it), like
@@ -1014,12 +1168,30 @@ def run_model_code(cmd, timeout: float, cwd: Optional[str] = None,
     or credentials of the suite (cwd: the temp folder; env: model_code_env()).
     The environment also holds a random run id (RUN_ID_VAR, kept when `env`
     already sets it), returned as `.run_id` for harness_passed.
+    When the suite runs as root, the command runs as the model-code user
+    (model_code_account), which owns `cwd`; `cwd` must then be inside the
+    temp folder.
     Raises subprocess.TimeoutExpired on timeout, after the kill."""
     env = dict(env if env is not None else model_code_env())
+    # Harness assertions must run even when the caller uses PYTHONOPTIMIZE.
+    env.pop("PYTHONOPTIMIZE", None)
     env.setdefault(RUN_ID_VAR, secrets.token_hex(16))
-    proc = subprocess.Popen(cmd, cwd=cwd if cwd is not None else tempfile.gettempdir(), env=env,
+    work_dir = cwd if cwd is not None else tempfile.gettempdir()
+    launch = list(cmd)
+    as_user: Dict[str, Any] = {}
+    account = model_code_account()
+    if account is not None:
+        uid, gid = account
+        _give_work_dir(work_dir, uid, gid)
+        if env.get("HOME") == os.environ.get("HOME"):  # root's home, unless the caller chose one
+            env["HOME"] = work_dir
+        if _POPEN_TAKES_USER:
+            as_user = {"user": uid, "group": gid, "extra_groups": []}
+        else:
+            launch = [sys.executable, "-c", _SWITCH_USER_LAUNCHER, str(uid), str(gid)] + launch
+    proc = subprocess.Popen(launch, cwd=work_dir, env=env,
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            start_new_session=True)
+                            start_new_session=True, **as_user)
     out: list = []
     err: list = []
     readers = [threading.Thread(target=_drain, args=(proc.stdout, out), daemon=True),
@@ -1185,4 +1357,3 @@ def assemble_python_script(code: str, preamble: str = "", harness: str = "") -> 
         sections.append(clean_harness)
 
     return "\n\n".join(sections)
-

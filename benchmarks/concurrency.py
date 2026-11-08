@@ -11,12 +11,18 @@ Tests:
 import json
 import time
 import urllib.request
-import urllib.error
 import threading
 import argparse
 import os
+import sys
 import uuid
 import statistics
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from benchmarks.common import ChunkMetrics, aggregate_decode_rate  # noqa: E402
+from client import LLMClient  # noqa: E402
 
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
@@ -65,103 +71,37 @@ def build_concurrency_prompt(target_tokens: int, client_id: int, total_clients: 
     return header + body + footer
 
 def client_task(client_id, prompt, api_url, model, max_tokens, temperature, results, lock, barrier, api_key=""):
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-    data = json.dumps(payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    req = urllib.request.Request(api_url, data=data, headers=headers)
-
-    t_first = None
-    t_last = None
-    token_count = 0
-    prompt_tokens = 0
-    completion_tokens = 0
-    error_msg = None
-
+    chunks = ChunkMetrics()
     if barrier:
         barrier.wait()
     t_start = time.perf_counter()
-
-    try:
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            for line in resp:
-                line = line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                line_data = line[5:].strip()
-                if line_data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(line_data)
-                except Exception:
-                    continue
-
-                if "error" in chunk:
-                    error_msg = str(chunk["error"])
-                    break
-
-                choices = chunk.get("choices") or []
-                if choices:
-                    choice = choices[0]
-                    if choice.get("finish_reason") == "error":
-                        error_msg = "Stream terminated with finish_reason: error"
-                        break
-                    delta = choice.get("delta", {})
-                    content = (
-                        delta.get("content")
-                        or delta.get("reasoning_content")
-                        or delta.get("reasoning")
-                        or delta.get("thought")
-                    )
-                    if content:
-                        now = time.perf_counter()
-                        if t_first is None:
-                            t_first = now
-                        t_last = now
-                        token_count += 1
-
-                if "usage" in chunk and chunk["usage"]:
-                    prompt_tokens = chunk["usage"].get("prompt_tokens", 0)
-                    completion_tokens = chunk["usage"].get("completion_tokens", 0)
-    except Exception as e:
-        error_msg = str(e)
-
+    result = LLMClient(api_url, api_key=api_key, model=model).call(
+        [{"role": "user", "content": prompt}], max_tokens=max_tokens, temperature=temperature,
+        stream=True, timeout=300, chunk_callback=chunks,
+    )
     t_end = time.perf_counter()
-    ttft = (t_first - t_start) if t_first else 0.0
-    duration = (t_end - t_start)
-    if completion_tokens == 0:
-        completion_tokens = token_count
-    if prompt_tokens == 0:
-        prompt_tokens = int(len(prompt.split()) * 1.33)
-
-    decode_time = (t_last - t_first) if (t_first and t_last and t_last > t_first) else 0.0
-    decode_speed = (completion_tokens - 1) / decode_time if (decode_time > 0 and completion_tokens > 1) else 0.0
+    ttft = result["ttft"] if not result.get("error") else 0.0
+    prompt_tokens = result["prompt_tokens"] or int(len(prompt.split()) * 1.33)
     prefill_speed = (prompt_tokens / ttft) if ttft > 0 else 0.0
 
     with lock:
         results[client_id] = {
             "prompt": prompt[:40] + ("..." if len(prompt) > 40 else ""),
             "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
+            "completion_tokens": result["completion_tokens"],
             "ttft_s": ttft,
-            "total_time_s": duration,
-            "decode_tok_s": decode_speed,
+            "total_time_s": result["total_time"],
+            "decode_tok_s": result["decode_speed"],
             "prefill_tok_s": prefill_speed,
             "t_dispatch": t_start,
-            "t_first": t_first if t_first else (t_start + ttft),
-            "t_last": t_last if t_last else t_end,
-            "error": error_msg
+            "t_first": chunks.first if chunks.first is not None else (t_start + ttft),
+            "t_last": chunks.last if chunks.last is not None else t_end,
+            "error": result.get("error"),
+            "failure_kind": result.get("failure_kind"),
+            "endpoint_unreachable": result.get("endpoint_unreachable", False)
         }
 
-def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature, api_key=""):
+def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature, api_key="", server_down=None):
     table_header = (
         f"{'Context':>8} | {'Prompt Tok':>10} | {'Compl Tok':>9} | {'Mean TTFT (s)':>14} | "
         f"{'Avg Prefill (t/s)':>17} | {'Agg Prefill (t/s)':>17} | "
@@ -180,7 +120,6 @@ def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature,
             results = {}
             lock = threading.Lock()
             threads = []
-            t_start = time.perf_counter()
 
             for i in range(c):
                 p = build_concurrency_prompt(ctx, i + 1, c)
@@ -193,14 +132,13 @@ def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature,
 
             for t in threads:
                 t.join()
-            wall_time = time.perf_counter() - t_start
 
-            tot_prompt = sum(r["prompt_tokens"] for r in results.values())
-            tot_completion = sum(r["completion_tokens"] for r in results.values() if not r.get("error"))
             errors = [r["error"] for r in results.values() if r.get("error")]
             if errors:
                 has_errors = True
             valid_results = [r for r in results.values() if not r.get("error")]
+            tot_prompt = sum(r["prompt_tokens"] for r in valid_results)
+            tot_completion = sum(r["completion_tokens"] for r in valid_results)
 
             ttfts_s = [r["ttft_s"] for r in valid_results if r["ttft_s"] > 0]
             mean_ttft_s = statistics.mean(ttfts_s) if ttfts_s else 0.0
@@ -208,20 +146,30 @@ def run_matrix_benchmark(clients, contexts, api_url, model, tokens, temperature,
             # Prefill throughput: aggregate batch throughput and per-client average
             max_ttft_s = max((r["ttft_s"] for r in valid_results), default=0.0)
             agg_prefill = (tot_prompt / max_ttft_s) if max_ttft_s > 0 else 0.0
-            avg_prefill = (agg_prefill / c) if c > 0 else 0.0
+            prefill_speeds = [r["prefill_tok_s"] for r in valid_results if r["ttft_s"] > 0]
+            avg_prefill = statistics.mean(prefill_speeds) if prefill_speeds else 0.0
 
             # Decode throughput: aggregate across concurrent streams and per-client average
             decode_speeds = [r["decode_tok_s"] for r in valid_results if r["decode_tok_s"] > 0]
-            agg_decode = sum(decode_speeds)
-            avg_decode = (agg_decode / c) if c > 0 else 0.0
+            agg_decode = aggregate_decode_rate(valid_results, "t_first", "t_last")
+            avg_decode = statistics.mean(decode_speeds) if decode_speeds else 0.0
 
-            status = "PASS" if not errors and tot_completion > 0 else "FAIL"
+            completed = len(valid_results) == c and all(r["completion_tokens"] > 0 for r in valid_results)
+            status = "ERROR" if errors else ("PASS" if completed else "FAIL")
+            if status != "PASS":
+                has_errors = True
             row = (
                 f"{ctx:>8,d} | {tot_prompt:>10,d} | {tot_completion:>9,d} | {mean_ttft_s:>14.2f} | "
                 f"{avg_prefill:>17.1f} | {agg_prefill:>17.1f} | "
                 f"{avg_decode:>16.1f} | {agg_decode:>16.1f} | {status:>8}"
             )
             print(row)
+            for error in sorted(set(errors)):
+                print(f"  Request error: {error}")
+            if any(r.get("endpoint_unreachable") for r in results.values()):
+                if server_down is not None:
+                    server_down.set()
+                return False
         print("-" * len(table_header))
     return not has_errors
 
@@ -262,14 +210,15 @@ def main():
     h_before = check_health(health_url, api_key=args.api_key)
     print(f"Health check before test: {h_before}\n")
 
-    success = run_matrix_benchmark(clients, contexts, args.url, args.model, args.tokens, args.temperature, args.api_key)
+    server_down = threading.Event()
+    success = run_matrix_benchmark(clients, contexts, args.url, args.model, args.tokens, args.temperature, args.api_key, server_down)
 
-    h_after = check_health(health_url, api_key=args.api_key)
+    h_after = {"error": "Server unreachable; health check not sent"} if server_down.is_set() else check_health(health_url, api_key=args.api_key)
     print(f"\nHealth check after test: {h_after}")
     print("=" * 88)
 
     if not success:
-        raise SystemExit(1)
+        raise SystemExit(3 if server_down.is_set() else 1)
 
 if __name__ == "__main__":
     main()

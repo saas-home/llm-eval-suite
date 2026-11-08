@@ -12,7 +12,7 @@ One command tests two things:
 - **The server:** verified parallel capacity, prefill and decode speed, prefix caching, abort recovery, and recall at the full configured context.
 - **The model:** coding in six languages (compiled and run), reasoning, math, science, medicine, law, writing, tool calling and prompt-injection defense.
 
-It works with [vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [llama.cpp](https://github.com/ggerganov/llama.cpp), [Ollama](https://github.com/ollama/ollama), [TGI](https://github.com/huggingface/text-generation-inference), exllama-based servers and commercial APIs. The output is a terminal scorecard, a JSON report and a log file.
+It works with [vLLM](https://github.com/vllm-project/vllm), [SGLang](https://github.com/sgl-project/sglang), [llama.cpp](https://github.com/ggerganov/llama.cpp), [Ollama](https://github.com/ollama/ollama), [TGI](https://github.com/huggingface/text-generation-inference), exllama-based servers and commercial APIs. The output is a terminal scorecard, a JSON report, a Markdown decision report and a log file.
 
 ## Contents
 
@@ -41,10 +41,10 @@ It works with [vLLM](https://github.com/vllm-project/vllm), [SGLang](https://git
 | **No unverified PASS** | If a grader cannot run the code (for example, no compiler), the result is PARTIAL at most. |
 | **Server faults are kept separate** | Timeouts, HTTP 5xx and 429 lower the completion rate. They do not lower the model score. If the server goes down, the run stops and the report is marked incomplete. |
 | **Phased runs** | Timing tests run alone on an idle server. The other tests then run in parallel, limited to the capacity that Test 3 measured. A full run takes about half the sequential time. |
-| **Decision report** | A Markdown report for three readers: which use cases the model suits (ranked, with evidence and wrong-answer examples), how it compares with other runs and vendor-published scores, and how many servers your workload needs. |
-| **Your workload, measured** | Test 46 sends your scenario (default: 4 users, new 200K-token documents, thinking on, ~2,000-token answers, users arriving 3-10 s apart) and reports what each user waits for against workable-speed gates. |
+| **Decision report** | A Markdown report that ranks the use cases the model suits, with evidence and wrong-answer examples. It compares the model with other runs and vendor-published scores, and says how many servers your workload needs. |
+| **Your workload, measured** | Test 46 sends your scenario and measures what each user waits for against speed gates. The default is 4 users 3-10 s apart, each with a new 200K-token document, thinking on and a ~2,000-token answer. |
 | **Statistics for qualification** | Qualification suites use seeded samples, repeats and 95% confidence intervals, with pass marks from published scores of comparable models. |
-| **Zero dependencies, offline** | Python 3.8+ standard library only. All datasets and test frameworks are bundled. The Docker image grades code with no network access. |
+| **Zero dependencies, offline** | Python 3.8+ standard library only. All datasets and test frameworks are bundled. Code grading downloads nothing. |
 
 ## Quick start (Docker)
 
@@ -57,6 +57,30 @@ git clone git@github.com:saas-home/llm-eval-suite.git
 cd llm-eval-suite
 docker build -t llm-eval-suite:latest .
 ```
+
+**Interactive startup:** on Linux, run:
+
+```bash
+./scripts/start_eval.sh
+```
+
+The launcher asks for the model endpoint, optional model ID and API key, context
+window, optional independent judge, test mode (`all`, `core` or `quick`), coding
+language and GPU hardware description. Defaults are every test and all six coding
+languages. It checks Docker, offers to build a missing image, asks for confirmation,
+probes the model endpoint, then starts the evaluation. An existing image is reused;
+rebuild it with the command above after changing the suite.
+
+API-key entry is hidden. Model and judge details are passed through Docker's
+`OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`, `MAX_CONTEXT` and `JUDGE_*`
+environment variables; no configuration or credential file is written or mounted.
+Blank API-key answers mean no authentication, even if your shell has an existing
+key. Docker administrators can still inspect container environment variables.
+Reports and logs are saved in this checkout's `results/` and `logs/`, regardless
+of where you launch the script. Model code still has the container's network access;
+see [Running model code safely](#running-model-code-safely).
+
+For manual commands instead:
 
 **1. Check that the server answers** (under 5 s):
 
@@ -140,9 +164,11 @@ python3 eval.py -e http://127.0.0.1:8080/v1 -q     # short smoke test
 > [!WARNING]
 > On the host, the compilers for TypeScript, Go, Java, Rust and C# are usually missing. Tests 20-25 then use a structural check for those languages, and the result is PARTIAL at most.
 
+To install the tool, run `python3 -m pip install .`. This adds the `llm-eval`, `llm-compare` and `llm-judge` commands, with no third-party dependencies. Installed commands read `config.json` and write `results/` and `logs/` in the current directory. A source checkout uses its own directory.
+
 ## Latest result
 
-`Qwen3.8-Flash-Next-FP4` on vLLM (524,288-token context), 2026-11-06:
+`Qwen3.8-Flash-Next-FP4` on vLLM (524,288-token context), 2026-11-06. This run is from before the 2026-11-07 test removals, so it scores 27 core tests.
 
 | | |
 |---|---|
@@ -172,6 +198,11 @@ Each test has a number, a name for `--test`, and a group for `--suite`. `--suite
 | 7 | Prefix cache | Time to first token for a cold and a warm request with the same prefix |
 | 8 | Client abort | Closes the socket during generation, then checks that the next request is served |
 | 11 | API errors | Invalid requests get HTTP 400/422, not 5xx |
+
+#### Multi-adapter (`--suite multi_lora`)
+
+| # | Test | What it checks |
+|:---:|---|---|
 | 31 | Multi-adapter | Routes to several LoRA adapters at once, with no cross-talk. SKIPPED on a single-model server. |
 
 #### Long context (`--suite context`)
@@ -179,7 +210,7 @@ Each test has a number, a name for `--test`, and a group for `--suite`. `--suite
 | # | Test | What it checks |
 |:---:|---|---|
 | 12 | Full context | Steps from 4k tokens to 98% of the configured context. Each step hides a value at 85% depth, and the final answer must repeat it. Reports prefill and decode per step. A report-only check then sends long prompts to every verified slot at once and reads the KV-cache size. If the reported KV cache cannot hold every slot at full context, that attempt is not sent, and only the context ÷ slots attempt runs. |
-| 13 | Graph search | Multi-hop route through 32k tokens with outdated and revoked distractors: the model must pick the current version, as with an amended contract clause |
+| 13 | Graph search | Multi-hop route through 32k tokens with outdated and revoked distractors. The model must pick the current version of each fact. |
 
 #### API contract and instruction following (`--suite contract`)
 
@@ -215,7 +246,7 @@ Tests 20-25 run in one language (`-l python`, the default) or in all six (`-l po
 | Rust | `rustc --test`, `rustc -D warnings` (edition 2024) |
 | C# | `dotnet build`, xUnit v3 + Moq, nullable warnings as errors |
 
-**Self-correction (Tests 14, 17, 20, 21, 23, 24, 25).** When an answer fails for a reason that is the model's (a rejected patch, a compile or type error, a failing test), the model gets the error a developer would read and tries again, up to 2 times. A fix on the first try, after 1 retry or after 2 retries is a PASS scored 1.0, 0.9 or 0.8. Not fully fixed after 2 retries is a FAIL. An answer that could not be checked, or a failed request, is not retried. Tests 22 (security review) and 32 (MultiPL-E) are graded on the first answer only.
+**Self-correction (Tests 14, 17, 20, 21, 23, 24, 25).** An answer can fail because of the model: a rejected patch, a compile or type error, or a failing test. The model then gets the error message and tries again, up to 2 times. A fix on the first try, after 1 retry or after 2 retries is a PASS scored 1.0, 0.9 or 0.8. Not fully fixed after 2 retries is a FAIL. An answer that could not be checked, or a failed request, is not retried. Tests 22 (security review) and 32 (MultiPL-E) are graded on the first answer only.
 
 #### Safety
 
@@ -223,11 +254,11 @@ Tests 20-25 run in one language (`-l python`, the default) or in all six (`-l po
 |:---:|---|---|
 | 26 | Prompt injection | Ignores instructions hidden in untrusted input. Counts as a safety check in every use case. |
 
-Reasoning, medical and writing skills are measured by the qualification suites below (MMLU-Pro, MATH-500, BBH, MedQA and others, full IFEval), with 50 questions each instead of 2-10.
+The qualification suites below measure reasoning, medical and writing skills with 50 questions per benchmark. They use MMLU-Pro, MATH-500, BBH, MedQA, full IFEval and others.
 
 ### Qualification and workload tests (32-48)
 
-Suites that qualify a model for a use: coding, medical, academic, writing, personal assistant and legal. Test 47 (contract review on full contracts) and Test 48 (summarisation) add document work. Test 46 measures your own workload. They run by default; each also runs alone with `--suite <name>`. See [Qualification suites](#qualification-suites-tests-32-48).
+Suites that qualify a model for a use: coding, medical, academic, writing, personal assistant and legal. Test 47 (contract review on full contracts) and Test 48 (summarisation) add document work. Test 46 measures your own workload. They run by default. To run one suite alone, use `--suite <name>`. See [Qualification suites](#qualification-suites-tests-32-48).
 
 ## How a run works
 
@@ -249,7 +280,7 @@ More rules for the parallel phase:
 - Judge requests have a separate limit: `--judge-parallel`, else the judge server's reported slots, else 2.
 - With `--language polyglot`, each language of Tests 20-25 is a separate job.
 - The output of each test prints as one block when the test ends.
-- C# builds (restore and compile) run one at a time, because they share the NuGet folder; the built programs run in parallel.
+- C# builds (restore and compile) run one at a time, because they share the NuGet folder. The built programs run in parallel.
 - Speeds measured in this phase have `measured_under_load: true`. The summary averages use only the isolated tests.
 
 `--sequential` runs every test one at a time in catalog order. The report records the schedule under `schedule`: phases, limits, limit sources, and wall time per phase.
@@ -272,19 +303,24 @@ Every run writes `<report>.md` next to the JSON report. It is written for three 
 | Approving for a team | Someone approving the model for a use | Per use case: verdict, evidence, accuracy with CI, share of questions right on every repeat, checks, and examples of wrong answers |
 
 **Verdicts.** Each of 11 use cases gets one:
-- **Recommended** needs every scored test's 95% CI lower bound at or above its pass mark, at least 85% of questions right on every repeat (pass^k), no failed check, and at least 40 scored questions.
+- **Recommended** needs all of these:
+  - every scored test's 95% CI lower bound at or above its pass mark
+  - at least 85% of questions right on every repeat (pass^k)
+  - no failed check and no skipped MultiPL-E language
+  - at most 5% unscored attempts and 5% unscored items per test (the reasons list any unscored share)
+  - at least 40 scored questions
 - **Usable with human review** needs every mean at or above its floor.
 - **Not recommended** is anything below that.
 
-A use case is as strong as its weakest scored test. Next to the verdict, each use case shows its **low, average and high**: the tests furthest below and above their own pass marks (tests use different scales: 10% is par on SimpleQA, not on MedQA), and the item-weighted average accuracy. Public benchmarks are labelled, because their items may be in training data. A use case graded without a judge cannot be Recommended.
+A use case is as strong as its weakest scored test. Next to the verdict, each use case shows its **low, average and high**. Low and high are the tests furthest below and above their own pass marks. Tests use different scales, so 10% is a pass on SimpleQA but not on MedQA. The average is the item-weighted accuracy. Public benchmarks are labelled, because their items may be in training data. A use case graded without a judge cannot be Recommended.
 
-**Workload (Test 46).** One user alone, then all users with random 3-10 s gaps (fixed seed). Each user sends a new set of contracts (a unique tag at the start, so nothing is cached), asks for one lawyer-labelled clause and a review of about 1,500 words. A user meets the gates when the first token, the complete answer and the decode speed are within the limits. Goodput is the number of users who meet them; "servers needed" assumes identical servers behind a load balancer.
+**Workload (Test 46).** One user runs alone, then all users start with random 3-10 s gaps (fixed seed). Each user sends a new set of contracts with a unique tag at the start, so nothing is cached. Each user asks for one lawyer-labelled clause and a review of about 1,500 words. A user meets the gates when the first token, the complete answer and the decode speed are within the limits. Goodput is the number of users who meet them. "Servers needed" assumes identical servers behind a load balancer.
 
-**Comparison.** `--compare-with results/old.json` (or `compare_reports` in config.json) adds earlier runs. Vendor-published scores come from `data/reference/published_scores.json` when the model family matches. They use the vendor's own harness, so they compare models with each other, not with a run here.
+**Comparison.** `--compare-with results/old.json` (or `compare_reports` in config.json) adds earlier runs. Vendor-published scores come from `data/reference/published_scores.json` when the model family matches. They use the vendor's own harness. Compare them with other vendor scores only, not with a run of this suite.
 
 **Sampling.** `--sampling "temperature=1.0,top_p=0.95,top_k=20"` (or `sampling` in config.json) sets the model card's recommended settings for the repeated benchmarks and Test 46. The report records them.
 
-**Judge check.** With a judge configured, the run checks it against public expert ratings (SummEval, LLMBar) and the report states the agreement next to every judged result. Optionally, list your own verdicts for judged criteria in a JSON file (`[{"test", "item", "criterion", "human": true}]`) and set `judge_labels`; the report then also states how often the judge agreed with you.
+**Judge check.** With a judge configured, the run checks the judge against public expert ratings (SummEval, LLMBar). The report states the agreement next to every judged result. To compare the judge with your own verdicts, write them to a JSON file (`[{"test", "item", "criterion", "human": true}]`) and set `judge_labels`. The report then also states how often the judge agreed with you.
 
 To rebuild the report, or to compare after the fact:
 
@@ -295,16 +331,16 @@ python3 report_md.py results/run.json --hardware "Nvidia DGX Spark - 128 GB"   #
 
 ## Qualification suites (Tests 32-48)
 
-These suites use seeded samples of official benchmarks and original task sets. Each score has a 95% confidence interval and the share of questions answered right on every repeat. They run by default (`--suite all`); `--suite core` leaves them out.
+These suites use seeded samples of official benchmarks and original task sets. Each score has a 95% confidence interval and the share of questions answered right on every repeat. They run by default (`--suite all`). `--suite core` leaves them out.
 
 | Suite | Tests | What it measures |
 |---|---|---|
 | `coding` | 4, 14, 17, 20-25, 32 | Code that compiles and passes tests in six languages (MultiPL-E and the coding tests) |
-| `medical` | 28, 33-36 | MedQA (USMLE), MedMCQA, PubMedQA, MMLU medical subjects |
-| `academic` | 16, 18, 19, 29, 37-39 | MMLU-Pro, MATH-500, BIG-Bench Hard and the reasoning tests |
-| `writing` | 27, 40, 41, 48 | Full IFEval, emails, texts and social posts, summaries of US bills (BillSum) |
+| `medical` | 33-36 | MedQA (USMLE), MedMCQA, PubMedQA, MMLU medical subjects |
+| `academic` | 37-39 | MMLU-Pro, MATH-500, BIG-Bench Hard |
+| `writing` | 40, 41, 48 | Full IFEval, emails, texts and social posts, summaries of US bills (BillSum) |
 | `personal` | 42-44 | SimpleQA (facts without search), XSTest (over-refusal), everyday assistant tasks |
-| `legal` | 45, 47 | LegalBench CC-BY-4.0 tasks; clause questions on full contracts (CUAD, lawyer-labelled; a third ask for a clause the contract does not have) |
+| `legal` | 45, 47 | LegalBench CC-BY-4.0 tasks. Clause questions on full contracts (CUAD, lawyer-labelled). A third of the questions ask for a clause that the contract does not have. |
 | `qualification` | all of the above | |
 | `workload` | 46 | Your workload: concurrent users with long new documents, against speed gates (runs alone, before the parallel phase) |
 
@@ -331,7 +367,7 @@ docker run --rm --network host -v "$PWD/results:/app/results" llm-eval-suite:lat
   | 48 Summarisation | A reference point counts as covered when half of its content words appear. Invented statements are not detected. |
 
   Results graded this way say "no judge" or "partly no judge", and their use case cannot be Recommended.
-- **Judge check.** With a judge, the run also checks it against expert ratings in the background: 40 SummEval summaries (faithfulness) and 40 LLMBar answer pairs (instruction following), both MIT-licensed and bundled. The report states how often the judge agreed.
+- **Judge check.** With a judge, the run also checks the judge against expert ratings in the background. It uses 40 SummEval summaries (faithfulness) and 40 LLMBar answer pairs (instruction following), both MIT-licensed and bundled. The report states how often the judge agreed.
 - **Data** is in `data/suites/`. Sources, licenses and checksums are in [`data/suites/SOURCES.md`](data/suites/SOURCES.md). To download it again, run `python3 scripts/fetch_benchmark_data.py`.
 
 <details>
@@ -366,7 +402,7 @@ The marks come from published scores of comparable models (`PASS_MARKS` in `suit
 ```bash
 --suite all          # default: every test, the full decision report
 --suite core         # Tests 1-31 only
---suite serving | contract | context | swe | multi_adapter               # core groups
+--suite serving | contract | context | swe | multi_lora               # core groups
 --suite coding | medical | academic | writing | personal | legal | qualification | workload
 --test 3,12          # by number
 --test 20-25         # by range (removed numbers are skipped)
@@ -411,7 +447,9 @@ Put run settings in `config.json` (or `.env`). A CLI flag overrides the file.
 }
 ```
 
-`max_output_tokens` (or `--max-output-tokens`) is the output budget per answer, thinking included, for the coding and accuracy tests. The default is 32,768. Thinking models can need more: Qwen3.8-Flash-Next's card allows 262,144 reasoning tokens. Each request is capped so the prompt and the answer fit the context window. Test 46 uses its `workload` setting.
+`max_output_tokens` (or `--max-output-tokens`) is the output budget per answer, thinking included, for the coding and accuracy tests. The default is 32,768. Thinking models can need more. For example, Qwen3.8-Flash-Next's card allows 262,144 reasoning tokens. The tool caps the budget so that the estimated prompt, a safety margin and the answer fit the context. The estimate cannot guarantee a fit for every tokenizer. Sometimes fewer than 1,024 tokens are left for the answer, or less than a smaller requested budget. Then the core test is skipped, or the qualification item is left unscored. The model does not fail on an answer the context cut off. If a self-correction retry no longer fits, the earlier graded attempt counts. Test 46 uses its `workload` setting.
+
+Test 46 is skipped with a reason if its output budget and a full focus contract cannot fit the server's context window. Reduce the workload's `max_output_tokens` or use a server with a larger context.
 
 The Docker image does not contain `config.json`. Mount it (`-v "$PWD/config.json:/app/config.json:ro"`) or use the flags `--sampling`, `--hardware`, `--max-output-tokens` and `--compare-with`.
 
@@ -432,7 +470,19 @@ python3 compare.py results/modelA.json results/modelB.json -o comparison.md
 python3 compare.py --live \
   --endpoint1 http://127.0.0.1:8080/v1 --model1 model-a \
   --endpoint2 http://10.0.0.2:8000/v1 --model2 model-b -o arena.md
+
+# Independent 10-point code-quality judge for the configured model
+python3 judge_eval.py --single \
+  --judge-endpoint http://127.0.0.1:8888/v1 --judge-model judge-model
 ```
+
+The standalone 10-point judge (`judge_eval.py` or `llm-judge`) needs a judge that is not one of the tested models.
+
+- **Judge settings.** Use `--judge-endpoint`, `--judge-model` and `--judge-api-key`. You can also use the `judge` object in `config.json`, or the `JUDGE_ENDPOINT`, `JUDGE_MODEL` and `JUDGE_API_KEY` environment variables. CLI flags override the file, and the file overrides the environment.
+- **Judge model.** If you omit it, the tool tries to discover it. One endpoint can serve the judge and a tested model if they are different models.
+- **Scoring.** A failed request or an invalid score leaves the task unscored. A model gets a rank only if all its tasks have a score. An empty answer is the model's failure: it scores 0, and the judge still scores the other model's answer.
+- **Incomplete runs.** If a server is unreachable, the tool sends no more tasks. It writes the reports and exits with code 3.
+- **Output throughput.** Generated tokens divided by the full wall time of the request, prompt processing included. It averages successful answers only. If the server does not report usage, the tool estimates the token count. If no answer was measured, it reports N/A (`null` in JSON).
 
 ### Other commands
 
@@ -487,6 +537,7 @@ The report also has a workload matrix. It rates the model for agents, coding, ma
 - **Completion rate.** The share of tests that finished without a server fault (network error, HTTP 5xx, 429).
 - **Token economy.** Tokens generated by passed tests ÷ (passed tests + 0.5 × PARTIAL tests). Lower means more concise.
 - **Mean decode throughput and mean TTFT.** Averages over the tests that report them. In a phased run, only isolated tests count.
+- **Stream decode timing.** Decode throughput uses the time between the first and last generated chunks. If only one chunk arrives, the tool cannot measure throughput and reports zero.
 - **Efficiency index (0 to 100).** The sum of three parts, with a maximum of 100:
   - 0.6 × effectiveness
   - 0.25 × speed score (1.5 × decode tok/s, maximum 100)
@@ -497,19 +548,32 @@ The report also has a workload matrix. It rates the model for agents, coding, ma
 
 ### If the tested server goes down
 
-When the tested server stops accepting connections during a run (connection refused, host unreachable, name not resolved), the run stops. It does not wait for the server to come back.
+The tested server can stop accepting connections during a run (connection refused, host unreachable, name not resolved). The tool then retries the request after 5, 10 and 15 seconds, so a server restart or model reload does not end the run. If the server still does not answer, the run stops:
 
 1. The log prints `[SERVER DOWN]`. No more requests go to the server.
 2. Tests that are already running end with an infra failure. Tests that have not started are not run.
 3. The JSON report is still written. `"incomplete"` gives the reason and lists the tests that did not run. Those tests show as SKIPPED.
 4. The program exits with code 3, so the container stops.
 
-Timeouts and HTTP 5xx do not stop the run: a busy server can recover from them.
+Timeouts and HTTP 5xx do not stop the run, because a busy server can recover from them.
 
 ## Running model code safely
 
 > [!WARNING]
 > Tests 4, 14, 17, 20, 21, 23, 25 and 32 run code that the model wrote. Run untrusted models in the Docker image.
+
+In the Docker image, the suite runs as root, and model code runs as the user `evalcode` (uid and gid 64999). That user owns only the folder of the current run, so model code:
+
+- cannot write to `results/` or `logs/`, so it cannot change a report
+- cannot read files that only their owner can read. Set `chmod 600 config.json .env` on the host before you mount them.
+- can read other files in the container that every user can read
+- can reach the network with the same access as the container (`--network host` in the examples above)
+
+The suite also removes environment variables with credential-like names (`*KEY*`, `*TOKEN*`, `*SECRET*` and similar), and a time limit and an output cap stop runaway code.
+
+On the host, model code runs as your own user and can read and write everything you can. If you run the suite as root outside the image, create the user first (see the `Dockerfile`), or the suite warns and runs model code as root. `EVAL_CODE_USER` selects a different user.
+
+For an untrusted model, also use a dedicated host or VM, and give the container network access to the model server and the judge only.
 
 To disable code execution:
 
@@ -527,6 +591,15 @@ With execution disabled:
 
 Scores from a run with `--no-execute` are not comparable with scores from a run that executes code.
 
+The standalone probes in `benchmarks/` follow these rules:
+
+- `adversarial.py` and `code_synthesis.py` run model code. `EVAL_SAFE=1` disables execution, and syntax-only checks then give PARTIAL at most.
+- The adversarial YAML check can verify only simple scalar mappings without a YAML dependency. Other formats give PARTIAL.
+- `adversarial.py`, `code_synthesis.py`, `precision.py` and `needle_recall.py` report a failed request as ERROR and exit with code 3. If the server is unreachable, they stop and list the checks that did not run.
+- `reasoning.py` checks topic coverage only, not whether the reasoning is correct. A matching answer gives PARTIAL.
+- `reasoning.py` and `concurrency.py` calculate total decode speed over the time span of the generated chunks. `concurrency.py` also reports the mean rate per client.
+- `context.py` accepts `--out` for JSON results. If the server does not report usage, it marks prompt-token counts as estimated.
+
 ## Repository layout
 
 | Path | Content |
@@ -540,10 +613,13 @@ Scores from a run with `--no-execute` are not comparable with scores from a run 
 | `client.py` | HTTP client, retries, request limit, logging, server metrics |
 | `reporting.py` | Scoring, scorecards, comparison |
 | `compare.py` | Compares reports or live servers |
+| `judge_eval.py` | Standalone 10-point code-quality judge |
+| `env_loader.py`, `domain_benchmarks.py` | config.json and `.env` loading, shared answer extraction |
+| `benchmarks/` | Standalone probe scripts |
 | `data/` | Bundled datasets and coding test packs |
 | `scripts/` | Data download, toolchain setup, test-pack check |
 | `tests/` | Unit tests (`unittest`) |
-| `results/`, `logs/` | Run output (git ignores it, except the report) |
+| `results/`, `logs/` | Run output. git ignores these folders, except `results/EVAL_REPORT.md` and the JSON report it describes. |
 
 [AGENTS.md](AGENTS.md) has the rules for contributors. [CHANGELOG.md](CHANGELOG.md) lists the changes.
 

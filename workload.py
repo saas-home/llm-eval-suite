@@ -42,9 +42,14 @@ DEFAULT_WORKLOAD: Dict[str, Any] = {
     "gates": {"first_token_s": 90, "complete_s": 300, "per_user_tok_s": 15},
 }
 PROMPT_MARGIN_TOKENS = 1000         # chat template and sizing error
+MIN_PROMPT_TOKENS = 1000
 CALIBRATION_CHARS = 40000           # one request measures the tokenizer's chars per token
 REQUEST_TIMEOUT_S = 1800            # 4 x 200K prompts can queue for minutes before the first token
 FALLBACK_TOKENS_PER_CHAR = 0.25
+
+
+class WorkloadContextError(ValueError):
+    """The configured workload cannot fit the server's context window."""
 
 
 def resolve_workload(block: Optional[Dict[str, Any]], max_context: Optional[int]) -> Dict[str, Any]:
@@ -63,9 +68,13 @@ def resolve_workload(block: Optional[Dict[str, Any]], max_context: Optional[int]
     w["stagger_s"] = [float(min(lo, hi)), float(max(lo, hi))]
     if max_context:
         fit = int(max_context) - int(w["max_output_tokens"]) - PROMPT_MARGIN_TOKENS
+        if fit < MIN_PROMPT_TOKENS:
+            raise WorkloadContextError(
+                f"server context of {int(max_context):,} tokens cannot fit the {int(w['max_output_tokens']):,}-token "
+                f"output budget, {MIN_PROMPT_TOKENS:,}-token minimum prompt and {PROMPT_MARGIN_TOKENS:,}-token margin")
         if fit < int(w["prompt_tokens"]):
             w["requested_prompt_tokens"] = int(w["prompt_tokens"])
-            w["prompt_tokens"] = max(1000, fit)
+            w["prompt_tokens"] = fit
     return w
 
 
@@ -287,7 +296,11 @@ def servers_needed(users: int, goodput: int) -> Optional[int]:
 
 
 def run_workload(client, block: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    w = resolve_workload(block, getattr(client, "max_context", None))
+    try:
+        w = resolve_workload(block, getattr(client, "max_context", None))
+    except WorkloadContextError as e:
+        log(f"[TEST 46] SKIPPED: {e}", color=YELLOW)
+        return {"status": "SKIPPED", "error": str(e)}
     log("\n" + "=" * 88, bold=True)
     log(f"[TEST 46] Workload: {w['users']} users x {w['prompt_tokens']:,}-token new documents, "
         f"~{w['answer_tokens']:,}-token answers, thinking on", bold=True, color=CYAN)
@@ -298,6 +311,11 @@ def run_workload(client, block: Optional[Dict[str, Any]] = None) -> Dict[str, An
     contracts = list(contracts_by_id.values())
     if not contracts:
         return {"status": "SKIPPED", "error": "dataset missing (run scripts/fetch_benchmark_data.py contracts)"}
+    questions = pick_questions(contracts, w["users"] + 1, int(w["seed"]))
+    if not questions:
+        error = "contract dataset has no labelled clauses for the workload"
+        log(f"  [TEST 46] SKIPPED: {error}", color=YELLOW)
+        return {"status": "SKIPPED", "error": error, "workload": w}
     if w.get("requested_prompt_tokens"):
         log(f"  Prompt reduced to {w['prompt_tokens']:,} tokens to fit the server's context "
             f"({w['requested_prompt_tokens']:,} requested)", color=YELLOW)
@@ -307,7 +325,6 @@ def run_workload(client, block: Optional[Dict[str, Any]] = None) -> Dict[str, An
     available = sum(len(c["text"]) for c in contracts)
     if target_chars > available:
         log(f"  The contract set holds about {int(available * ratio):,} tokens; prompts are capped there.", color=YELLOW)
-    questions = pick_questions(contracts, w["users"] + 1, int(w["seed"]))
     words = review_words(w)
     prompts = [fit_prompt(client, contracts, target_chars, int(w["prompt_tokens"]), int(w["seed"]) + i,
                           q["contract"], q["question"], words)
@@ -315,6 +332,16 @@ def run_workload(client, block: Optional[Dict[str, Any]] = None) -> Dict[str, An
     sizes = [client_count(client, p) for p in prompts]
     if all(sizes):
         log(f"  Prompt sizes (server tokenizer): {', '.join(f'{n:,}' for n in sizes)} tokens")
+    context = getattr(client, "max_context", None)
+    if isinstance(context, int) and context > 0:
+        for size, prompt in zip(sizes, prompts):
+            estimate = size if size is not None else math.ceil(len(prompt) * ratio)
+            if estimate + int(w["max_output_tokens"]) > context:
+                source = "server tokenizer" if size is not None else "estimated"
+                error = (f"workload prompt ({estimate:,} tokens, {source}) and "
+                         f"{int(w['max_output_tokens']):,}-token output exceed the {context:,}-token server context")
+                log(f"  [TEST 46] SKIPPED: {error}", color=YELLOW)
+                return {"status": "SKIPPED", "error": error, "workload": w}
 
     log("\n[A] One user alone", bold=True, color=CYAN)
     solo = run_user(client, prompts[0], questions[0], w, 0.0, time.perf_counter())

@@ -105,6 +105,17 @@ ENV POLYGLOT_HOME=/opt/polyglot \
     GOFLAGS=-mod=mod \
     GOPROXY=off
 
+# 7. The user that runs model-written code (client.run_model_code). The suite
+#    runs as root and switches to this user for every compile and run, so the
+#    code cannot read root-only files or write the reports. The fixed uid and
+#    gid are not used by Ubuntu (the image's own 'ubuntu' user is 1000, like
+#    many host users; a default system gid such as 999 is often a host group
+#    like systemd-journal or docker). Build leftovers in /tmp are removed.
+RUN groupadd --system --gid 64999 evalcode \
+    && useradd --system --uid 64999 --gid 64999 --no-create-home --home-dir /nonexistent \
+        --shell /usr/sbin/nologin evalcode \
+    && find /tmp -mindepth 1 -delete
+
 WORKDIR /app
 
 COPY . /app

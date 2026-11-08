@@ -10,85 +10,22 @@ Tests:
 
 import sys
 import os
-import time
 import json
-import re
-import urllib.request
-import urllib.error
 import argparse
+from decimal import Decimal
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from benchmarks.common import benchmark_error, call_nonstream, declared_integer, declared_money  # noqa: E402
+from domain_benchmarks import final_content  # noqa: E402
+
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
 def call_model(url, messages, max_tokens=3500, temperature=0.0, enable_thinking=True, timeout=600, model="default", api_key=""):
-    payload = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": False,
-    }
-    # Pass chat_template_kwargs only if needed
-    if enable_thinking:
-        payload["chat_template_kwargs"] = {"enable_thinking": True}
-
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=req_data, headers=headers)
-    
-    t0 = time.perf_counter()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        # If rejected due to chat_template_kwargs, retry once without it
-        if "chat_template_kwargs" in payload:
-            payload.pop("chat_template_kwargs", None)
-            req_retry = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
-            try:
-                with urllib.request.urlopen(req_retry, timeout=timeout) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-            except Exception as e2:
-                print(f"HTTP error during model call: {e2}")
-                return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e2)}
-        else:
-            print(f"HTTP error during model call: {e}")
-            return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e)}
-    except Exception as e:
-        print(f"Request error during model call: {e}")
-        return {"content": "", "reasoning": "", "text": "", "prompt_tokens": 0, "completion_tokens": 0, "total_time_s": 0.0, "tok_per_sec": 0.0, "error": str(e)}
-
-    tt = time.perf_counter() - t0
-    
-    choices = data.get("choices") or [{}]
-    choice = choices[0]
-    msg = choice.get("message", {})
-    content = msg.get("content") or ""
-    reasoning = (
-        msg.get("reasoning_content")
-        or msg.get("reasoning")
-        or msg.get("thought")
-        or ""
-    )
-    usage = data.get("usage") or {}
-    prompt_tokens = usage.get("prompt_tokens", 0)
-    completion_tokens = usage.get("completion_tokens", 0)
-    tok_per_sec = completion_tokens / tt if tt > 0 else 0.0
-    
-    return {
-        "content": content,
-        "reasoning": reasoning,
-        "text": (reasoning + "\n" + content) if reasoning.strip() else content,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_time_s": tt,
-        "tok_per_sec": tok_per_sec
-    }
+    return call_nonstream(url, messages, max_tokens, temperature, enable_thinking, timeout, model, api_key)
 
 FILLER_BLOCK = (
     "In distributed storage clusters, erasure coding partitions data objects into k data chunks and m coding chunks "
@@ -160,13 +97,16 @@ def test_14_stage_dependency(url, model="default", api_key=""):
     
     print("  Ingesting ~60,000 tokens with 14 chained dependency stages...")
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=3500, temperature=0.0, enable_thinking=True, model=model, api_key=api_key)
+    name = "14-Stage Dependency Chain"
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s)")
     
-    text = res["text"]
-    passed = str(expected_final) in text
+    passed = declared_integer(final_content(res), "FINAL_STAGE_14") == expected_final
     print(f"  - Expected stage_14 = {expected_final}: {'MATCH' if passed else 'FAIL'}")
     print(f"  [Result]: {'PASS' if passed else 'FAIL'}")
-    return {"name": "14-Stage Dependency Chain", "passed": passed, "expected": expected_final}
+    return {"name": name, "passed": passed, "expected": expected_final}
 
 def test_financial_ledger_reconciliation(url, model="default", api_key=""):
     print("\n" + "="*80)
@@ -203,7 +143,7 @@ def test_financial_ledger_reconciliation(url, model="default", api_key=""):
     ]
     
     bal = initial_balance
-    for tx, amt in transactions:
+    for _, amt in transactions:
         bal += amt
     expected_balance = round(bal, 2)  # 11565.22
     
@@ -231,14 +171,17 @@ def test_financial_ledger_reconciliation(url, model="default", api_key=""):
     
     print("  Ingesting ~60,000 tokens with 25 floating-point financial transactions...")
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=3500, temperature=0.0, enable_thinking=True, model=model, api_key=api_key)
+    name = "25-Transaction Ledger Reconciliation"
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s)")
     
-    text = res["text"]
     exp_str = f"{expected_balance:.2f}"
-    passed = (exp_str in text) or (exp_str in text.replace(",", ""))
+    passed = declared_money(final_content(res), "ENDING_BALANCE") == Decimal(exp_str)
     print(f"  - Expected ending balance = ${exp_str}: {'MATCH' if passed else 'FAIL'}")
     print(f"  [Result]: {'PASS' if passed else 'FAIL'}")
-    return {"name": "25-Transaction Ledger Reconciliation", "passed": passed, "expected": exp_str}
+    return {"name": name, "passed": passed, "expected": exp_str}
 
 def main():
     parser = argparse.ArgumentParser(description="Extreme Precision Long-Context Stress Test.")
@@ -249,14 +192,23 @@ def main():
     args = parser.parse_args()
     
     results = []
-    results.append(test_14_stage_dependency(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_financial_ledger_reconciliation(args.url, model=args.model, api_key=args.api_key))
+    checks = [
+        ("14-Stage Dependency Chain", test_14_stage_dependency),
+        ("25-Transaction Ledger Reconciliation", test_financial_ledger_reconciliation),
+    ]
+    for index, (_, check) in enumerate(checks):
+        result = check(args.url, model=args.model, api_key=args.api_key)
+        results.append(result)
+        if result.get("endpoint_unreachable"):
+            results.extend({"name": name, "passed": False, "status": "SKIPPED",
+                            "reason": "Server unreachable"} for name, _ in checks[index + 1:])
+            break
     
     print("\n" + "="*80)
     print("EXTREME PRECISION BENCHMARK SUMMARY")
     print("="*80)
     for r in results:
-        status = "PASSED" if r["passed"] else "FAILED"
+        status = r.get("status", "PASSED" if r["passed"] else "FAILED")
         print(f" • {r['name']:<42} : {status}")
     out_dir = os.path.dirname(args.out)
     if out_dir:
@@ -264,6 +216,8 @@ def main():
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     print(f"\nSaved results to {args.out}")
+    if any(result.get("status") == "ERROR" for result in results):
+        sys.exit(3)
 
 if __name__ == "__main__":
     main()

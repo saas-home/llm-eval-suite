@@ -8,117 +8,39 @@ Tests:
 - Server health check
 """
 
-import json
-import time
-import urllib.request
-import urllib.error
 import argparse
 import os
+import sys
+
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from benchmarks.common import ChunkMetrics  # noqa: E402
+from client import LLMClient  # noqa: E402
 
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
 def run_test(api_url, prompt_text, max_tokens=64, model="default", api_key=""):
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "user", "content": prompt_text}
-        ],
-        "max_tokens": max_tokens,
-        "temperature": 0.0,
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-    
-    data = json.dumps(payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    req = urllib.request.Request(api_url, data=data, headers=headers)
-    
-    t0 = time.perf_counter()
-    t_first = None
-    t_last = None
-    chunks_count = 0
-    prompt_tokens = 0
-    completion_tokens = 0
-    text_accum = []
-    
-    try:
-        with urllib.request.urlopen(req, timeout=300) as response:
-            for line in response:
-                line = line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                line_data = line[5:].strip()
-                if line_data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(line_data)
-                except Exception:
-                    continue
-                
-                if "error" in chunk:
-                    print(f"\n[ERROR from server]: {chunk['error']}", flush=True)
-                    break
-
-                if "usage" in chunk and chunk["usage"]:
-                    prompt_tokens = chunk["usage"].get("prompt_tokens", 0)
-                    completion_tokens = chunk["usage"].get("completion_tokens", 0)
-                
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-
-                if choices[0].get("finish_reason") == "error":
-                    err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
-                    print(f"\n[ERROR from model]: {err_msg}", flush=True)
-                    break
-
-                delta = choices[0].get("delta", {})
-                content = (
-                    delta.get("content")
-                    or delta.get("reasoning_content")
-                    or delta.get("reasoning")
-                    or delta.get("thought")
-                )
-                if content:
-                    now = time.perf_counter()
-                    if t_first is None:
-                        t_first = now
-                    t_last = now
-                    chunks_count += 1
-                    text_accum.append(content)
-                    print(content, end="", flush=True)
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        print(f"\nHTTP Error {e.code}: {e.reason} - {err_body}")
-        return None
-    except Exception as e:
-        print(f"\nRequest failed: {e}")
-        return None
-
+    chunks = ChunkMetrics(display=True)
+    result = LLMClient(api_url, api_key=api_key, model=model).call(
+        [{"role": "user", "content": prompt_text}], max_tokens=max_tokens, temperature=0.0,
+        stream=True, timeout=300, chunk_callback=chunks,
+    )
     print()
-    if t_last is None:
-        t_last = time.perf_counter()
-    if t_first is None:
-        t_first = t_last
-
-    ttft = t_first - t0
-    decode_time = t_last - t_first
-    final_tokens = completion_tokens if completion_tokens > 0 else chunks_count
-    
-    prefill_speed = prompt_tokens / ttft if ttft > 0 else 0
-    decode_speed = (final_tokens - 1) / decode_time if decode_time > 0 and final_tokens > 1 else 0
-    
+    if result.get("error"):
+        print(f"Request failed: {result['error']}")
+        return None
+    ttft = result["ttft"]
+    prompt_tokens = result["prompt_tokens"]
     return {
         "prompt_tokens": prompt_tokens,
-        "completion_tokens": final_tokens,
+        "completion_tokens": result["completion_tokens"],
         "ttft_s": ttft,
-        "prefill_tok_s": prefill_speed,
-        "decode_time_s": decode_time,
-        "decode_tok_s": decode_speed,
-        "text": "".join(text_accum)
+        "prefill_tok_s": prompt_tokens / ttft if ttft > 0 else 0,
+        "decode_time_s": chunks.duration,
+        "decode_tok_s": result["decode_speed"],
+        "text": result["text"]
     }
 
 if __name__ == "__main__":
@@ -139,3 +61,5 @@ if __name__ == "__main__":
         print(f"TTFT         : {res['ttft_s']*1000:.1f} ms")
         print(f"Prefill Speed: {res['prefill_tok_s']:.1f} tok/s")
         print(f"Decode Speed : {res['decode_tok_s']:.1f} tok/s")
+    else:
+        sys.exit(1)

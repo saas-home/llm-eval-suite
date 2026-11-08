@@ -13,8 +13,8 @@ Key Evaluation Pillars:
    with extended `<think>` token generation.
 3. Continuous Batching & KV Paging: Measures aggregate throughput (tok/s), dual prefill TTFT,
    and hardware memory telemetry during peak saturation.
-4. Logical Coherence & Precision: Validates that reasoning quality and structural compliance
-   do not degrade under maximum GPU resource pressure.
+4. Topic coverage: Checks that the final answer mentions requested technical topics.
+   This heuristic does not verify reasoning correctness.
 """
 
 import sys
@@ -23,21 +23,21 @@ import time
 import json
 import re
 import argparse
-import urllib.request
-import urllib.error
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
 DEFAULT_RESULTS_DIR = os.path.join(ROOT_DIR, "results")
-os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
 
 # Shared terminal formatting from the parent package (respects NO_COLOR / non-TTY).
 _BENCH_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BENCH_PARENT not in sys.path:
     sys.path.insert(0, _BENCH_PARENT)
-from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET
+from benchmarks.common import ChunkMetrics, aggregate_decode_rate  # noqa: E402
+from client import LLMClient, log, BOLD, GREEN, YELLOW, RED, CYAN, RESET  # noqa: E402
+from domain_benchmarks import final_content  # noqa: E402
 
 
 def get_gpu_vram_usage():
@@ -145,7 +145,7 @@ def generate_dense_context(target_tokens: int, domain: str) -> str:
     return context_body
 
 
-def build_parallel_tasks(target_context_tokens: int, parallel_count: int) -> list[dict]:
+def build_parallel_tasks(target_context_tokens: int, parallel_count: int) -> List[dict]:
     """Build heterogeneous, complex high-context reasoning prompts for each stream."""
     tasks = []
 
@@ -210,105 +210,46 @@ def build_parallel_tasks(target_context_tokens: int, parallel_count: int) -> lis
     return tasks[:parallel_count]
 
 
-def execute_stream(endpoint: str, model: str, task: dict, max_tokens: int, temperature: float, api_key: str = "") -> dict:
+def execute_stream(endpoint: str, model: str, task: dict, max_tokens: int, temperature: float,
+                   api_key: str = "", client=None) -> dict:
     """Execute a single high-context reasoning stream with real-time token tracking."""
-    url = f"{endpoint.rstrip('/')}/chat/completions"
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": task["prompt"]}],
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-
     stream_id = task["stream_id"]
-    t0 = time.perf_counter()
-    t_first = None
-    t_last = None
-    tokens_emitted = 0
-    full_text = ""
-    prompt_tokens = 0
-    completion_tokens = 0
-    cached_tokens = 0
-    error_msg = None
-
-    req_data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=req_data, headers=headers)
-
-    try:
-        with urllib.request.urlopen(req, timeout=900) as resp:
-            for line in resp:
-                line = line.decode("utf-8", errors="replace").strip()
-                if not line or not line.startswith("data:"):
-                    continue
-                raw_data = line[5:].strip()
-                if raw_data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(raw_data)
-                except Exception:
-                    continue
-
-                if "usage" in chunk and chunk["usage"]:
-                    u = chunk["usage"]
-                    prompt_tokens = u.get("prompt_tokens", prompt_tokens)
-                    completion_tokens = u.get("completion_tokens", completion_tokens)
-                    cached_tokens = (u.get("prompt_tokens_details") or {}).get("cached_tokens", cached_tokens)
-
-                choices = chunk.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {})
-                    content_piece = (
-                        delta.get("content")
-                        or delta.get("reasoning_content")
-                        or delta.get("reasoning")
-                        or delta.get("thought")
-                        or ""
-                    )
-                    if content_piece:
-                        now = time.perf_counter()
-                        if t_first is None:
-                            t_first = now
-                        t_last = now
-                        tokens_emitted += 1
-                        full_text += content_piece
-
-    except Exception as e:
-        error_msg = str(e)
-
-    total_wall_s = time.perf_counter() - t0
-    ttft_s = (t_first - t0) if t_first is not None else total_wall_s
-    decode_duration_s = (t_last - t_first) if (t_first and t_last and t_last > t_first) else 0.001
-    tok_count = completion_tokens or tokens_emitted
-    decode_speed_tok_s = (tok_count / decode_duration_s) if decode_duration_s > 0 else 0.0
+    chunks = ChunkMetrics()
+    result = (client or LLMClient(endpoint, api_key=api_key, model=model)).call(
+        [{"role": "user", "content": task["prompt"]}], max_tokens=max_tokens,
+        temperature=temperature, stream=True, timeout=900, chunk_callback=chunks,
+    )
+    total_wall_s = result["total_time"]
+    ttft_s = result["ttft"]
+    tok_count = result["completion_tokens"]
+    prompt_tokens = result["prompt_tokens"]
+    error_msg = result.get("error")
     prefill_speed_tok_s = (prompt_tokens / ttft_s) if (prompt_tokens > 0 and ttft_s > 0) else 0.0
 
-    # Extract thinking trace if present
-    think_match = re.search(r"<think>(.*?)</think>", full_text, re.DOTALL)
-    thinking_content = think_match.group(1).strip() if think_match else ""
-    final_answer = re.sub(r"<think>.*?</think>", "", full_text, flags=re.DOTALL).strip() if think_match else full_text
+    think_match = re.search(r"<think>(.*?)</think>", result["text"], re.DOTALL)
+    thinking_content = result["reasoning"] or (think_match.group(1).strip() if think_match else "")
+    final_answer = final_content(result)
 
     # Verify coverage of expected technical topics
-    topics_found = sum(1 for topic in task.get("expected_topics", []) if topic.lower() in full_text.lower())
-    reasoning_passed = (topics_found >= 1) and (tok_count >= min(max_tokens, 50)) and (error_msg is None)
+    topics_found = sum(1 for topic in task.get("expected_topics", []) if topic.lower() in final_answer.lower())
+    coverage_met = (topics_found >= 1) and (tok_count >= min(max_tokens, 50))
 
     return {
         "stream_id": stream_id,
         "name": task["name"],
-        "status": "PASS" if reasoning_passed else "FAIL",
+        "status": "ERROR" if error_msg else ("PARTIAL" if coverage_met else "FAIL"),
         "error": error_msg,
+        "failure_kind": result.get("failure_kind"),
+        "endpoint_unreachable": result.get("endpoint_unreachable", False),
         "wall_time_s": round(total_wall_s, 2),
         "ttft_s": round(ttft_s, 3),
         "prefill_tok_s": round(prefill_speed_tok_s, 1),
-        "decode_duration_s": round(decode_duration_s, 2),
-        "decode_tok_s": round(decode_speed_tok_s, 2),
+        "decode_duration_s": round(chunks.duration, 2),
+        "decode_tok_s": round(result["decode_speed"], 2),
+        "_decode_start": chunks.first,
+        "_decode_end": chunks.last,
         "prompt_tokens": prompt_tokens,
-        "cached_tokens": cached_tokens,
+        "cached_tokens": result["cached_tokens"],
         "completion_tokens": tok_count,
         "thinking_chars": len(thinking_content),
         "answer_chars": len(final_answer),
@@ -357,16 +298,17 @@ def main():
 
     t_suite_start = time.perf_counter()
     results = []
+    client = LLMClient(endpoint, api_key=args.api_key, model=args.model)
 
     with ThreadPoolExecutor(max_workers=parallel) as pool:
         futures = {
-            pool.submit(execute_stream, endpoint, args.model, task, max_tokens, args.temperature, args.api_key): task
+            pool.submit(execute_stream, endpoint, args.model, task, max_tokens, args.temperature, args.api_key, client): task
             for task in tasks
         }
         for fut in as_completed(futures):
             res = fut.result()
             results.append(res)
-            st_color = GREEN if res["status"] == "PASS" else RED
+            st_color = GREEN if res["status"] == "PASS" else (YELLOW if res["status"] == "PARTIAL" else RED)
             log(f"  >> Stream #{res['stream_id']} [{res['name'][:35]}]: "
                 f"{st_color}{res['status']}{RESET} | "
                 f"TTFT: {res['ttft_s']:.2f}s | "
@@ -381,22 +323,28 @@ def main():
     vram_after = get_gpu_vram_usage()
 
     # Calculate aggregate metrics
-    total_completion_tokens = sum(r["completion_tokens"] for r in results)
-    total_prompt_tokens = sum(r["prompt_tokens"] for r in results)
-    aggregate_throughput = (total_completion_tokens / total_wall_time) if total_wall_time > 0 else 0.0
-    avg_ttft = sum(r["ttft_s"] for r in results) / len(results) if results else 0.0
+    completed = [r for r in results if not r.get("error")]
+    total_completion_tokens = sum(r["completion_tokens"] for r in completed)
+    total_prompt_tokens = sum(r["prompt_tokens"] for r in completed)
+    aggregate_throughput = aggregate_decode_rate(results)
+    avg_ttft = sum(r["ttft_s"] for r in completed) / len(completed) if completed else 0.0
     all_passed = all(r["status"] == "PASS" for r in results)
+    incomplete = any(r["status"] == "ERROR" for r in results)
+    any_failed = any(r["status"] == "FAIL" for r in results)
 
     # Print Formatted Scorecard Table
     log("\n" + "="*96, bold=True)
     log(" CONCENTRATED PARALLEL BENCHMARK SCORECARD & RESULTS ", bold=True, color=GREEN if all_passed else YELLOW)
     log("="*96)
-    log(f"  Suite Overall Status      : {GREEN + 'ALL PASSED (100%)' + RESET if all_passed else RED + 'FAILURES DETECTED' + RESET}")
+    verdict = ("INCOMPLETE: REQUEST ERROR" if incomplete else
+               "FAILURES DETECTED" if any_failed else
+               "UNVERIFIED: TOPIC COVERAGE ONLY")
+    log(f"  Suite Overall Status      : {verdict}")
     log(f"  Total Suite Wall Time     : {total_wall_time:.2f} s")
     log(f"  Combined Prompt Context   : {total_prompt_tokens:,} tokens ingested")
     log(f"  Combined Generated Output : {total_completion_tokens:,} tokens generated")
     log(f"  Aggregate Saturated Tok/s : {BOLD}{aggregate_throughput:.2f} tok/s{RESET} (concurrent decode throughput)")
-    log(f"  Average Time-To-First-Tok : {avg_ttft:.2f} s across {parallel} streams")
+    log(f"  Average Time-To-First-Tok : {avg_ttft:.2f} s across {len(completed)} completed streams")
     if vram_after:
         log(f"  Post-Run GPU VRAM Usage   : {vram_after['used_mib']:.0f} MiB / {vram_after['total_mib']:.0f} MiB ({vram_after['free_mib']:.0f} MiB free)")
     log("-" * 96)
@@ -406,13 +354,17 @@ def main():
     log("-" * 96)
 
     for r in results:
-        st_str = f"{GREEN}PASS{RESET}" if r["status"] == "PASS" else f"{RED}FAIL{RESET}"
+        color = GREEN if r["status"] == "PASS" else (YELLOW if r["status"] == "PARTIAL" else RED)
+        st_str = f"{color}{r['status']}{RESET}"
         think_str = f"{r['thinking_chars']} chars" if r["has_thinking_block"] else "None (Raw)"
         log(f"{r['name'][:38]:<38} | {st_str:<17} | {r['prompt_tokens']:<9} | {r['ttft_s']:.2f}s{'' :<4} | {r['decode_tok_s']:.2f} t/s  | {r['completion_tokens']:<9} | {think_str}")
 
     log("="*96 + "\n")
 
     # Export JSON report
+    for result in results:
+        result.pop("_decode_start", None)
+        result.pop("_decode_end", None)
     report_data = {
         "benchmark": "deep_concentrated_parallel_high_context_reasoning",
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -430,15 +382,23 @@ def main():
             "after": vram_after
         },
         "all_passed": all_passed,
+        "incomplete": incomplete,
         "stream_results": results
     }
 
     out_file = args.out or os.path.join(DEFAULT_RESULTS_DIR, f"deep_parallel_reasoning_{time.strftime('%Y%m%d_%H%M%S')}.json")
-    with open(out_file, "w") as f:
+    out_dir = os.path.dirname(out_file)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    with open(out_file, "w", encoding="utf-8") as f:
         json.dump(report_data, f, indent=2)
 
     log(f"  Detailed JSON Benchmark Export : {out_file}", bold=True, color=CYAN)
     log("="*96 + "\n", bold=True)
+    if incomplete:
+        sys.exit(3)
+    if any_failed:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

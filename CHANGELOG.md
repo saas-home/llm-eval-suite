@@ -4,6 +4,49 @@ This file records notable changes. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added: interactive Docker startup
+
+- `scripts/start_eval.sh` asks for model and optional independent-judge details, test mode, language and hardware, then probes the endpoint and runs the Docker evaluation with persistent reports and logs. API-key entry is hidden, model settings are passed by environment variable name, and no credential files are saved or mounted. Missing images are built only with approval.
+
+### Security: model code runs as its own user
+
+- In the Docker image, model-written code (every compile, test and run) now runs as the user `evalcode` (uid and gid 64999), not as root. It owns only the folder of the current run, so it cannot change the reports in `results/` or `logs/`, or read a mounted `config.json` or `.env` set to `chmod 600`. The image also removes build leftovers from `/tmp`.
+- Outside the image, a suite that runs as root switches to that user too, or warns once if it does not exist. `EVAL_CODE_USER` selects another user. Without root, nothing changes.
+- The README no longer says the image grades code without network access. Model code has the network access of the container.
+
+### Fixed: configuration settings and precedence
+
+- Documented judge, sampling, output-budget, workload and report settings in `config.json` now reach their consumers instead of being silently dropped.
+- Configured quick mode now uses the short context and concurrency checks. Explicit `--suite all` and `--language python` override configured alternatives; evaluation and comparison honor CLI, file and environment precedence in that order.
+
+### Fixed: standalone judge failures
+
+- The 10-point judge now requires an independent judge, configured by CLI, `judge` settings or `JUDGE_*` environment variables. The tested model cannot grade itself.
+- Failed requests and invalid judge scores leave tasks unscored; an empty answer scores 0 for that model and the other answer is still judged; a model is not ranked on an incomplete task set. The judge receives the task instructions, and an unreachable model or judge stops the run and records the tasks not sent. Missing or unparseable Python is no longer reported as valid syntax.
+- The judge's non-streaming output-throughput average excludes failed requests and is no longer labeled as decode throughput; missing measurements are reported as N/A.
+
+### Fixed: completion and streaming results
+
+- An interrupted, malformed or choice-less completion is reported as an infrastructure failure instead of grading a missing or partial answer. Decode throughput stops at the last generated chunk, not a delayed usage trailer. A refused or unreachable connection is retried after 5, 10 and 15 seconds (a server restart or model reload); after that the endpoint is marked down and no more requests are sent.
+
+### Fixed: workload context limits
+
+- Test 46 skips with an explicit reason when its output budget or an untruncated focus contract cannot fit the server's context, rather than sending oversized requests and scoring their failures against the model.
+- Coding and qualification requests never inflate the configured output budget. Core tests are skipped and qualification items are unscored when the estimated prompt size leaves less than 1,024 answer tokens (or less than a smaller requested budget), instead of scoring a cut-off answer as the model's failure; a self-correction retry that no longer fits keeps the graded earlier attempt. More than 5% unscored attempts or items in a test, or a skipped MultiPL-E language (including missing datasets), turns a PASS into PARTIAL and cannot receive a Recommended use-case verdict; smaller unscored shares are listed in the verdict reasons; grading-tool failures remain infrastructure failures.
+
+### Fixed: standalone benchmark grading and execution
+
+- The adversarial, code-synthesis, precision and needle-recall probes use the shared HTTP client and preserve request errors as ERROR rather than model failures. They stop after an unreachable endpoint and report the checks not run.
+- Streaming, context, concurrency, vision and parallel-reasoning probes also reject malformed or interrupted streams through the shared client. The context probe now accepts `--out`, labels estimated prompt counts and reports zero cold-prefill throughput for fully cached prompts. The parallel reasoning probe reports topic-only checks as PARTIAL. The concurrency and reasoning probes measure aggregate decode over the generated-chunk span, and concurrency's per-client averages use the measured rates.
+- Generated Python runs through the shared guarded executor with a per-run success marker; disabling execution gives PARTIAL at most. Harness assertions remain enabled even when the evaluator inherits `PYTHONOPTIMIZE`.
+- Graders check final answers and strict JSON fields instead of passing on incidental substrings in reasoning. Unverifiable YAML gets PARTIAL rather than PASS.
+
+### Fixed: package installation
+
+- Installed CLI entry points now include all runtime modules, benchmark data, polyglot packs and the invoice image. Installed commands keep configuration and output in the current directory instead of trying to write into site-packages.
+- Source distributions include the standalone probes, helper scripts, configuration template and test fixtures, and are tested independently in CI.
+- The parallel reasoning probe imports on Python 3.8, CI tests that minimum version, and the optional mypy version is capped before the release that dropped the configured Python 3.8 target.
+
 ### Fixed: findings left open by the review
 
 - **Model code cannot fake a pass.** Every verification harness (Python and compiled) used to print a fixed marker such as `POLYGLOT_OK` or `DIFF_BEHAVIOR_VERIFIED`, so an answer that printed the marker and exited passed. Each run now gets a random id in `EVAL_RUN_ID`, and only the marker followed by that id counts (`client.harness_passed`).

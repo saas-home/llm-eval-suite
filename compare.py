@@ -1239,9 +1239,9 @@ def main():
     group_out.add_argument("--env-file", default=None, help="Path to custom .env file (default: auto-loads .env if present)")
 
     # Suppressed legacy single-endpoint flags (backward-compatible)
-    parser.add_argument("--url", "--endpoint", default=default_url, help=argparse.SUPPRESS)
-    parser.add_argument("--model", default=os.getenv("OPENAI_MODEL") or "default", help=argparse.SUPPRESS)
-    parser.add_argument("--api-key", default=os.getenv("OPENAI_API_KEY", ""), help=argparse.SUPPRESS)
+    parser.add_argument("--url", "--endpoint", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--model", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--api-key", default=None, help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -1258,15 +1258,17 @@ def main():
 
     # Route 2: Native Arena Mode (Live Concurrent Comparison)
     elif args.live or (args.endpoint1 and args.endpoint2):
-        ep1 = args.endpoint1 or cfg.get("endpoint1") or cfg.get("endpoint") or os.getenv("ENDPOINT1") or args.url
+        ep1 = args.endpoint1 or args.url or cfg.get("endpoint1") or cfg.get("endpoint") or os.getenv("ENDPOINT1") or default_url
         ep2 = args.endpoint2 or cfg.get("endpoint2") or os.getenv("ENDPOINT2")
 
         ep1_matched = normalize_endpoint(ep1) in (normalize_endpoint(cfg.get("endpoint1")), normalize_endpoint(cfg.get("endpoint")))
         ep2_matched = normalize_endpoint(ep2) == normalize_endpoint(cfg.get("endpoint2"))
 
-        m1 = args.model1 or (cfg.get("model1") or cfg.get("model") if ep1_matched else None) or os.getenv("MODEL1") or args.model
+        m1 = args.model1 or args.model or (cfg.get("model1") or cfg.get("model") if ep1_matched else None) \
+            or os.getenv("MODEL1") or os.getenv("OPENAI_MODEL") or "default"
         m2 = args.model2 or (cfg.get("model2") if ep2_matched else None) or os.getenv("MODEL2")
-        k1 = args.api_key1 or (cfg.get("api_key1") or cfg.get("api_key") if ep1_matched else None) or os.getenv("API_KEY1") or args.api_key or ""
+        k1 = args.api_key1 or args.api_key or (cfg.get("api_key1") or cfg.get("api_key") if ep1_matched else None) \
+            or os.getenv("API_KEY1") or os.getenv("OPENAI_API_KEY") or ""
         k2 = args.api_key2 or (cfg.get("api_key2") if ep2_matched else None) or os.getenv("API_KEY2") or ""
 
         if not ep1 or not ep2:
@@ -1289,10 +1291,10 @@ def main():
             print(f"{YELLOW}Note: config defines two servers but Arena Mode was not requested. "
                   f"Use --live (with --endpoint1/--endpoint2) for side-by-side comparison.{RESET}")
         out_file = args.out or os.path.join(DEFAULT_RESULTS_DIR, "compare_benchmark.json")
-        target_url = args.url if args.url != default_url else (cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or default_url)
+        target_url = args.url or cfg.get("endpoint") or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or default_url
         ep_matched = normalize_endpoint(target_url) in (normalize_endpoint(cfg.get("endpoint")), normalize_endpoint(cfg.get("endpoint1")))
-        target_model = args.model if args.model != "default" else ((cfg.get("model") if ep_matched else None) or os.getenv("OPENAI_MODEL") or "default")
-        target_key = args.api_key if args.api_key != "" else ((cfg.get("api_key") if ep_matched else "") or os.getenv("OPENAI_API_KEY") or "")
+        target_model = args.model or (cfg.get("model") if ep_matched else None) or os.getenv("OPENAI_MODEL") or "default"
+        target_key = args.api_key or (cfg.get("api_key") if ep_matched else None) or os.getenv("OPENAI_API_KEY") or ""
         if target_model == "default":
             target_model = discover_model(target_url, target_key, None)
             if target_model == "default":

@@ -106,7 +106,14 @@ def _infra_guarded(test_fn):
     def wrapper(client, *args, **kwargs):
         tracker = InfraTrackingClient(client)
         polyglot.take_infra_events()  # start clean: this worker thread may have run another test
-        result = test_fn(tracker, *args, **kwargs)
+        try:
+            result = test_fn(tracker, *args, **kwargs)
+        except suites.PromptTooLargeError as e:
+            infra_errors = tracker.infra_errors + polyglot.take_infra_events()
+            if infra_errors:
+                return mark_infra_failure({"status": "FAIL", "error": str(e)}, infra_errors)
+            log(f"  -> SKIPPED: {e}", color=YELLOW)
+            return {"status": "SKIPPED", "error": str(e)}
         # A compiler that timed out on a loaded machine is infra too.
         return mark_infra_failure(result, tracker.infra_errors + polyglot.take_infra_events())
     return wrapper
@@ -1934,8 +1941,16 @@ def run_with_retries(client, prompt: str, grade, max_tokens: int, retry_request:
     attempts: list = []
     first_res = None
     while True:
-        res = client.call(messages, max_tokens=suites.output_budget(client, messages, max_tokens),
-                          temperature=0.0, stream=True)
+        try:
+            budget = suites.output_budget(client, messages, max_tokens)
+        except suites.PromptTooLargeError as e:
+            if not attempts:
+                raise
+            # The retry conversation outgrew the context window: keep the
+            # graded earlier attempt instead of discarding the test.
+            log(f"  -> No retry: {e}", color=YELLOW)
+            break
+        res = client.call(messages, max_tokens=budget, temperature=0.0, stream=True)
         first_res = first_res or res
         text = domain_benchmarks.final_content(res)
         v = grade(text, res)
@@ -3164,7 +3179,7 @@ def main():
     group_target = parser.add_argument_group("Target Endpoint & Authentication")
     group_target.add_argument("--endpoint", "-e", help="LLM server base endpoint (e.g. http://127.0.0.1:8080/v1)")
     group_target.add_argument("--model", "-m", help="Model name or ID to test (auto-discovered if omitted)")
-    group_target.add_argument("--api-key", "-k", default=os.getenv("OPENAI_API_KEY", ""), help="API key (or via OPENAI_API_KEY environment variable)")
+    group_target.add_argument("--api-key", "-k", default=None, help="API key (or via OPENAI_API_KEY environment variable)")
 
     # 2. Test Selection & Filtering
     group_tests = parser.add_argument_group("Test Selection & Filtering")
@@ -3172,7 +3187,7 @@ def main():
                              choices=["all", "core", "flagship", "adversarial", "serving", "contract", "context", "swe",
                                       "reasoning", "coding", "medical", "academic", "writing", "personal", "legal",
                                       "extended", "qualification", "workload", "multi_lora"],
-                             default="all",
+                             default=None,
                              help="Test group: 'all' (every test; the full decision report, several hours), 'core' "
                                   "(Tests 1-31), 'serving' (1,2,3,7,8,11), 'contract' (5,6,9,10), 'context' (12,13), "
                                   "'swe' (4,14,17,20-25), 'qualification' (32-45, 47, 48), 'workload' (46), or one "
@@ -3183,7 +3198,7 @@ def main():
                              help="Exclude specific test(s) by number or name (e.g. 2, '2,15', '12-15', 'vision')")
     group_tests.add_argument("--language", "-l",
                              choices=["python", "typescript", "go", "java", "rust", "csharp", "polyglot", "py", "ts", "golang", "rs", "cs", "all"],
-                             default="python",
+                             default=None,
                              help="Programming language for SWE benchmark tests 20-25 (python, typescript, go, java, rust, csharp, polyglot; default: python)")
     group_tests.add_argument("--quick", "-q", action="store_true",
                              help="Fast smoke qualification mode (compact context horizons, skips heavy prefill)")
@@ -3236,8 +3251,8 @@ def main():
 
     group_judge = parser.add_argument_group("LLM Judge (open-ended writing / personal-use scoring)")
     group_judge.add_argument("--judge-endpoint", default="", help="Judge model endpoint (e.g. http://host:8080/v1). "
-                             "If unset (and not in config.json 'judge' or JUDGE_ENDPOINT), the tested model judges itself "
-                             "and judged scores are labeled self-judged")
+                             "If unset (and not in config.json 'judge' or JUDGE_ENDPOINT), judged tests are graded "
+                             "objectively")
     group_judge.add_argument("--judge-model", default="", help="Judge model ID (auto-discovered if omitted)")
     group_judge.add_argument("--judge-api-key", default="", help="Judge API key (or JUDGE_API_KEY)")
     group_judge.add_argument("--judge-parallel", type=int, default=None,
@@ -3276,6 +3291,7 @@ def main():
 
     # Load configuration from config.json or .env if present
     cfg, config_path, loaded_from_file = env_loader.load_config(args.config)
+    quick_mode = args.quick or bool(cfg.get("quick"))
 
     global EXECUTE_MODEL_CODE
     if args.no_execute:
@@ -3440,7 +3456,7 @@ def main():
     # keep their short, explicit ladders.
     context_steps = None
 
-    if args.quick:
+    if quick_mode:
         if args.milestones:
             milestones = sorted(list(set(args.milestones)))
         else:
@@ -3495,7 +3511,7 @@ def main():
     if isinstance(cfg_test, list):
         cfg_test = ",".join(str(t) for t in cfg_test)
     test_arg = args.test if args.test is not None else cfg_test
-    suite_arg = args.suite if args.suite != "all" else (cfg.get("suite") or "all")
+    suite_arg = args.suite if args.suite is not None else (cfg.get("suite") or "all")
     exclude_arg = args.exclude if args.exclude is not None else cfg.get("exclude")
     if isinstance(exclude_arg, list):
         exclude_arg = ",".join(str(e) for e in exclude_arg)
@@ -3512,7 +3528,7 @@ def main():
         log(f"Active Suite [{suite_arg.upper()}]: {len(selected_tests)} of {len(ALL_TESTS)} tests: "
             f"{format_test_numbers(selected_tests)}\n", color=CYAN, bold=True)
 
-    target_language = languages.normalize_language(args.language if args.language != "python" else (cfg.get("language") or "python"))
+    target_language = languages.normalize_language(args.language if args.language is not None else (cfg.get("language") or "python"))
     if target_language != "python":
         log(f"Polyglot SWE Suite Active: Language = {target_language.upper()}", color=CYAN, bold=True)
 
@@ -3572,7 +3588,7 @@ def main():
         "advertised_slots_source": slots_source,
         "judge_slots": judge_slots,
         "suite": suite_arg,
-        "quick_mode": args.quick or bool(cfg.get("quick")),
+        "quick_mode": quick_mode,
         "language": target_language,
         "selected_tests": sorted(list(selected_tests)),
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -3606,7 +3622,7 @@ def main():
     jobs = [
         Job(1, "streaming", lambda: run_test_streaming(client), "Test 1 streaming"),
         Job(2, "vision", lambda: run_test_vision(client), "Test 2 vision"),
-        Job(3, "concurrency", lambda: run_test_concurrency(client, expected_slots, expected_source, quick=args.quick),
+        Job(3, "concurrency", lambda: run_test_concurrency(client, expected_slots, expected_source, quick=quick_mode),
             "Test 3 serving capacity"),
         Job(4, "capabilities_4tasks", lambda: run_test_capabilities(client), "Test 4 capabilities"),
         Job(5, "tool_calling", lambda: run_test_tool_calling(client), "Test 5 tool calling"),
@@ -3617,7 +3633,7 @@ def main():
         Job(10, "extreme_precision", lambda: run_test_extreme_precision(client), "Test 10 precision"),
         Job(11, "error_handling", lambda: run_test_error_handling(client), "Test 11 error handling"),
         Job(12, "context_scaling", lambda: run_test_context_scaling(
-            client, context_steps, capacity_slots=_capacity_slots(report, expected_slots), run_capacity=not args.quick,
+            client, context_steps, capacity_slots=_capacity_slots(report, expected_slots), run_capacity=not quick_mode,
             capacity_split=46 not in selected_tests),
             "Test 12 full context"),
         Job(13, "multihop_graph", lambda: run_test_multihop_graph(client, target_context=adv_depth), "Test 13 multi-hop"),

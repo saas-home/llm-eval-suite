@@ -19,150 +19,34 @@ import os
 import time
 import json
 import re
-import uuid
 import random
-import tempfile
 import subprocess
 import ast
 import argparse
-import urllib.request
-import urllib.error
 
 # Shared terminal formatting from the parent package (respects NO_COLOR / non-TTY).
 _BENCH_PARENT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _BENCH_PARENT not in sys.path:
     sys.path.insert(0, _BENCH_PARENT)
-from client import log, BOLD, GREEN, YELLOW, RED, CYAN, MAGENTA, RESET, extract_python_code, assemble_python_script
+from client import (  # noqa: E402
+    CYAN, GREEN, MAGENTA, RED, RESET, YELLOW, LLMClient, assemble_python_script,
+    extract_python_code, harness_passed, log, run_model_code,
+)
+from benchmarks.common import benchmark_error, benchmark_response, declared_integer as _declared_integer  # noqa: E402
+from domain_benchmarks import final_content  # noqa: E402
+from eval import grade_multihop_answer  # noqa: E402
+
 
 class BenchmarkClient:
     def __init__(self, endpoint: str, model: str, api_key: str = ""):
-        self.endpoint = endpoint.rstrip("/")
-        if not self.endpoint.endswith("/v1"):
-            self.endpoint += "/v1"
-        self.completions_url = f"{self.endpoint}/chat/completions"
-        self.model = model
-        self.api_key = api_key
+        self.client = LLMClient(endpoint, api_key=api_key, model=model)
 
     def call(self, messages, max_tokens=2048, temperature=0.7, stream=True,
              tools=None, tool_choice=None, timeout=600):
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": stream,
-        }
-        if tools:
-            payload["tools"] = tools
-        if tool_choice:
-            payload["tool_choice"] = tool_choice
-        if stream:
-            payload["stream_options"] = {"include_usage": True}
-
-        data = json.dumps(payload).encode("utf-8")
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-
-        req = urllib.request.Request(self.completions_url, data=data, headers=headers)
-        t0 = time.perf_counter()
-
-        if not stream:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                res_json = json.loads(resp.read().decode("utf-8"))
-            t_end = time.perf_counter()
-            choice = res_json.get("choices", [{}])[0]
-            msg = choice.get("message", {})
-            content = msg.get("content") or ""
-            reasoning = (
-                msg.get("reasoning_content")
-                or msg.get("reasoning")
-                or msg.get("thought")
-                or ""
-            )
-            tool_calls = msg.get("tool_calls")
-            usage = res_json.get("usage", {})
-            comp_toks = usage.get("completion_tokens", 0)
-            return {
-                "content": content,
-                "reasoning": reasoning,
-                "text": f"{reasoning}\n{content}" if reasoning else content,
-                "tool_calls": tool_calls,
-                "ttft_ms": (t_end - t0) * 1000.0,
-                "total_time_s": t_end - t0,
-                "tok_per_sec": comp_toks / (t_end - t0) if (t_end - t0) > 0 else 0.0,
-                "completion_tokens": comp_toks,
-                "prompt_tokens": usage.get("prompt_tokens", 0)
-            }
-
-        # Streaming mode for TTFT & speed measurement
-        t_first = None
-        t_last = None
-        content_chunks = []
-        reasoning_chunks = []
-        token_count = 0
-        prompt_tokens = 0
-        completion_tokens = 0
-        tool_calls = None
-
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            for line in resp:
-                l = line.decode("utf-8", errors="replace").strip()
-                if not l.startswith("data:"):
-                    continue
-                d_str = l[5:].strip()
-                if d_str == "[DONE]":
-                    break
-                try:
-                    c = json.loads(d_str)
-                except Exception:
-                    continue
-                if "usage" in c and c["usage"]:
-                    prompt_tokens = c["usage"].get("prompt_tokens", prompt_tokens)
-                    completion_tokens = c["usage"].get("completion_tokens", completion_tokens)
-                choices = c.get("choices", [])
-                if choices:
-                    delta = choices[0].get("delta", {})
-                    if "tool_calls" in delta and delta["tool_calls"]:
-                        tool_calls = delta["tool_calls"]
-                    c_text = delta.get("content") or ""
-                    r_text = (
-                        delta.get("reasoning_content")
-                        or delta.get("reasoning")
-                        or delta.get("thought")
-                        or ""
-                    )
-                    if c_text or r_text:
-                        now = time.perf_counter()
-                        if t_first is None:
-                            t_first = now
-                        t_last = now
-                        token_count += 1
-                        if c_text:
-                            content_chunks.append(c_text)
-                        if r_text:
-                            reasoning_chunks.append(r_text)
-
-        t_end = time.perf_counter()
-        total_time = t_end - t0
-        ttft = (t_first - t0) if t_first else total_time
-        gen_time = (t_end - t_first) if t_first else total_time
-        actual_comp = completion_tokens if completion_tokens > 0 else token_count
-        speed = (actual_comp / gen_time) if gen_time > 0 else 0.0
-
-        content_str = "".join(content_chunks)
-        reasoning_str = "".join(reasoning_chunks)
-        return {
-            "content": content_str,
-            "reasoning": reasoning_str,
-            "text": f"{reasoning_str}\n{content_str}" if reasoning_str else content_str,
-            "tool_calls": tool_calls,
-            "ttft_ms": ttft * 1000.0,
-            "total_time_s": total_time,
-            "tok_per_sec": speed,
-            "completion_tokens": actual_comp,
-            "prompt_tokens": prompt_tokens
-        }
+        return benchmark_response(self.client.call(
+            messages, max_tokens=max_tokens, temperature=temperature, stream=stream,
+            tools=tools, tool_choice=tool_choice, timeout=timeout,
+        ))
 
 
 # ============================================================================
@@ -226,11 +110,16 @@ def test_multihop_graph_distractors(client: BenchmarkClient):
     )
 
     log(f"  Ingesting ~{total_blocks * 60:,}-token context with 2 temporal distractors and 1 active specification...")
+    name = "Multi-Hop Graph & Adversarial Distractors"
     res = client.call([{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.0, stream=True)
-    text = res["text"]
+    error = benchmark_error(name, res)
+    if error:
+        return error
+    text = final_content(res)
 
-    has_active_tokyo = ("Transit Hub Tokyo" in text or "Tokyo" in text) and "Bridge Omega" in text
-    has_code = "AUTH_ROUTING_KEY_9921_TOK" in text
+    route = grade_multihop_answer(text)
+    has_active_tokyo = route["route_in_order"]
+    has_code = route["declared_code_correct"]
     has_rejected_chicago = ("chicago" in text.lower()) and ("deprecated" in text.lower() or "rfc-77" in text.lower() or "revoked" in text.lower() or "invalid" in text.lower())
     has_rejected_frankfurt = ("frankfurt" in text.lower()) and ("revoked" in text.lower() or "rollback" in text.lower() or "invalid" in text.lower())
 
@@ -242,7 +131,7 @@ def test_multihop_graph_distractors(client: BenchmarkClient):
     log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | TTFT: {res['ttft_ms']:.1f} ms | Status: {'PASS' if passed else 'FAIL'}")
 
     return {
-        "name": "Multi-Hop Graph & Adversarial Distractors",
+        "name": name,
         "passed": passed,
         "prompt_tokens": res["prompt_tokens"],
         "completion_tokens": res["completion_tokens"],
@@ -275,8 +164,12 @@ def test_novel_algorithmic_fuzz(client: BenchmarkClient):
     )
 
     log("  Requesting synthesis of non-standard Monotonic Ring Buffer...")
+    name = "Novel Algorithmic Synthesis (5k Fuzz)"
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3500, temperature=0.2, stream=True)
-    raw = res["content"] if res["content"].strip() else res["text"]
+    error = benchmark_error(name, res)
+    if error:
+        return error
+    raw = final_content(res)
 
     # Extract code
     code = extract_python_code(raw, prefer_class="class ConcurrentMonotonicRingBuffer")
@@ -351,7 +244,7 @@ def run_fuzz_verification():
             expected_snap = sorted(ground_truth.items(), key=lambda x: x[0])
             assert snap == expected_snap, f"Snapshot mismatch at op {op}: {snap} vs {expected_snap}"
 
-    print("ALL_5000_FUZZ_TESTS_PASSED")
+    print("ALL_5000_FUZZ_TESTS_PASSED", __import__('os').environ['EVAL_RUN_ID'])
 
 if __name__ == "__main__":
     run_fuzz_verification()
@@ -359,39 +252,38 @@ if __name__ == "__main__":
     import_preamble = "import threading\nfrom collections import deque, OrderedDict\nimport sys\nimport random\nimport time"
     full_script = assemble_python_script(code, preamble=import_preamble, harness=fuzz_harness)
     fuzz_passed = False
+    syntax_only = False
     err_msg = ""
-    if os.getenv("EVAL_SAFE"):
-        # SECURITY: EVAL_SAFE=1 disables execution of LLM-generated code; syntax-check only.
+    if not code.strip():
+        err_msg = "No ConcurrentMonotonicRingBuffer code found."
+    elif os.getenv("EVAL_SAFE", "").strip().lower() in ("1", "true", "yes"):
         try:
-            ast.parse(full_script)
-            fuzz_passed = True
-            err_msg = "syntax-only validation (EVAL_SAFE=1)"
-        except SyntaxError as e:
+            tree = ast.parse(full_script)
+            syntax_only = any(isinstance(node, ast.ClassDef) and node.name == "ConcurrentMonotonicRingBuffer"
+                              for node in tree.body)
+            err_msg = ("Execution disabled; syntax check only." if syntax_only
+                       else "No ConcurrentMonotonicRingBuffer class found.")
+        except (SyntaxError, ValueError) as e:
             err_msg = f"SyntaxError: {e}"
     else:
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write(full_script)
-            temp_path = f.name
-
         try:
-            proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=20)
-            fuzz_passed = ("ALL_5000_FUZZ_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
+            proc = run_model_code([sys.executable, "-c", full_script], 20)
+            fuzz_passed = harness_passed(proc, "ALL_5000_FUZZ_TESTS_PASSED")
             if not fuzz_passed:
-                err_msg = (proc.stderr or proc.stdout).strip()[:300]
-        except Exception as e:
+                err_msg = (proc.stderr or proc.stdout).strip()[:300] or "Fuzz verification did not complete."
+        except (OSError, subprocess.TimeoutExpired) as e:
             err_msg = str(e)
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
 
-    log(f"  - Automated 5,000 Operations Fuzz Assertions: {'PASS' if fuzz_passed else 'FAIL'}")
-    if not fuzz_passed:
-        log(f"    [Error]: {err_msg}", color=RED)
-    log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | Status: {'PASS' if fuzz_passed else 'FAIL'}")
+    status = "PASS" if fuzz_passed else ("PARTIAL" if syntax_only else "FAIL")
+    log(f"  - Automated 5,000 Operations Fuzz Assertions: {'not run' if syntax_only else status}")
+    if err_msg:
+        log(f"    [{'NOTE' if syntax_only else 'Error'}]: {err_msg}", color=YELLOW if syntax_only else RED)
+    log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | Status: {status}")
 
     return {
-        "name": "Novel Algorithmic Synthesis (5k Fuzz)",
+        "name": name,
         "passed": fuzz_passed,
+        "status": status,
         "completion_tokens": res["completion_tokens"],
         "tok_s": round(res["tok_per_sec"], 2),
         "error": err_msg
@@ -401,6 +293,55 @@ if __name__ == "__main__":
 # ============================================================================
 # PILLAR 3: COMBINATORIAL ANTI-CONSTRAINT FOLLOWING (IFEVAL TIER)
 # ============================================================================
+def _markdown_headings(text):
+    headings = []
+    fence = None
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        marker = re.match(r"^(`{3,}|~{3,})", stripped)
+        if marker:
+            token = marker.group(1)
+            if fence is None:
+                fence = token
+            elif token[0] == fence[0] and len(token) >= len(fence):
+                fence = None
+        elif fence is None and re.match(r"^#{1,6}(?:\s+|$)", stripped):
+            headings.append((stripped, offset, offset + len(line)))
+        offset += len(line)
+    return headings
+
+
+def _yaml_mapping_verdict(text, expected):
+    """Verify simple scalar mappings; return None for YAML we cannot validate."""
+    keys = set()
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)[ \t]*:[ \t]*(.*)", line)
+        if not match:
+            return None
+        key, value = match.groups()
+        if key in keys:
+            return False
+        keys.add(key)
+        value = value.strip()
+        if value.startswith('"'):
+            try:
+                if not isinstance(json.loads(value), str):
+                    return None
+            except json.JSONDecodeError:
+                return None
+        elif value.startswith("'"):
+            if not re.fullmatch(r"'(?:[^']|'')*'", value):
+                return None
+        else:
+            value = value.split(" #", 1)[0].strip()
+            if value and not re.fullmatch(r"(?:[A-Za-z0-9_./][A-Za-z0-9_./+%-]*|[+-]\d+(?:\.\d+)?)", value):
+                return None
+    return keys == expected
+
+
 def test_ifeval_combinatorial_constraints(client: BenchmarkClient):
     log("\n" + "="*88, bold=True)
     log("[TEST 3/5] Combinatorial Anti-Constraint & Negative Instruction Following (IFEval Tier)", bold=True, color=CYAN)
@@ -422,70 +363,57 @@ def test_ifeval_combinatorial_constraints(client: BenchmarkClient):
     )
 
     log("  Dispatching multi-constraint prompt with lipogram, word counts, and forbidden tokens...")
+    name = "Combinatorial Anti-Constraints (IFEval)"
     res = client.call([{"role": "user", "content": prompt}], max_tokens=3500, temperature=0.4, stream=True)
-    text = res["content"] if res["content"].strip() else res["text"]
+    error = benchmark_error(name, res)
+    if error:
+        return error
+    text = final_content(res)
 
     # Constraint 1: 4 sections
-    s1 = "### Section I: Foundation" in text
-    s2 = "### Section II: Isolation Proof" in text
-    s3 = "### Section III: Hardware Enclaves" in text
-    s4 = "### Section IV: Infrastructure Configuration" in text
-    c1 = s1 and s2 and s3 and s4
+    headings = _markdown_headings(text)
+    expected_headings = ["### Section I: Foundation", "### Section II: Isolation Proof",
+                         "### Section III: Hardware Enclaves", "### Section IV: Infrastructure Configuration"]
+    c1 = [heading[0] for heading in headings] == expected_headings
 
     # Constraint 2: Lipogram in Section II (No 'e' or 'E')
-    c2 = False
-    sec2_text = ""
-    try:
-        sec2_part = text.split("### Section II: Isolation Proof")[1].split("### Section III")[0]
-        # remove header line
-        sec2_lines = [l for l in sec2_part.splitlines() if not l.startswith("###")]
-        sec2_text = "\n".join(sec2_lines).strip()
-        c2 = ("e" not in sec2_text.lower()) and (len(sec2_text) > 30)
-    except Exception:
-        c2 = False
+    sec2_text = text[headings[1][2]:headings[2][1]].strip() if c1 else ""
+    c2 = bool(sec2_text) and "e" not in sec2_text.lower()
 
-    # Constraint 3: Word count in Section III (90 - 130 words)
-    c3 = False
-    sec3_words = 0
-    try:
-        sec3_part = text.split("### Section III: Hardware Enclaves")[1].split("### Section IV")[0]
-        words = sec3_part.strip().split()
-        sec3_words = len(words)
-        c3 = 90 <= sec3_words <= 130
-    except Exception:
-        c3 = False
+    # Constraint 3: Word count in Section III (strictly between 90 and 130)
+    sec3_text = text[headings[2][2]:headings[3][1]] if c1 else ""
+    sec3_words = len(sec3_text.split())
+    c3 = 90 < sec3_words < 130
 
     # Constraint 4: YAML block in Section IV with exact 4 keys
-    c4 = False
-    try:
-        yaml_match = re.search(r"```(?:yaml)?\s*\n(.*?)```", text, re.DOTALL)
-        if yaml_match:
-            y_text = yaml_match.group(1)
-            keys = ["enclave_id", "page_isolation", "ring_buffer_mb", "attestation_pki"]
-            c4 = all(k in y_text for k in keys)
-    except Exception:
-        c4 = False
+    sec4_text = text[headings[3][2]:] if c1 else ""
+    blocks = re.findall(r"(?ims)^```yaml[ \t]*\r?\n(.*?)^```[ \t]*\r?$", sec4_text)
+    expected_keys = {"enclave_id", "page_isolation", "ring_buffer_mb", "attestation_pki"}
+    yaml_checks = [_yaml_mapping_verdict(block, expected_keys) for block in blocks]
+    c4 = True if True in yaml_checks else (None if None in yaml_checks else False)
 
     # Constraint 5: Forbidden anti-tokens
     forbidden = ["constraint", "rule", "forbidden", "negative"]
-    found_forbidden = [f for f in forbidden if f in text.lower()]
+    found_forbidden = [f for f in forbidden if re.search(r"\b" + re.escape(f) + r"\b", text, re.IGNORECASE)]
     c5 = len(found_forbidden) == 0
 
     # Constraint 6: Termination Stamp
-    c6 = "[SECURITY_STAMP_2026_VERIFIED]" in text
+    c6 = bool(text) and text.splitlines()[-1].strip() == "[SECURITY_STAMP_2026_VERIFIED]"
 
-    all_passed = c1 and c2 and c3 and c4 and c5 and c6
+    all_passed = c1 and c2 and c3 and c4 is True and c5 and c6
+    status = "PASS" if all_passed else ("PARTIAL" if c4 is None and c1 and c2 and c3 and c5 and c6 else "FAIL")
     log(f"  - C1 (Exact 4 Required Markdown Sections): {'PASS' if c1 else 'FAIL'}")
     log(f"  - C2 (Section II Lipogram: ZERO 'e'/'E' in text): {'PASS' if c2 else 'FAIL'} (Chars: {len(sec2_text)})")
-    log(f"  - C3 (Section III Word Count 90-130 words): {'PASS' if c3 else 'FAIL'} (Count: {sec3_words})")
-    log(f"  - C4 (Section IV YAML with 4 Exact Keys): {'PASS' if c4 else 'FAIL'}")
+    log(f"  - C3 (Section III Word Count between 90 and 130 words): {'PASS' if c3 else 'FAIL'} (Count: {sec3_words})")
+    log(f"  - C4 (Section IV YAML with 4 Exact Keys): {'PASS' if c4 is True else 'unverified' if c4 is None else 'FAIL'}")
     log(f"  - C5 (Zero Forbidden Anti-Tokens): {'PASS' if c5 else 'FAIL'} (Found: {found_forbidden})")
     log(f"  - C6 (Exact Security Stamp Termination): {'PASS' if c6 else 'FAIL'}")
-    log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | Status: {'PASS' if all_passed else 'FAIL'}")
+    log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | Status: {status}")
 
     return {
-        "name": "Combinatorial Anti-Constraints (IFEval)",
+        "name": name,
         "passed": all_passed,
+        "status": status,
         "completion_tokens": res["completion_tokens"],
         "tok_s": round(res["tok_per_sec"], 2),
         "constraint_details": {
@@ -507,44 +435,6 @@ def test_counterfactual_axiomatic_math(client: BenchmarkClient):
     log("[TEST 4/5] Counterfactual Axiomatic Symbolic Deduction (Non-Commutative Modular Algebra)", bold=True, color=CYAN)
     log("="*88)
 
-    # Ground truth calculation:
-    # Operators in field Z_23:
-    # a (+) b = (3*a - 2*b + 5) mod 23
-    # a (*) b = (a^2 + b + 2) mod 23
-    # Problem:
-    # Given equation: ( (X (+) 4) (*) 3 ) (+) 8 = 19 (mod 23)
-    # Step 1: Let Y = ( (X (+) 4) (*) 3 )
-    # Y (+) 8 = 19
-    # (3*Y - 2*8 + 5) mod 23 = 19
-    # (3*Y - 16 + 5) mod 23 = 19
-    # (3*Y - 11) mod 23 = 19
-    # 3*Y mod 23 = (19 + 11) mod 23 = 30 mod 23 = 7
-    # Inverse of 3 mod 23: 3 * 8 = 24 = 1 mod 23.
-    # Y = (7 * 8) mod 23 = 56 mod 23 = 10.
-    # So Y = 10.
-    #
-    # Step 2: Let Z = (X (+) 4).
-    # Z (*) 3 = Y = 10.
-    # (Z^2 + 3 + 2) mod 23 = 10
-    # (Z^2 + 5) mod 23 = 10
-    # Z^2 mod 23 = 5.
-    # Quadratic residues mod 23:
-    # 1^2=1, 2^2=4, 3^2=9, 4^2=16, 5^2=25=2, 6^2=36=13, 7^2=49=3, 8^2=64=18, 9^2=81=12, 10^2=100=8, 11^2=121=6, 12^2=144=6,
-    # 13^2=169=8, 14^2=196=12, 15^2=225=18, 16^2=256=3, 17^2=289=13, 18^2=324=2, 19^2=361=16, 20^2=400=9, 21^2=441=4, 22^2=484=1
-    # Notice 5 is NOT a quadratic residue mod 23!
-    # Let's design the equation so Z^2 mod 23 has a solution:
-    # Let target Z^2 mod 23 = 4 -> Z = 2 or Z = 21.
-    # If Z^2 + 3 + 2 = 9 mod 23 -> Z^2 = 4 mod 23 -> Z in {2, 21}.
-    # So we want Y = 9.
-    # Then Y (+) 8: (3*9 - 16 + 5) mod 23 = (27 - 11) mod 23 = 16.
-    # So equation is: ( (X (+) 4) (*) 3 ) (+) 8 = 16 (mod 23)
-    # Y = 9.
-    # Z (*) 3 = (Z^2 + 5) mod 23 = 9 -> Z^2 mod 23 = 4 -> Z = 2 or Z = 21.
-    #
-    # Step 3: Z = (X (+) 4) = (3*X - 2*4 + 5) mod 23 = (3*X - 3) mod 23.
-    # Case A: 3*X - 3 = 2 mod 23 -> 3*X = 5 mod 23 -> X = (5 * 8) mod 23 = 40 mod 23 = 17.
-    # Case B: 3*X - 3 = 21 mod 23 -> 3*X = 24 = 1 mod 23 -> X = (1 * 8) mod 23 = 8.
-    # Valid solutions for X are 17 or 8!
     expected_solutions = [8, 17]
 
     prompt = (
@@ -562,13 +452,23 @@ def test_counterfactual_axiomatic_math(client: BenchmarkClient):
     )
 
     log("  Requesting step-by-step resolution of custom non-commutative modular algebra...")
+    name = "Counterfactual Axiomatic Algebra"
     res = client.call([{"role": "user", "content": prompt}], max_tokens=1800, temperature=0.0, stream=True)
-    text = res["text"]
+    error = benchmark_error(name, res)
+    if error:
+        return error
+    text = final_content(res)
+    declarations = re.findall(r"(?im)^[ \t>*_-]*[`*_]*FINAL_SOLUTIONS_FOR_X[`*_]*[ \t]*:[ \t]*(.*)$", text)
+    solutions = []
+    if declarations:
+        declared = declarations[-1].strip().strip("`*").strip()
+        if re.fullmatch(r"\[[ \t]*[+-]?\d+(?:[ \t]*,[ \t]*[+-]?\d+)*[ \t]*\]", declared):
+            solutions = [int(value.strip()) for value in declared[1:-1].split(",")]
 
-    has_inv = ("8" in text) and ("inverse" in text.lower() or "3 * 8" in text or "24" in text)
-    has_8 = "8" in text
-    has_17 = "17" in text
-    matched = ("8" in text and "17" in text)
+    has_inv = bool(re.search(r"\binverse[^\n]*(?<!\d)8(?!\d)", text, re.IGNORECASE))
+    has_8 = 8 in solutions
+    has_17 = 17 in solutions
+    matched = sorted(solutions) == expected_solutions
 
     log(f"  - Modular Multiplicative Inverse of 3 mod 23 (=8): {'PASS' if has_inv else 'FAIL'}")
     log(f"  - Solved First Root X=8: {'PASS' if has_8 else 'FAIL'}")
@@ -576,7 +476,7 @@ def test_counterfactual_axiomatic_math(client: BenchmarkClient):
     log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | Status: {'PASS' if matched else 'FAIL'}")
 
     return {
-        "name": "Counterfactual Axiomatic Algebra",
+        "name": name,
         "passed": matched,
         "completion_tokens": res["completion_tokens"],
         "tok_s": round(res["tok_per_sec"], 2)
@@ -598,7 +498,7 @@ def test_frontier_depth_precision(client: BenchmarkClient, target_context=120000
     ) # ~45 tokens
 
     blocks = max(100, int(target_context / 45))
-    val_front = random.randint(1000, 9999) if "random" in globals() else 4821
+    val_front = random.randint(1000, 9999)
     val_middle = 7392
     val_tail = 3105
 
@@ -635,13 +535,17 @@ def test_frontier_depth_precision(client: BenchmarkClient, target_context=120000
     )
 
     log(f"  Ingesting ~{target_context:,} tokens with needles at 0.5%, 50.0%, and 99.5% depth...")
+    name = f"Frontier Needle Horizon ({target_context//1000}k)"
     res = client.call([{"role": "user", "content": prompt}], max_tokens=1000, temperature=0.0, stream=True)
-    text = res["text"]
+    error = benchmark_error(name, res)
+    if error:
+        return error
+    text = final_content(res)
 
-    m1 = str(val_front) in text
-    m2 = str(val_middle) in text
-    m3 = str(val_tail) in text
-    m_calc = str(expected_composite) in text
+    m1 = _declared_integer(text, "ALPHA_REG") == val_front
+    m2 = _declared_integer(text, "BETA_REG") == val_middle
+    m3 = _declared_integer(text, "GAMMA_REG") == val_tail
+    m_calc = _declared_integer(text, "COMPOSITE_CHECKSUM") == expected_composite
     passed = m1 and m2 and m3 and m_calc
 
     log(f"  - Extreme Front Needle (0.5% depth, ALPHA={val_front}): {'PASS' if m1 else 'FAIL'}")
@@ -651,7 +555,7 @@ def test_frontier_depth_precision(client: BenchmarkClient, target_context=120000
     log(f"  -> Speed: {res['tok_per_sec']:.2f} tok/s | TTFT: {res['ttft_ms']:.1f} ms | Status: {'PASS' if passed else 'FAIL'}")
 
     return {
-        "name": f"Frontier Needle Horizon ({target_context//1000}k)",
+        "name": name,
         "passed": passed,
         "completion_tokens": res["completion_tokens"],
         "ttft_ms": round(res["ttft_ms"], 1),
@@ -686,12 +590,19 @@ def main():
 
     results = []
     t_start = time.perf_counter()
-
-    results.append(test_multihop_graph_distractors(client))
-    results.append(test_novel_algorithmic_fuzz(client))
-    results.append(test_ifeval_combinatorial_constraints(client))
-    results.append(test_counterfactual_axiomatic_math(client))
-    results.append(test_frontier_depth_precision(client, target_context=args.context_depth))
+    checks = [
+        ("Multi-Hop Graph & Adversarial Distractors", test_multihop_graph_distractors, {}),
+        ("Novel Algorithmic Synthesis (5k Fuzz)", test_novel_algorithmic_fuzz, {}),
+        ("Combinatorial Anti-Constraints (IFEval)", test_ifeval_combinatorial_constraints, {}),
+        ("Counterfactual Axiomatic Algebra", test_counterfactual_axiomatic_math, {}),
+        (f"Frontier Needle Horizon ({args.context_depth//1000}k)", test_frontier_depth_precision,
+         {"target_context": args.context_depth}),
+    ]
+    for _, check, kwargs in checks:
+        result = check(client, **kwargs)
+        results.append(result)
+        if result.get("endpoint_unreachable"):
+            break
 
     total_wall_time = time.perf_counter() - t_start
 
@@ -702,15 +613,24 @@ def main():
     log("-" * 88)
 
     all_passed = True
+    any_failed = False
+    incomplete = False
     for r in results:
-        status_color = GREEN if r["passed"] else RED
-        status_text = "PASS" if r["passed"] else "FAIL"
+        status_text = r.get("status", "PASS" if r["passed"] else "FAIL")
+        status_color = GREEN if status_text == "PASS" else (YELLOW if status_text == "PARTIAL" else RED)
         if not r["passed"]:
             all_passed = False
+        if status_text == "FAIL":
+            any_failed = True
+        if status_text == "ERROR":
+            incomplete = True
         log(f"{r['name']:<50} | {status_color}{status_text:<10}{RESET} | {r.get('tok_s', 0):.2f} tok/s")
 
     log("="*88)
-    verdict = f"{GREEN}100% HARDENED & QUALIFIED{RESET}" if all_passed else f"{RED}DEFECTS / QUALIFICATION FAILURES DETECTED{RESET}"
+    verdict = (f"{YELLOW}INCOMPLETE: REQUEST ERROR{RESET}" if incomplete else
+               f"{GREEN}100% HARDENED & QUALIFIED{RESET}" if all_passed else
+               f"{RED}DEFECTS / QUALIFICATION FAILURES DETECTED{RESET}" if any_failed else
+               f"{YELLOW}UNVERIFIED: SOME CHECKS NOT COMPLETED{RESET}")
     log(f"Final Qualification Verdict: {verdict}")
     log(f"Total Wall Time            : {total_wall_time:.2f} s")
 
@@ -725,11 +645,15 @@ def main():
         "model": args.model,
         "total_wall_time_s": round(total_wall_time, 2),
         "all_passed": all_passed,
+        "incomplete": incomplete,
+        "not_run": [name for name, _, _ in checks[len(results):]],
         "results": results
     }
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
     log(f"Detailed Report Exported   : {args.out}\n")
+    if incomplete:
+        sys.exit(3)
 
 
 if __name__ == "__main__":

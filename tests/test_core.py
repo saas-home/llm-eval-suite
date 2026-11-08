@@ -11,6 +11,7 @@ import sys
 import json
 import tempfile
 import unittest
+from contextlib import ExitStack
 from unittest import mock
 
 # Make repository root importable regardless of CWD.
@@ -166,6 +167,230 @@ class TestEnvLoader(unittest.TestCase):
             self.assertTrue(loaded)
             self.assertEqual(cfg["endpoint"], "http://x/v1")
             self.assertEqual(cfg["model"], "model-x")
+
+    def test_loads_documented_run_settings(self):
+        options = {
+            "judge": {"endpoint": "http://judge/v1", "model": "judge-model"},
+            "sampling": {"temperature": 0.7, "top_p": 0.9},
+            "hardware": "one GPU",
+            "max_output_tokens": 65536,
+            "workload": {"users": 2, "gates": {"first_token_s": 30}},
+            "compare_reports": ["earlier.json"],
+            "reference_scores": "scores.json",
+            "judge_labels": "labels.json",
+            "samples": 12,
+            "repeats": 2,
+            "sequential": True,
+            "parallel_suite": False,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(options, f)
+            with mock.patch.object(env_loader, "load_env_file"):
+                cfg, _, loaded = env_loader.load_config(path)
+        self.assertTrue(loaded)
+        for key, value in options.items():
+            with self.subTest(key=key):
+                self.assertEqual(cfg.get(key), value)
+
+    def test_server_config_takes_precedence_over_environment(self):
+        options = {
+            "server1": {
+                "endpoint": "http://config/v1",
+                "model": "config-model",
+                "api_key": "config-key",
+                "max_context": 8192,
+            }
+        }
+        env = {
+            "OPENAI_BASE_URL": "http://env/v1",
+            "OPENAI_MODEL": "env-model",
+            "OPENAI_API_KEY": "env-key",
+            "MAX_CONTEXT": "4096",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(options, f)
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(env_loader, "load_env_file"):
+                cfg, _, _ = env_loader.load_config(path)
+        self.assertEqual(
+            (cfg["endpoint"], cfg["model"], cfg["api_key"], cfg["max_context"]),
+            ("http://config/v1", "config-model", "config-key", 8192),
+        )
+
+    def test_flat_file_settings_override_numbered_environment_for_server_one(self):
+        options = {
+            "endpoint": "http://config/v1", "model": "config-model",
+            "api_key": "config-key", "max_context": 8192,
+        }
+        env = {
+            "ENDPOINT1": "http://env/v1", "MODEL1": "env-model",
+            "API_KEY1": "env-key", "MAX_CONTEXT": "4096",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(options, f)
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(env_loader, "load_env_file"):
+                cfg, _, _ = env_loader.load_config(path)
+        for key in ("endpoint", "model", "api_key", "max_context"):
+            with self.subTest(key=key):
+                self.assertEqual(cfg[key], options[key])
+                self.assertEqual(cfg[key + "1"], options[key])
+
+    def test_explicit_flat_and_numbered_file_settings_remain_distinct(self):
+        options = {
+            "endpoint": "http://single/v1", "model": "single-model",
+            "endpoint1": "http://first/v1", "model1": "first-model",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(options, f)
+            with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(env_loader, "load_env_file"):
+                cfg, _, _ = env_loader.load_config(path)
+        self.assertEqual((cfg["endpoint"], cfg["model"]), ("http://single/v1", "single-model"))
+        self.assertEqual((cfg["endpoint1"], cfg["model1"]), ("http://first/v1", "first-model"))
+
+
+class TestEvalConfiguration(unittest.TestCase):
+    def run_configured_eval(self, settings, extra_args=()):
+        import eval as ev
+        import suites
+
+        fake = mock.MagicMock()
+        fake.server_down = False
+        fake.fetch_models.return_value = []
+        fake.fetch_server_metrics.return_value = None
+        fake.fetch_server_info.return_value = {}
+        fake.detect_server_slots.return_value = (2, "/health")
+        config = {
+            "endpoint": "http://config/v1",
+            "model": "test-model",
+            "tests": [3, 12],
+            **settings,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            config_path = os.path.join(td, "config.json")
+            report_path = os.path.join(td, "report.json")
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f)
+            argv = ["eval.py", "--config", config_path, "--sequential", "--no-log-file",
+                    "--auto", "--out", report_path, *extra_args]
+            with ExitStack() as stack:
+                stack.enter_context(mock.patch.dict(os.environ, {"OPENAI_API_KEY": "env-key"}, clear=True))
+                stack.enter_context(mock.patch.object(env_loader, "load_env_file"))
+                stack.enter_context(mock.patch.object(sys, "argv", argv))
+                stack.enter_context(mock.patch.object(ev, "SWE_MAX_TOKENS", ev.SWE_MAX_TOKENS))
+                stack.enter_context(mock.patch.object(suites, "QUAL_MAX_TOKENS", suites.QUAL_MAX_TOKENS))
+                stack.enter_context(mock.patch.object(suites, "SAMPLING", suites.SAMPLING))
+                names = ("LLMClient", "log", "run_test_concurrency", "run_test_context_scaling",
+                         "compute_executive_summary", "print_summary_table", "print_test_timings")
+                patched = stack.enter_context(mock.patch.multiple(ev, **{name: mock.DEFAULT for name in names}))
+                patched["LLMClient"].return_value = fake
+                patched["run_test_concurrency"].return_value = {"status": "PASS", "verified_max_parallel": 2}
+                patched["run_test_context_scaling"].return_value = {"status": "PASS"}
+                patched["compute_executive_summary"].return_value = {}
+                judge_builder = stack.enter_context(mock.patch.object(ev.judge, "build_judge",
+                                                                      return_value=ev.judge.Judge()))
+                workload_runner = stack.enter_context(mock.patch.object(ev.workload, "run_workload",
+                                                                        return_value={"status": "PASS"}))
+                report_writer = stack.enter_context(mock.patch.object(ev.report_md, "write_report",
+                                                                      return_value="report.md"))
+                ev.main()
+                with open(report_path, encoding="utf-8") as f:
+                    report = json.load(f)
+                return report, patched, judge_builder, workload_runner, report_writer
+
+    def test_explicit_default_cli_values_override_config(self):
+        report, _, _, _, _ = self.run_configured_eval(
+            {"suite": "swe", "language": "polyglot"}, ("--suite", "all", "--language", "python"))
+        self.assertEqual((report["suite"], report["language"]), ("all", "python"))
+
+    def test_quick_config_controls_context_and_concurrency(self):
+        report, patched, _, _, _ = self.run_configured_eval({"quick": True})
+        self.assertTrue(report["quick_mode"])
+        self.assertEqual(report["context_scaling_steps"], [4000, 8000, 16000])
+        self.assertTrue(patched["run_test_concurrency"].call_args.kwargs["quick"])
+        self.assertFalse(patched["run_test_context_scaling"].call_args.kwargs["run_capacity"])
+
+    def test_config_api_key_overrides_environment_but_not_cli(self):
+        _, patched, _, _, _ = self.run_configured_eval({"api_key": "config-key"})
+        self.assertEqual(patched["LLMClient"].call_args.kwargs["api_key"], "config-key")
+        _, patched, _, _, _ = self.run_configured_eval({"api_key": "config-key"}, ("--api-key", "cli-key"))
+        self.assertEqual(patched["LLMClient"].call_args.kwargs["api_key"], "cli-key")
+
+    def test_run_settings_reach_their_consumers(self):
+        options = {
+            "tests": [46],
+            "judge": {"endpoint": "http://judge/v1", "model": "judge-model"},
+            "sampling": {"temperature": 0.7},
+            "hardware": "one GPU",
+            "max_output_tokens": 65536,
+            "workload": {"users": 2},
+            "compare_reports": ["earlier.json"],
+            "reference_scores": "scores.json",
+            "judge_labels": "labels.json",
+            "samples": 12,
+            "repeats": 2,
+        }
+        report, _, judge_builder, workload_runner, report_writer = self.run_configured_eval(options)
+        self.assertEqual(judge_builder.call_args.args[0]["endpoint"], options["judge"]["endpoint"])
+        self.assertEqual(workload_runner.call_args.args[1], options["workload"])
+        self.assertEqual(report["sampling"], options["sampling"])
+        self.assertEqual(report["hardware"], options["hardware"])
+        self.assertEqual(report["max_output_tokens"], options["max_output_tokens"])
+        self.assertEqual(report["qualification"], {"samples": 12, "repeats": 2})
+        self.assertEqual(report_writer.call_args.kwargs["compare_paths"], options["compare_reports"])
+        self.assertEqual(report_writer.call_args.kwargs["reference_path"], options["reference_scores"])
+        self.assertEqual(report_writer.call_args.kwargs["judge_labels"], options["judge_labels"])
+
+
+class TestCompareConfiguration(unittest.TestCase):
+    def run_configured_compare(self, extra_args=()):
+        config = {"endpoint": "http://config/v1", "model": "config-model", "api_key": "config-key"}
+        env = {"OPENAI_BASE_URL": "http://env/v1", "OPENAI_MODEL": "env-model", "OPENAI_API_KEY": "env-key"}
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f)
+            argv = ["compare.py", "--config", path, "--out", os.path.join(td, "report.json"), *extra_args]
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(env_loader, "load_env_file"), \
+                 mock.patch.object(sys, "argv", argv), \
+                 mock.patch.object(compare, "run_benchmark") as run:
+                compare.main()
+                return run.call_args
+
+    def test_file_settings_take_precedence_over_environment(self):
+        call = self.run_configured_compare()
+        self.assertEqual(call.args[0], "http://config/v1")
+        self.assertEqual(call.kwargs["model"], "config-model")
+        self.assertEqual(call.kwargs["api_key"], "config-key")
+
+    def test_explicit_url_overrides_config_even_when_equal_to_environment(self):
+        call = self.run_configured_compare(("--url", "http://env/v1", "--model", "cli-model"))
+        self.assertEqual(call.args[0], "http://env/v1")
+        self.assertEqual(call.kwargs["model"], "cli-model")
+
+    def test_live_mode_uses_flat_config_over_numbered_environment(self):
+        config = {"endpoint": "http://config/v1", "model": "config-model", "api_key": "config-key"}
+        env = {"ENDPOINT1": "http://env/v1", "MODEL1": "env-model", "API_KEY1": "env-key",
+               "ENDPOINT2": "http://second/v1", "MODEL2": "second-model"}
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f)
+            with mock.patch.dict(os.environ, env, clear=True), \
+                 mock.patch.object(env_loader, "load_env_file"), \
+                 mock.patch.object(sys, "argv", ["compare.py", "--config", path, "--live"]), \
+                 mock.patch.object(compare, "run_live_arena") as run:
+                compare.main()
+        self.assertEqual(run.call_args.kwargs["endpoint1"], "http://config/v1")
+        self.assertEqual(run.call_args.kwargs["model1"], "config-model")
+        self.assertEqual(run.call_args.kwargs["api_key1"], "config-key")
 
 
 class TestParseSelectedTests(unittest.TestCase):
@@ -1361,6 +1586,21 @@ class TestReviewFixesAndRobustness(unittest.TestCase):
                 self.assertIn("First log entry", f.read())
             with open(log2, "r", encoding="utf-8") as f:
                 self.assertIn("Second log entry", f.read())
+
+    def test_file_logger_accepts_a_relative_filename(self):
+        import client
+        old_cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                os.chdir(td)
+                self.assertEqual(client.init_file_logger("relative.log"), "relative.log")
+                client.log("relative entry")
+                client.close_file_logger()
+                with open("relative.log", encoding="utf-8") as f:
+                    self.assertIn("relative entry", f.read())
+            finally:
+                client.close_file_logger()
+                os.chdir(old_cwd)
 
     def test_n_way_compare_formatting_no_literal_padding(self):
         import reporting

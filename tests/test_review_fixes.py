@@ -5,6 +5,7 @@ import io
 import os
 import socket
 import sys
+import tempfile
 import unittest
 import urllib.error
 from unittest import mock
@@ -413,6 +414,15 @@ class TestOpenFindings(unittest.TestCase):
         self.assertFalse(polyglot._passed_run(0, "POLYGLOT_OK\n", {"EVAL_RUN_ID": "abc"}))
         self.assertTrue(polyglot._passed_run(0, "POLYGLOT_OK abc\n", {"EVAL_RUN_ID": "abc"}))
 
+    def test_model_code_cannot_inherit_python_optimization_that_disables_assertions(self):
+        command = [sys.executable, "-c", "assert False, 'verification must run'"]
+        with mock.patch.dict(os.environ, {"PYTHONOPTIMIZE": "1"}):
+            implicit = client_module.run_model_code(command, 10)
+            explicit = client_module.run_model_code(command, 10, env=client_module.model_code_env())
+        self.assertNotEqual(implicit.returncode, 0)
+        self.assertNotEqual(explicit.returncode, 0)
+        self.assertIn("verification must run", implicit.stderr)
+
     def test_spoofed_diff_behavior_check_fails(self):
         """A patch that printed DIFF_BEHAVIOR_VERIFIED and exited passed Test 20."""
         import difflib
@@ -554,6 +564,134 @@ class TestOpenFindings(unittest.TestCase):
         self.assertEqual(len(jars), 7)
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{64}", sha) for sha, _ in jars))
         self.assertIn("sha256sum -c", block)
+
+
+class _PopenCalled(Exception):
+    pass
+
+
+def _capture_popen(calls):
+    def fake(cmd, **kwargs):
+        calls.append((cmd, kwargs))
+        raise _PopenCalled()
+    return fake
+
+
+class TestModelCodeUser(unittest.TestCase):
+    """As root (the Docker image), model code ran as root: it could read a
+    mounted config.json with API keys and rewrite the reports."""
+
+    def _as_root_with_user(self, uid=64999, gid=64999):
+        entry = MagicMock(pw_uid=uid, pw_gid=gid)
+        return (mock.patch.object(client_module.os, "geteuid", return_value=0),
+                mock.patch.object(client_module.pwd, "getpwnam", return_value=entry))
+
+    def test_root_runs_model_code_as_the_code_user_in_its_own_folder(self):
+        calls = []
+        root, user = self._as_root_with_user()
+        with root, user, tempfile.TemporaryDirectory() as work, \
+                mock.patch.object(client_module, "_give_work_dir") as give, \
+                mock.patch.object(client_module, "_POPEN_TAKES_USER", True), \
+                mock.patch.object(client_module.subprocess, "Popen", side_effect=_capture_popen(calls)):
+            with self.assertRaises(_PopenCalled):
+                client_module.run_model_code(["python3", "-c", "pass"], 5, cwd=work)
+            give.assert_called_once_with(work, 64999, 64999)
+        cmd, kwargs = calls[0]
+        self.assertEqual(cmd, ["python3", "-c", "pass"])
+        self.assertEqual((kwargs["user"], kwargs["group"], kwargs["extra_groups"]), (64999, 64999, []))
+        self.assertEqual(kwargs["env"]["HOME"], work)  # not root's home
+
+    def test_python_38_switches_user_in_a_launcher(self):
+        calls = []
+        root, user = self._as_root_with_user()
+        with root, user, mock.patch.object(client_module, "_give_work_dir"), \
+                mock.patch.object(client_module, "_POPEN_TAKES_USER", False), \
+                mock.patch.object(client_module.subprocess, "Popen", side_effect=_capture_popen(calls)):
+            with self.assertRaises(_PopenCalled):
+                client_module.run_model_code(["go", "test"], 5)
+        cmd, kwargs = calls[0]
+        self.assertNotIn("user", kwargs)
+        self.assertEqual(cmd[1:2] + cmd[3:], ["-c", "64999", "64999", "go", "test"])
+        self.assertIn("os.setuid", cmd[2])
+
+    def test_without_root_nothing_changes(self):
+        calls = []
+        with mock.patch.object(client_module.os, "geteuid", return_value=1000), \
+                mock.patch.object(client_module, "_give_work_dir") as give, \
+                mock.patch.object(client_module.subprocess, "Popen", side_effect=_capture_popen(calls)):
+            with self.assertRaises(_PopenCalled):
+                client_module.run_model_code(["true"], 5)
+        give.assert_not_called()
+        self.assertNotIn("user", calls[0][1])
+
+    def test_missing_user_or_root_user_runs_as_root(self):
+        with mock.patch.object(client_module.os, "geteuid", return_value=0), \
+                mock.patch.object(client_module.pwd, "getpwnam", side_effect=KeyError("evalcode")), \
+                mock.patch.object(client_module, "_missing_code_user_warned", False), \
+                mock.patch.object(client_module, "log") as log:
+            self.assertIsNone(client_module.model_code_account())
+        self.assertIn("runs as root", log.call_args[0][0])
+        root, _ = self._as_root_with_user()
+        with root, mock.patch.object(client_module.pwd, "getpwnam", return_value=MagicMock(pw_uid=0, pw_gid=0)):
+            self.assertIsNone(client_module.model_code_account())
+
+    def test_a_folder_outside_the_temp_folder_is_never_handed_over(self):
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with mock.patch.object(client_module.os, "chown") as chown:
+            with self.assertRaises(ValueError):
+                client_module._give_work_dir(repo, 64999, 64999)
+            client_module._give_work_dir(tempfile.gettempdir(), 64999, 64999)  # shared: left as it is
+        chown.assert_not_called()
+
+    def test_handover_changes_links_and_never_follows_them(self):
+        with tempfile.TemporaryDirectory() as outside, tempfile.TemporaryDirectory() as work:
+            secret = os.path.join(outside, "config.json")
+            open(secret, "w").close()
+            os.mkdir(os.path.join(work, "sub"))
+            open(os.path.join(work, "sub", "harness.py"), "w").close()
+            os.symlink(secret, os.path.join(work, "link"))
+            os.symlink(outside, os.path.join(work, "dirlink"))
+            with mock.patch.object(client_module.os, "chown") as chown:
+                client_module._give_work_dir(work, 64999, 64999)
+        names = sorted(c.args[0] for c in chown.call_args_list[1:])
+        self.assertEqual(names, ["dirlink", "harness.py", "link", "sub"])
+        self.assertTrue(all(c.kwargs["follow_symlinks"] is False for c in chown.call_args_list))
+        self.assertTrue(all(c.kwargs.get("dir_fd") is not None for c in chown.call_args_list[1:]))
+
+
+@unittest.skipUnless(hasattr(os, "geteuid") and os.geteuid() == 0 and client_module.model_code_account(),
+                     "needs root and the evalcode user (run in the Docker image)")
+class TestModelCodeUserLive(unittest.TestCase):
+    """The real switch, in the Docker image."""
+
+    def test_model_code_cannot_read_root_files_or_write_reports(self):
+        uid = client_module.model_code_account()[0]
+        with tempfile.TemporaryDirectory() as outside, tempfile.TemporaryDirectory() as work:
+            secret = os.path.join(outside, "config.json")
+            with open(secret, "w") as f:
+                f.write('{"api_key": "sk-test"}')
+            os.chmod(secret, 0o600)
+            os.chmod(outside, 0o755)  # like /app: readable folder, root-only file
+            reports = os.path.join(outside, "results")
+            os.mkdir(reports, 0o755)
+            script = os.path.join(work, "answer.py")
+            with open(script, "w") as f:
+                f.write(
+                    "import os, sys\n"
+                    f"print('UID', os.getuid())\n"
+                    f"try:\n    open({secret!r}).read(); print('READ_SECRET')\nexcept PermissionError:\n    pass\n"
+                    f"try:\n    open(os.path.join({reports!r}, 'x.json'), 'w'); print('WROTE_REPORT')\n"
+                    "except PermissionError:\n    pass\n"
+                    "open('own.txt', 'w').write('ok')\n"
+                    "print('HOME', os.environ['HOME'])\n")
+            proc = client_module.run_model_code([sys.executable, script], 10, cwd=work)
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            self.assertIn(f"UID {uid}", proc.stdout)
+            self.assertEqual(client_module.model_code_account(), (64999, 64999))
+            self.assertNotIn("READ_SECRET", proc.stdout)
+            self.assertNotIn("WROTE_REPORT", proc.stdout)
+            self.assertIn(f"HOME {work}", proc.stdout)
+            self.assertTrue(os.path.isfile(os.path.join(work, "own.txt")))
 
 
 if __name__ == "__main__":

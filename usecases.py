@@ -8,8 +8,8 @@ intervals) and its checks (single-run core tests). The verdict is one of:
   Recommended               every scored test's 95% CI lower bound is at or
                             above its pass mark, every repeated test answers
                             at least 85% of items right on every attempt
-                            (pass^k), no check failed, and the evidence is
-                            strong.
+                            (pass^k), no check failed or attempts or languages
+                            were unscored, and the evidence is strong.
   Usable with human review  every scored test's mean is at or above its
                             partial mark (or, with checks only, none failed).
   Not recommended           below that.
@@ -91,15 +91,30 @@ def scored_summary(key: str, data: Any) -> Optional[Dict[str, Any]]:
     marks = dict(suites._marks_record(key), **{k: v for k, v in (data.get("pass_marks") or {}).items()
                                               if v is not None})
     rel = data.get("reliability") or {}
+    per_language = data.get("per_language") or {}
+    unscored_attempts = data.get("unscored_attempts")
+    if unscored_attempts is None:
+        attempt_details = details or [d for result in per_language.values() for d in result.get("details", [])]
+        unscored_attempts = sum(score is None for d in attempt_details for score in d.get("attempt_scores", []))
+    languages_skipped = list(data.get("languages_skipped") or [])
+    for language, result in per_language.items():
+        if result.get("status") == "SKIPPED" and language not in languages_skipped:
+            languages_skipped.append(language)
+    unscored_items = data.get("unscored_items", 0)
+    repeats = data.get("repeats", 1)
+    total_attempts = data.get("total_attempts") or (items + unscored_items) * max(1, repeats or 1)
     return {"key": key, "accuracy_pct": round(acc, 1), "ci95_low_pct": round(lo, 1), "ci95_high_pct": round(hi, 1),
-            "items": items, "repeats": data.get("repeats", 1), "pass_pct": marks["pass_pct"],
+            "items": items, "repeats": repeats, "pass_pct": marks["pass_pct"],
             "partial_pct": marks["partial_pct"], "pass_all_repeats_pct": rel.get("pass_all_repeats_pct"),
             "inconsistent_items": rel.get("inconsistent_items"), "public": key in PUBLIC_BENCHMARKS,
             "judged": key in JUDGED_TESTS,
             # Graded without a judge (none configured, or it went down): only
             # format and exact-match checks were made.
             "objective": bool(data.get("objective_only") or data.get("partly_objective")),
-            "unscored_items": data.get("unscored_items", 0)}
+            "unscored_items": unscored_items,
+            "unscored_attempts": unscored_attempts,
+            "total_attempts": total_attempts,
+            "languages_skipped": languages_skipped}
 
 
 def scored_tier(s: Dict[str, Any]) -> str:
@@ -188,6 +203,26 @@ def evaluate_use_case(uc: Dict[str, Any], results: Dict[str, Any]) -> Dict[str, 
         if tier == RECOMMENDED:
             tier = REVIEW
         reasons.append("no score from: " + ", ".join(unmeasured) + " (skipped, infra or harness failure)")
+    # A small unscored share (suites.UNSCORED_TOLERANCE_PCT) is reported but
+    # does not cap the verdict; a larger one leaves the result unproven.
+    unscored = [f"{s['key']} ({s['unscored_items']})" for s in scored if s["unscored_items"]]
+    if unscored:
+        if tier == RECOMMENDED and any(suites.too_many_unscored(s["unscored_items"], s["items"] + s["unscored_items"])
+                                       for s in scored):
+            tier = REVIEW
+        reasons.append("unscored items: " + ", ".join(unscored))
+    incomplete_attempts = [f"{s['key']} ({s['unscored_attempts']})" for s in scored if s["unscored_attempts"]]
+    if incomplete_attempts:
+        if tier == RECOMMENDED and any(suites.too_many_unscored(s["unscored_attempts"], s["total_attempts"])
+                                       for s in scored):
+            tier = REVIEW
+        reasons.append("unscored attempts: " + ", ".join(incomplete_attempts))
+    missing_languages = [f"{s['key']} ({', '.join(s['languages_skipped'])})"
+                         for s in scored if s["languages_skipped"]]
+    if missing_languages:
+        if tier == RECOMMENDED:
+            tier = REVIEW
+        reasons.append("unscored languages: " + ", ".join(missing_languages))
     if tier == RECOMMENDED and evidence != "strong":
         tier = REVIEW
         reasons.append(f"limited evidence ({items} scored items)")

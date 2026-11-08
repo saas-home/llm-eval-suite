@@ -25,9 +25,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import domain_benchmarks as db
-from client import InfraTrackingClient, carry_log_buffer, log, mark_infra_failure, GREEN, YELLOW, CYAN
+from client import DATA_DIR, InfraTrackingClient, carry_log_buffer, log, mark_infra_failure, GREEN, YELLOW, CYAN
 
-SUITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "suites")
+SUITE_DIR = os.path.join(DATA_DIR, "suites")
 DEFAULT_SAMPLES = 50
 DEFAULT_REPEATS = 3
 # Output budget per answer, thinking included. The model card allows far more
@@ -38,22 +38,46 @@ QUAL_MAX_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS  # set by --max-output-tokens / conf
 # Room kept free in the context window next to a prompt (chat template, rounding).
 CONTEXT_HEADROOM_TOKENS = 512
 MIN_OUTPUT_TOKENS = 1024
+# Unscored attempts or items (no judge, prompt too large for the server,
+# grading-tool failure) up to this share of the total leave a PASS standing
+# and do not by themselves cap a use case below Recommended. They are still
+# reported.
+UNSCORED_TOLERANCE_PCT = 5.0
+
+
+def too_many_unscored(unscored: int, total: int) -> bool:
+    """True when `unscored` of `total` exceeds UNSCORED_TOLERANCE_PCT."""
+    if not unscored:
+        return False
+    if total <= 0:
+        return True
+    return 100.0 * unscored / total > UNSCORED_TOLERANCE_PCT
+
+
+class PromptTooLargeError(ValueError):
+    """The estimated prompt leaves too little room for an answer."""
 
 
 def output_budget(client: Any, messages: List[Dict[str, Any]], budget: Optional[int] = None) -> int:
     """The output budget for one request: `budget` (default QUAL_MAX_TOKENS),
     capped so the prompt and the answer fit the server's context window. The
     prompt is estimated at 3 characters per token, which overestimates
-    English text, so the cap errs on the safe side."""
+    English text, so the cap errs on the safe side. Room below
+    MIN_OUTPUT_TOKENS (or below a smaller requested budget) raises
+    PromptTooLargeError: a cut-off answer would be scored as the model's
+    failure when the cause is the server's context size."""
     want = budget or QUAL_MAX_TOKENS
     context = getattr(client, "max_context", None)
     if not isinstance(context, int) or context <= 0:
         return want
     prompt_tokens = len(json.dumps(messages)) // 3
     room = context - prompt_tokens - CONTEXT_HEADROOM_TOKENS
-    # Below MIN_OUTPUT_TOKENS of room, ask for what fits (at least 256): a
-    # larger request would exceed the window and be rejected outright.
-    return min(want, room) if room >= MIN_OUTPUT_TOKENS else max(256, room)
+    needed = min(want, MIN_OUTPUT_TOKENS)
+    if room < needed:
+        raise PromptTooLargeError(
+            f"estimated prompt ({prompt_tokens:,} tokens) and {CONTEXT_HEADROOM_TOKENS:,}-token reserve "
+            f"leave {max(room, 0):,} output tokens in the {context:,}-token context (need {needed:,})")
+    return min(want, room)
 CI_SEED = 1234
 
 # Sampling for every repeated benchmark. None means the suite default:
@@ -194,12 +218,13 @@ def run_benchmark(client: Any, title: str, items: List[Dict[str, Any]], make_mes
     score is the mean over repeats; accuracy is the mean item score. Any
     request that failed for infrastructure reasons marks the whole result as
     an infra failure (excluded from model scoring). So does a failed judge
-    request: a grader reports it as detail["judge_error"].
+    request or grading tool: a grader reports it in its detail.
 
     A grader returns score None for an attempt it cannot score (for example
     a judged requirement with no judge and no objective check). Those
     attempts are left out; an item with none scored is left out of the
-    accuracy and counted in `unscored_items`."""
+    accuracy and counted in `unscored_items`. All such attempts, including
+    missing repeats of otherwise scored items, count in `unscored_attempts`."""
     log(f"[{title}] {min(samples, len(items))} items x {repeats} repeat(s)", bold=True, color=CYAN)
     if not items:
         return {"status": "SKIPPED", "error": "dataset missing (run scripts/fetch_benchmark_data.py)"}
@@ -214,7 +239,11 @@ def run_benchmark(client: Any, title: str, items: List[Dict[str, Any]], make_mes
         idx, rep = job
         item = chosen[idx]
         messages = make_messages(item)
-        res = tracker.call(messages, max_tokens=output_budget(client, messages, max_tokens), sampling=sampling_for(repeats),
+        try:
+            budget = output_budget(client, messages, max_tokens)
+        except PromptTooLargeError as e:
+            return idx, rep, {}, None, {"error": str(e)}
+        res = tracker.call(messages, max_tokens=budget, sampling=sampling_for(repeats),
                            stream=False, **(call_kwargs or {}))
         score, detail = grade(item, res)
         if score is not None and score < 1.0:  # keep the answer so every miss can be audited
@@ -233,17 +262,30 @@ def run_benchmark(client: Any, title: str, items: List[Dict[str, Any]], make_mes
                 speeds.append(res["decode_speed"])
     scored = {i: [x for x in v if x is not None] for i, v in scores.items()}
     scored_idx = [i for i in range(len(chosen)) if scored[i]]
+    unscored_attempts = sum(score is None for attempts in scores.values() for score in attempts)
+    judge_errors = [f"judge: {d['judge_error']}" for ds in details.values() for d in ds if d.get("judge_error")]
+    grader_errors = [f"grading: {d.get('detail') or 'infrastructure failure'}"
+                     for ds in details.values() for d in ds if d.get("stage") == "infra"]
+    infra_errors = tracker.infra_errors + judge_errors + grader_errors
     if not scored_idx:
-        log("  -> no item could be scored (judged requirements without a judge and no objective check)",
-            color=YELLOW)
-        return {"status": "SKIPPED", "error": "no item could be scored without a judge", "items": len(chosen),
-                "unscored_items": len(chosen)}
+        errors = [d["error"] for attempts in details.values() for d in attempts if d.get("error")]
+        reason = errors[0] if errors else (infra_errors[0] if infra_errors else "no item could be scored without a judge")
+        log(f"  -> no item could be scored ({reason})", color=YELLOW)
+        result = {"status": "FAIL" if infra_errors else "SKIPPED", "error": reason, "items": len(chosen),
+                  "unscored_items": len(chosen), "unscored_attempts": unscored_attempts,
+                  "total_attempts": len(jobs)}
+        return mark_infra_failure(result, infra_errors)
     item_scores = [statistics.mean(scored[i]) for i in scored_idx]
     accuracy = 100.0 * statistics.mean(item_scores)
     lo, hi = bootstrap_ci(item_scores)
     status = status_for(accuracy, key)
+    unscored_items = len(chosen) - len(scored_idx)
+    if status == "PASS" and (too_many_unscored(unscored_attempts, len(jobs))
+                             or too_many_unscored(unscored_items, len(chosen))):
+        status = "PARTIAL"
     log(f"  -> Accuracy {accuracy:.1f}% (95% CI {100 * lo:.1f}-{100 * hi:.1f}) over {len(scored_idx)} items "
-        f"x {repeats} | truncated answers: {truncated[0]} -> {status}", color=GREEN if status == "PASS" else YELLOW)
+        f"x {repeats} | unscored attempts: {unscored_attempts} | truncated answers: {truncated[0]} -> {status}",
+        color=GREEN if status == "PASS" else YELLOW)
     result = {
         "status": status,
         "pass_marks": _marks_record(key),
@@ -251,7 +293,9 @@ def run_benchmark(client: Any, title: str, items: List[Dict[str, Any]], make_mes
         "ci95_low_pct": round(100 * lo, 1),
         "ci95_high_pct": round(100 * hi, 1),
         "items": len(scored_idx),
-        "unscored_items": len(chosen) - len(scored_idx),
+        "unscored_items": unscored_items,
+        "unscored_attempts": unscored_attempts,
+        "total_attempts": len(jobs),
         "repeats": repeats,
         "sampling": sampling_for(repeats),
         "reliability": reliability([scores[i] for i in scored_idx], key),
@@ -267,8 +311,7 @@ def run_benchmark(client: Any, title: str, items: List[Dict[str, Any]], make_mes
                      "attempts": details[i]}
                     for i in range(len(chosen))],
     }
-    judge_errors = [f"judge: {d['judge_error']}" for ds in details.values() for d in ds if d.get("judge_error")]
-    return mark_infra_failure(result, tracker.infra_errors + judge_errors)
+    return mark_infra_failure(result, infra_errors)
 
 
 def judge_failure(out: Dict[str, Any]) -> Dict[str, Any]:
@@ -496,7 +539,8 @@ def make_grade_simpleqa(judge):
 def simpleqa_summary(result: Dict[str, Any]) -> Dict[str, Any]:
     """Adds SimpleQA's standard metrics: correct, not attempted, and accuracy
     on attempted questions (rewarding calibrated 'I don't know')."""
-    attempts = [a for d in result.get("details", []) for a in d["attempts"] if "judge_error" not in a]
+    attempts = [a for d in result.get("details", []) for a in d["attempts"]
+                if "judge_error" not in a and "error" not in a]
     if not attempts:
         return result
     n = len(attempts)
@@ -744,7 +788,7 @@ def run_ifeval_full(client, judge, samples, repeats, workers):
     res = run_benchmark(client, "TEST 40 IFEval (full, strict)", usable,
                         lambda it: [{"role": "user", "content": it["prompt"]}], grade, samples, repeats, workers,
                         meta=meta, key="ifeval_full")
-    attempts = [a for d in res.get("details", []) for a in d["attempts"]]
+    attempts = [a for d in res.get("details", []) for a in d["attempts"] if "error" not in a]
     if attempts:
         inst_strict = [ok for a in attempts for ok in a["strict"]]
         inst_loose = [ok for a in attempts for ok in a["loose"]]
@@ -1132,6 +1176,7 @@ def run_multipl_e(client, judge, samples, repeats, workers):
     the official tests. Reports per-language and overall accuracy."""
     import polyglot
     per_lang, all_scores, tokens, missing = {}, [], 0, []
+    unscored_items = unscored_attempts = total_attempts = 0
     for lang in MULTIPL_E_LANGS:
         # No toolchain, no verdict: skip the language before asking the model.
         if lang != "python" and not polyglot.toolchain_available(lang):
@@ -1145,15 +1190,27 @@ def run_multipl_e(client, judge, samples, repeats, workers):
         res = run_benchmark(client, f"TEST 32 MultiPL-E [{lang}]", items, multipl_e_messages, grade_multipl_e,
                             samples, repeats, workers, meta=meta, key="multipl_e")
         per_lang[lang] = res
-        all_scores += [d["score"] for d in res.get("details", [])]
+        if res["status"] == "SKIPPED":
+            missing.append(lang)
+            log(f"[TEST 32 MultiPL-E [{lang}]] SKIPPED: {res['error']}", color=YELLOW)
+        all_scores += [d["score"] for d in res.get("details", []) if d["score"] is not None]
         tokens += res.get("completion_tokens", 0)
+        unscored_items += res.get("unscored_items", 0)
+        unscored_attempts += res.get("unscored_attempts", 0)
+        total_attempts += res.get("total_attempts", 0)
+    infra = [r.get("error") for r in per_lang.values() if r.get("failure_kind") == "infra"]
     if not all_scores:
-        return {"status": "SKIPPED", "error": "dataset missing (run scripts/fetch_benchmark_data.py coding)"}
+        reason = next((r["error"] for r in per_lang.values() if r.get("error")), "no MultiPL-E item could be scored")
+        result = {"status": "FAIL" if infra else "SKIPPED", "error": reason, "unscored_items": unscored_items,
+                  "unscored_attempts": unscored_attempts, "total_attempts": total_attempts,
+                  "per_language": per_lang, "languages_skipped": missing}
+        return mark_infra_failure(result, infra)
     accuracy = 100.0 * statistics.mean(all_scores)
     lo, hi = bootstrap_ci(all_scores)
     status = status_for(accuracy, "multipl_e")
-    if missing and status == "PASS":
-        status = "PARTIAL"  # languages without a toolchain are unverified, never a PASS
+    if status == "PASS" and (missing or too_many_unscored(unscored_attempts, total_attempts)
+                             or too_many_unscored(unscored_items, len(all_scores) + unscored_items)):
+        status = "PARTIAL"
     result = {
         "status": status,
         "pass_marks": _marks_record("multipl_e"),
@@ -1161,6 +1218,9 @@ def run_multipl_e(client, judge, samples, repeats, workers):
         "ci95_low_pct": round(100 * lo, 1),
         "ci95_high_pct": round(100 * hi, 1),
         "items": len(all_scores),
+        "unscored_items": unscored_items,
+        "unscored_attempts": unscored_attempts,
+        "total_attempts": total_attempts,
         "repeats": repeats,
         "completion_tokens": tokens,
         "sampling": sampling_for(repeats),
@@ -1172,7 +1232,6 @@ def run_multipl_e(client, judge, samples, repeats, workers):
         "source": "https://huggingface.co/datasets/nuprl/MultiPL-E + openai/openai_humaneval",
         "license": "MIT",
     }
-    infra = [r.get("error") for r in per_lang.values() if r.get("failure_kind") == "infra"]
     return mark_infra_failure(result, infra)
 
 

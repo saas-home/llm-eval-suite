@@ -1,0 +1,7 @@
+include config.json.example
+recursive-include assets *
+recursive-include benchmarks *.py
+recursive-include data *
+recursive-include scripts *.py *.sh
+recursive-include tests *.py
+global-exclude *.py[cod]

@@ -198,18 +198,45 @@ class TestServerDown(unittest.TestCase):
         sleep = mock.patch.object(client_module.time, "sleep")
         self.addCleanup(urlopen.stop)
         self.addCleanup(sleep.stop)
-        return c, urlopen.start()
+        return c, urlopen.start(), sleep.start()
 
     def test_no_request_after_the_server_is_found_down(self):
-        c, urlopen = self._refusing_client()
+        c, urlopen, sleep = self._refusing_client()
         first = c.call([{"role": "user", "content": "hi"}])
         self.assertTrue(first["endpoint_unreachable"])
         self.assertIsNotNone(c.server_down)
-        sent = urlopen.call_count  # the first call and its retries
+        # A short wait for a restart, then the server is declared down.
+        delays = client_module.UNREACHABLE_RETRY_DELAYS
+        self.assertEqual(urlopen.call_count, 1 + len(delays))
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], list(delays))
+        self.assertLessEqual(sum(delays), 60)
+        sent = urlopen.call_count
         second = c.call([{"role": "user", "content": "hi"}])
         self.assertEqual(urlopen.call_count, sent)
         self.assertEqual(second["failure_kind"], "infra")
         self.assertIn("not sent", second["error"])
+
+    def test_server_restart_within_the_retry_window_is_not_down(self):
+        import io
+        import urllib.error
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        refused = urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+        ok = Response(b'{"choices":[{"message":{"content":"hello"},"finish_reason":"stop"}]}')
+        c = LLMClient("http://srv:8080/v1", model="m")
+        with mock.patch.object(client_module.urllib.request, "urlopen", side_effect=[refused, refused, ok]), \
+                mock.patch.object(client_module.time, "sleep") as sleep:
+            res = c.call([{"role": "user", "content": "hi"}], stream=False, retries=0)
+        self.assertIsNone(res.get("error"))
+        self.assertEqual(res["content"], "hello")
+        self.assertIsNone(c.server_down)
+        self.assertEqual(sleep.call_count, 2)
 
     def test_timeout_is_not_down(self):
         c = LLMClient("http://srv:8080/v1", model="m")

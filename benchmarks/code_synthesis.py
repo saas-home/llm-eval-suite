@@ -9,120 +9,35 @@ Tests:
 5. Strict JSON Schema Validation & Complex Constraint Adherence
 """
 
-import sys
-import os
-import time
-import json
-import re
-import urllib.request
-import urllib.error
-import subprocess
-import ast
-import tempfile
 import argparse
+import ast
+import ipaddress
+import json
+import os
+import re
+import subprocess
+import sys
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from benchmarks.common import benchmark_error, benchmark_response  # noqa: E402
+from benchmarks.common import strict_json_loads as _strict_json_loads  # noqa: E402
+from client import LLMClient, assemble_python_script, harness_passed, run_model_code  # noqa: E402
+from domain_benchmarks import final_content  # noqa: E402
+
 _ep = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_ENDPOINT") or "http://127.0.0.1:8000/v1").rstrip("/")
 DEFAULT_API_URL = _ep if _ep.endswith("/chat/completions") else f"{_ep}/chat/completions"
 
 def call_model(url, messages, max_tokens=2048, temperature=0.1, model="default", timeout=600, enable_thinking=None, api_key=""):
-    payload = {
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        "stream": True,
-        "stream_options": {"include_usage": True}
-    }
-    if enable_thinking is not None:
-        payload["chat_template_kwargs"] = {"enable_thinking": enable_thinking}
-    req_data = json.dumps(payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    req = urllib.request.Request(url, data=req_data, headers=headers)
-    
-    t0 = time.perf_counter()
-    t_first = None
-    t_last = None
-    content_chunks = []
-    reasoning_chunks = []
-    prompt_tokens = 0
-    completion_tokens = 0
-    
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            for line in resp:
-                line = line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                data_str = line[5:].strip()
-                if data_str == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data_str)
-                except Exception:
-                    continue
-                
-                if "error" in chunk:
-                    print(f"\n[ERROR from server]: {chunk['error']}", flush=True)
-                    break
-
-                if "usage" in chunk and chunk["usage"]:
-                    prompt_tokens = chunk["usage"].get("prompt_tokens", prompt_tokens)
-                    completion_tokens = chunk["usage"].get("completion_tokens", completion_tokens)
-                
-                choices = chunk.get("choices") or []
-                if choices:
-                    if choices[0].get("finish_reason") == "error":
-                        err_msg = choices[0].get("message", {}).get("content", "Server error during generation")
-                        print(f"\n[ERROR from model]: {err_msg}", flush=True)
-                        break
-
-                    delta = choices[0].get("delta", {})
-                    c = delta.get("content")
-                    r = (
-                        delta.get("reasoning_content")
-                        or delta.get("reasoning")
-                        or delta.get("thought")
-                    )
-                    if c or r:
-                        now = time.perf_counter()
-                        if t_first is None:
-                            t_first = now
-                        t_last = now
-                    if c:
-                        content_chunks.append(c)
-                    if r:
-                        reasoning_chunks.append(r)
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode("utf-8", errors="replace")
-        print(f"\nHTTP Error {e.code}: {e.reason} - {err_body}")
-    except Exception as e:
-        print(f"\nRequest failed: {e}")
-                    
-    total_time = time.perf_counter() - t0
-    ttft = (t_first - t0) if t_first else total_time
-    answer_text = "".join(content_chunks)
-    reasoning_text = "".join(reasoning_chunks)
-    full_text = f"{reasoning_text}\n{answer_text}" if reasoning_text.strip() else answer_text
-    
-    if completion_tokens == 0:
-        completion_tokens = (len(answer_text) + len(reasoning_text)) // 4
-    decode_time = (t_last - t_first) if (t_last and t_first and t_last > t_first) else total_time
-    tok_per_sec = (completion_tokens - 1) / decode_time if decode_time > 0 and completion_tokens > 1 else 0.0
-    
-    return {
-        "text": full_text,
-        "content": answer_text,
-        "reasoning": reasoning_text,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "ttft_ms": ttft * 1000.0,
-        "total_time_s": total_time,
-        "tok_per_sec": tok_per_sec
-    }
+    kwargs = {"enable_thinking": enable_thinking} if enable_thinking is not None else None
+    client = LLMClient(url, api_key=api_key, model=model)
+    return benchmark_response(client.call(
+        messages, max_tokens=max_tokens, temperature=temperature, stream=True,
+        timeout=timeout, chat_template_kwargs=kwargs,
+    ))
 
 def extract_code_block(text, lang="python"):
     # Look for ```python ... ```
@@ -133,18 +48,6 @@ def extract_code_block(text, lang="python"):
     # Check for unclosed code block
     pattern_unclosed = rf"```(?:{lang})?\n(.*)"
     m = re.search(pattern_unclosed, text, re.DOTALL | re.IGNORECASE)
-    if m:
-        return m.group(1).strip()
-    return text.strip()
-
-def extract_json_block(text):
-    # If ```json ... ```
-    pattern = r"```(?:json)?\s*([\[\{].*?[\]\}])\s*```"
-    m = re.search(pattern, text, re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    # Or search for first [ or { to last ] or }
-    m = re.search(r"([\[\{].*[\]\}])", text, re.DOTALL)
     if m:
         return m.group(1).strip()
     return text.strip()
@@ -160,10 +63,14 @@ def test_executable_code(url, model="default", api_key=""):
         "2. Methods: `__init__(capacity: int)`, `get(key: int) -> int` (returns -1 if absent), `put(key: int, value: int) -> None`, `peek(key: int) -> int` (returns value without updating LRU order).\n"
         "3. Provide clean, fully typed, self-contained Python code."
     )
+    name = "Executable Algorithmic Code (LRU Cache)"
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=2048, temperature=0.0, enable_thinking=False, model=model, api_key=api_key)
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  [Model Response]: Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s, TTFT: {res['ttft_ms']:.1f} ms)")
     
-    code_source = res["content"] if res["content"].strip() else res["text"]
+    code_source = final_content(res)
     code = extract_code_block(code_source)
     
     # Unit test harness to execute against the generated code
@@ -214,38 +121,38 @@ def run_unit_tests():
         assert c.get(i) == -1
 
 run_unit_tests()
-print("ALL_UNIT_TESTS_PASSED")
+print("ALL_UNIT_TESTS_PASSED", __import__('os').environ['EVAL_RUN_ID'])
 """
-    full_script = code + "\n" + test_harness
+    full_script = assemble_python_script(code, harness=test_harness)
 
     success = False
-    if os.getenv("EVAL_SAFE"):
-        # SECURITY: EVAL_SAFE=1 disables execution of LLM-generated code; syntax-check only.
+    syntax_only = False
+    error = ""
+    if not code.strip():
+        error = "No Python code found."
+    elif os.getenv("EVAL_SAFE", "").strip().lower() in ("1", "true", "yes"):
         try:
-            ast.parse(full_script)
-            success = True
-            print("  [Verification Result]: PASS (SYNTAX-ONLY; code execution disabled via EVAL_SAFE=1)")
-        except SyntaxError as e:
-            print(f"  [Verification Result]: FAIL (SyntaxError: {e})")
+            tree = ast.parse(full_script)
+            syntax_only = any(isinstance(node, ast.ClassDef) and node.name == "LRUCache" for node in tree.body)
+            error = ("Execution disabled; syntax check only." if syntax_only else "No LRUCache class found.")
+        except (SyntaxError, ValueError) as e:
+            error = f"SyntaxError: {e}"
     else:
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write(full_script)
-            temp_path = f.name
-
         try:
-            proc = subprocess.run([sys.executable, temp_path], capture_output=True, text=True, timeout=15)
-            success = ("ALL_UNIT_TESTS_PASSED" in proc.stdout) and (proc.returncode == 0)
-            if success:
-                print("  [Verification Result]: PASS (Generated code executed and passed all 25 unit test assertions successfully)")
-            else:
-                print(f"  [Verification Result]: FAIL\nSTDOUT: {proc.stdout}\nSTDERR: {proc.stderr}")
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            
+            proc = run_model_code([sys.executable, "-c", full_script], 15)
+            success = harness_passed(proc, "ALL_UNIT_TESTS_PASSED")
+            if not success:
+                error = (proc.stderr or proc.stdout).strip()[:300] or "Unit-test verification did not complete."
+        except (OSError, subprocess.TimeoutExpired) as e:
+            error = str(e)
+
+    status = "PASS" if success else ("PARTIAL" if syntax_only else "FAIL")
+    print(f"  [Verification Result]: {status}" + (f" ({error})" if error else ""))
     return {
-        "name": "Executable Algorithmic Code (LRU Cache)",
+        "name": name,
         "passed": success,
+        "status": status,
+        "error": error,
         "tokens": res["completion_tokens"],
         "ttft_ms": res["ttft_ms"],
         "tok_per_sec": res["tok_per_sec"]
@@ -296,20 +203,30 @@ def test_multi_needle_in_haystack(url, model="default", api_key=""):
     )
     
     print(f"  Ingesting ~60,000-token prompt with 5 buried needles...")
+    name = "Multi-Needle in 60k Haystack (NIAH)"
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=512, temperature=0.0, timeout=600, model=model, api_key=api_key)
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  [Model Response]: TTFT: {res['ttft_ms']:.1f} ms | Decode Speed: {res['tok_per_sec']:.1f} tok/s")
     
-    output = res["content"] if res["content"].strip() else res["text"]
+    output = final_content(res)
     print("  [Response Preview]:", output.strip().splitlines()[-10:])
-    
-    # Verify extraction
-    p1 = "9182" in output
-    p2 = "k7$vB9#zL1" in output
-    p3 = "us-east-cluster-node-42" in output
-    p4 = "8388608" in output
-    p5 = "sig_990184_verified" in output
+
+    try:
+        extracted = _strict_json_loads(output)
+    except ValueError:
+        extracted = {}
+    if not isinstance(extracted, dict):
+        extracted = {}
+    p1 = type(extracted.get("port")) is int and extracted["port"] == 9182
+    p2 = extracted.get("salt") == "k7$vB9#zL1"
+    p3 = extracted.get("node") == "us-east-cluster-node-42"
+    p4 = type(extracted.get("overflow_bytes")) is int and extracted["overflow_bytes"] == 8388608
+    p5 = extracted.get("signature") == "sig_990184_verified"
     expected_sum = 9182 + 8388608  # 8397790
-    p_sum = str(expected_sum) in output
+    p_sum = (type(extracted.get("sum_port_and_overflow")) is int
+             and extracted["sum_port_and_overflow"] == expected_sum)
     
     all_passed = p1 and p2 and p3 and p4 and p5 and p_sum
     print(f"  - Needle 1 (Port 9182): {'PASS' if p1 else 'FAIL'}")
@@ -321,7 +238,7 @@ def test_multi_needle_in_haystack(url, model="default", api_key=""):
     print(f"  [Verification Result]: {'PASS (100% Retrieval & Calculation)' if all_passed else 'FAIL'}")
     
     return {
-        "name": "Multi-Needle in 60k Haystack (NIAH)",
+        "name": name,
         "passed": all_passed,
         "tokens": res["completion_tokens"],
         "ttft_ms": res["ttft_ms"],
@@ -347,7 +264,11 @@ def test_mathematical_reasoning(url, model="default", api_key=""):
         "4. Calculate P(A | B) = P(A and B) / P(B).\n"
         "5. State the final probability as an exact irreducible fraction in the form P/Q."
     )
+    name = "Mathematical Reasoning (Exact Combinatorics)"
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=2500, temperature=0.0, model=model, api_key=api_key)
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  [Model Response]: Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s, TTFT: {res['ttft_ms']:.1f} ms)")
     
     # Ground truth calculation:
@@ -360,11 +281,16 @@ def test_mathematical_reasoning(url, model="default", api_key=""):
     # Therefore, P(A and B) = (220 - 90) / 220 = 130 / 220.
     # P(A | B) = P(A and B) / P(B) = 130 / 164 = 65 / 82.
     
-    text = res["text"]
-    has_220 = "220" in text
-    has_164 = "164" in text
-    has_130 = "130" in text
-    has_fraction = ("65/82" in text) or ("65 / 82" in text) or ("65}{82}" in text) or ("65 \\over 82" in text)
+    text = final_content(res)
+    has_220 = bool(re.search(r"(?<!\d)220(?!\d)", text))
+    has_164 = bool(re.search(r"(?<!\d)164(?!\d)", text))
+    has_130 = bool(re.search(r"(?<!\d)130(?!\d)", text))
+    fractions = list(re.finditer(
+        r"\\(?:d|t)?frac\s*\{\s*(-?\d+)\s*\}\s*\{\s*(\d+)\s*\}"
+        r"|(?<![\d.])(-?\d+)\s*(?:/|\\over)\s*(\d+)(?![\d.])", text))
+    fraction = fractions[-1] if fractions else None
+    has_fraction = bool(fraction and (int(fraction.group(1) or fraction.group(3)),
+                                      int(fraction.group(2) or fraction.group(4))) == (65, 82))
     
     passed = has_220 and has_164 and has_130 and has_fraction
     print(f"  - Total outcomes C(12,3) = 220: {'PASS' if has_220 else 'FAIL'}")
@@ -374,7 +300,7 @@ def test_mathematical_reasoning(url, model="default", api_key=""):
     print(f"  [Verification Result]: {'PASS' if passed else 'FAIL'}")
     
     return {
-        "name": "Mathematical Reasoning (Exact Combinatorics)",
+        "name": name,
         "passed": passed,
         "tokens": res["completion_tokens"],
         "ttft_ms": res["ttft_ms"],
@@ -397,10 +323,14 @@ def test_concurrency_formal_proof(url, model="default", api_key=""):
         "3. Specify the exact interleaving execution trace that induces deadlock.\n"
         "4. Provide the standardized lock-ordering hierarchy rule that guarantees deadlock-free execution."
     )
+    name = "Concurrency & Deadlock Cycle Proof"
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=1500, temperature=0.0, model=model, api_key=api_key)
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  [Model Response]: Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s, TTFT: {res['ttft_ms']:.1f} ms)")
     
-    text = res["text"].lower()
+    text = final_content(res).lower()
     c1 = "coffman" in text
     c2 = "circular wait" in text or "cycle" in text
     c3 = "t1" in text and "t4" in text
@@ -414,12 +344,49 @@ def test_concurrency_formal_proof(url, model="default", api_key=""):
     print(f"  [Verification Result]: {'PASS' if passed else 'FAIL'}")
     
     return {
-        "name": "Concurrency & Deadlock Cycle Proof",
+        "name": name,
         "passed": passed,
         "tokens": res["completion_tokens"],
         "ttft_ms": res["ttft_ms"],
         "tok_per_sec": res["tok_per_sec"]
     }
+
+def _node_schema_error(data):
+    if not isinstance(data, list) or len(data) != 3:
+        return "Expected an array of exactly 3 nodes."
+    expected_keys = {"node_id", "region", "is_active", "ip_address", "tags", "load_avg"}
+    seen_ids, seen_regions = set(), set()
+    for idx, item in enumerate(data):
+        if not isinstance(item, dict) or set(item) != expected_keys:
+            return f"Item {idx}: keys do not match the required schema."
+        node_id = item["node_id"]
+        if isinstance(node_id, bool) or not isinstance(node_id, int) or not 1000 <= node_id <= 1999:
+            return f"Item {idx}: invalid node_id."
+        region = item["region"]
+        if region not in ("us-east", "us-west", "eu-central"):
+            return f"Item {idx}: invalid region."
+        if not isinstance(item["is_active"], bool):
+            return f"Item {idx}: is_active must be a boolean."
+        try:
+            if not isinstance(item["ip_address"], str):
+                raise ValueError("not a string")
+            if any(len(part) > 1 and part.startswith("0") for part in item["ip_address"].split(".")):
+                raise ValueError("leading zero")
+            ipaddress.IPv4Address(item["ip_address"])
+        except ValueError:
+            return f"Item {idx}: invalid IPv4 address."
+        tags = item["tags"]
+        if not isinstance(tags, list) or len(tags) != 3 or not all(isinstance(t, str) for t in tags):
+            return f"Item {idx}: tags must contain exactly 3 strings."
+        load = item["load_avg"]
+        if isinstance(load, bool) or not isinstance(load, (int, float)) or not 0.0 <= load <= 1.0:
+            return f"Item {idx}: invalid load_avg."
+        if node_id in seen_ids or region in seen_regions:
+            return f"Item {idx}: node_id and region must be distinct."
+        seen_ids.add(node_id)
+        seen_regions.add(region)
+    return ""
+
 
 def test_strict_schema_validation(url, model="default", api_key=""):
     print("\n" + "="*80)
@@ -438,43 +405,27 @@ def test_strict_schema_validation(url, model="default", api_key=""):
         "   - 'load_avg': float between 0.0 and 1.0\n"
         "3. All 3 nodes must have distinct node_id and distinct regions."
     )
+    name = "Strict JSON Schema & Constraints"
     res = call_model(url, [{"role": "user", "content": prompt}], max_tokens=1000, temperature=0.0, model=model, api_key=api_key)
+    error = benchmark_error(name, res)
+    if error:
+        return error
     print(f"  [Model Response]: Generated {res['completion_tokens']} tokens in {res['total_time_s']:.2f}s ({res['tok_per_sec']:.1f} tok/s, TTFT: {res['ttft_ms']:.1f} ms)")
     
-    raw_text = res["content"] if res["content"].strip() else res["text"]
-    text = extract_json_block(raw_text)
-        
+    text = final_content(res)
     try:
-        data = json.loads(text)
-        assert isinstance(data, list) and len(data) == 3, f"Expected list of length 3, got {type(data)} of len {len(data) if isinstance(data, list) else 'N/A'}"
-        
-        seen_ids = set()
-        seen_regions = set()
-        for idx, item in enumerate(data):
-            assert set(item.keys()) == {'node_id', 'region', 'is_active', 'ip_address', 'tags', 'load_avg'}, f"Item {idx} keys mismatch: {item.keys()}"
-            assert isinstance(item['node_id'], int) and 1000 <= item['node_id'] <= 1999, f"Invalid node_id: {item['node_id']}"
-            assert item['region'] in ['us-east', 'us-west', 'eu-central'], f"Invalid region: {item['region']}"
-            assert isinstance(item['is_active'], bool), f"is_active must be boolean: {item['is_active']}"
-            # Validate IP format
-            parts = item['ip_address'].split('.')
-            assert len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts), f"Invalid IP: {item['ip_address']}"
-            assert isinstance(item['tags'], list) and len(item['tags']) == 3 and all(isinstance(t, str) for t in item['tags']), f"Tags mismatch: {item['tags']}"
-            assert isinstance(item['load_avg'], (float, int)) and 0.0 <= item['load_avg'] <= 1.0, f"load_avg invalid: {item['load_avg']}"
-            
-            seen_ids.add(item['node_id'])
-            seen_regions.add(item['region'])
-            
-        assert len(seen_ids) == 3, "node_ids not distinct"
-        assert len(seen_regions) == 3, "regions not distinct"
-        passed = True
+        error = _node_schema_error(_strict_json_loads(text))
+    except ValueError as e:
+        error = str(e)
+    passed = not error
+    if passed:
         print("  [Schema Check]: JSON parsed and verified against 100% of strict field, type, and uniqueness constraints.")
         print("  [Verification Result]: PASS")
-    except Exception as e:
-        passed = False
-        print(f"  [Verification Result]: FAIL - {e}\nRaw Output: {text[:300]}")
+    else:
+        print(f"  [Verification Result]: FAIL - {error}\nRaw Output: {text[:300]}")
         
     return {
-        "name": "Strict JSON Schema & Constraints",
+        "name": name,
         "passed": passed,
         "tokens": res["completion_tokens"],
         "ttft_ms": res["ttft_ms"],
@@ -496,27 +447,42 @@ def main():
     print("=" * 80)
     
     results = []
-    results.append(test_executable_code(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_multi_needle_in_haystack(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_mathematical_reasoning(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_concurrency_formal_proof(args.url, model=args.model, api_key=args.api_key))
-    results.append(test_strict_schema_validation(args.url, model=args.model, api_key=args.api_key))
+    checks = [
+        ("Executable Algorithmic Code (LRU Cache)", test_executable_code),
+        ("Multi-Needle in 60k Haystack (NIAH)", test_multi_needle_in_haystack),
+        ("Mathematical Reasoning (Exact Combinatorics)", test_mathematical_reasoning),
+        ("Concurrency & Deadlock Cycle Proof", test_concurrency_formal_proof),
+        ("Strict JSON Schema & Constraints", test_strict_schema_validation),
+    ]
+    for _, check in checks:
+        result = check(args.url, model=args.model, api_key=args.api_key)
+        results.append(result)
+        if result.get("endpoint_unreachable"):
+            break
     
     print("\n" + "=" * 80)
     print("INTENSIVE ACCURACY BENCHMARK SUMMARY")
     print("=" * 80)
     
     all_passed = True
+    any_failed = False
+    incomplete = False
     for r in results:
-        status = "PASSED" if r["passed"] else "FAILED"
+        status = r.get("status", "PASS" if r["passed"] else "FAIL")
         print(f" - {r['name']:<50} : {status:<8} ({r['tok_per_sec']:.1f} tok/s, {r['tokens']} tokens)")
         if not r["passed"]:
             all_passed = False
+        if status == "FAIL":
+            any_failed = True
+        if status == "ERROR":
+            incomplete = True
             
     summary_data = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "model": args.model,
         "all_passed": all_passed,
+        "incomplete": incomplete,
+        "not_run": [name for name, _ in checks[len(results):]],
         "results": results
     }
     
@@ -529,10 +495,14 @@ def main():
     print(f"\nSaved detailed results to {args.out}")
     print("=" * 80)
     
+    if incomplete:
+        print(">> VERDICT: INCOMPLETE (REQUEST ERROR). <<")
+        sys.exit(3)
     if all_passed:
         print(">> VERDICT: 100% ROCK SOLID. ZERO QUALITY OR ACCURACY LOSS OBSERVED. <<")
     else:
-        print(">> VERDICT: DEFECTS DETECTED. <<")
+        print(">> VERDICT: DEFECTS DETECTED. <<" if any_failed else
+              ">> VERDICT: UNVERIFIED (CODE EXECUTION DISABLED). <<")
         sys.exit(1)
 
 if __name__ == "__main__":

@@ -30,9 +30,9 @@ import judge_validation
 import suites
 import usecases
 import workload
+from client import DATA_DIR
 from reporting import REPORTABLE_CATALOG, extract_test_metrics, format_duration
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_REFERENCE = os.path.join("data", "reference", "published_scores.json")
 USE_CASE_NAMES = {uc["key"]: uc["name"] for uc in usecases.USE_CASES}
 TEST_NAMES = {key: name for _num, key, name in REPORTABLE_CATALOG}
@@ -101,7 +101,7 @@ def paired_difference(details_a: Optional[List[Dict[str, Any]]],
 def load_reference(path: Optional[str], report: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """The published-scores set that applies to the tested model (matched on
     the model name or the weights the server reports), or None."""
-    path = path or os.path.join(BASE_DIR, DEFAULT_REFERENCE)
+    path = path or os.path.join(DATA_DIR, "reference", "published_scores.json")
     if not os.path.exists(path):
         return None
     with open(path, encoding="utf-8") as f:
@@ -460,9 +460,9 @@ def _method(report: Dict[str, Any]) -> List[str]:
         f"- **Sampling:** {_sampling_text(report)}.",
         f"- **Output budget per answer (thinking included):** {_budget_text(report)}.",
         f"- **Verdict rule:** Recommended needs every scored test's CI lower bound at or above its pass mark, "
-        f"at least {usecases.RELIABILITY_MIN_PCT:.0f}% of items right on every repeat, no failed check and at least "
-        f"{usecases.STRONG_EVIDENCE_ITEMS} scored items. Usable with human review needs every mean at or above its "
-        "floor. A use case is as strong as its weakest scored test.",
+        f"at least {usecases.RELIABILITY_MIN_PCT:.0f}% of items right on every repeat, no failed check or unscored "
+        f"attempts, items or languages, and at least {usecases.STRONG_EVIDENCE_ITEMS} scored items. Usable with human review "
+        "needs every mean at or above its floor. A use case is as strong as its weakest scored test.",
         "- **Pass marks** come from published scores of comparable models where they exist; each result records "
         "its basis (`pass_marks.basis` in the JSON).",
         "- **Public benchmarks** may be in a model's training data. Within a verdict, original tasks count twice "

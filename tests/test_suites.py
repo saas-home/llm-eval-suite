@@ -269,7 +269,8 @@ class TestMultiplEMissingToolchain(unittest.TestCase):
 
     def test_languages_without_toolchain_are_skipped_before_any_request(self):
         from unittest import mock
-        bench = MagicMock(return_value={"details": [{"score": 1.0}], "accuracy_pct": 100.0, "completion_tokens": 5})
+        bench = MagicMock(return_value={"status": "PASS", "details": [{"score": 1.0}],
+                                       "accuracy_pct": 100.0, "completion_tokens": 5})
         with mock.patch.object(polyglot, "toolchain_available", return_value=False), \
                 mock.patch.object(suites, "load_items", return_value=([{"prompt": "def f():"}], {})), \
                 mock.patch.object(suites, "run_benchmark", bench):

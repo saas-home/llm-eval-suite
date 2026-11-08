@@ -37,10 +37,10 @@ import xml.etree.ElementTree as ET
 from contextlib import nullcontext
 from typing import Any, Dict, List, Optional
 
-from client import RUN_ID_VAR, model_code_env, run_model_code
+from client import DATA_DIR, RUN_ID_VAR, model_code_env, run_model_code
 
 POLYGLOT_HOME = os.environ.get("POLYGLOT_HOME", "/opt/polyglot")
-FIXTURE_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "polyglot")
+FIXTURE_ROOT = os.path.join(DATA_DIR, "polyglot")
 OK_MARKER = "POLYGLOT_OK"
 COMPILE_TIMEOUT = 240
 RUN_TIMEOUT = 90

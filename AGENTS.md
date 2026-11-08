@@ -65,7 +65,7 @@ The Docker image compiles and runs the non-Python answers for Tests 20-25. It us
 
 Every reference answer must PASS. Every negative answer must FAIL. If the toolchains are missing, the graders use a structural check, and its result is PARTIAL at most. An unverified answer is never a PASS.
 
-Run model-written code only through `client.run_model_code` (own process group, output cap, no credentials). A harness signals success by printing its marker followed by the run id from `EVAL_RUN_ID` (`POLYGLOT_OK <id>`; in Python, `print('MARKER', __import__('os').environ['EVAL_RUN_ID'])`), checked with `client.harness_passed`. A bare marker is what an answer could print itself.
+Run model-written code only through `client.run_model_code` (own process group, output cap, no credentials). As root, it runs the code as the `evalcode` user, which owns only `cwd`. So give each run its own folder from `tempfile.TemporaryDirectory()`, and put every file the code must read in that folder. A harness signals success by printing its marker followed by the run id from `EVAL_RUN_ID` (`POLYGLOT_OK <id>`; in Python, `print('MARKER', __import__('os').environ['EVAL_RUN_ID'])`), checked with `client.harness_passed`. A bare marker is what an answer could print itself.
 
 ## Scheduling (phased runs)
 
@@ -74,7 +74,7 @@ Run model-written code only through `client.run_model_code` (own process group, 
 - Every model request goes through `LLMClient.call`, which obeys `request_limiter`. Do not send raw HTTP requests in model-quality tests. They bypass the limit and can overload the server in the parallel phase.
 - Log only with `client.log`. It buffers output per thread in the parallel phase. A bare `print` mixes lines from different tests.
 - If the builds of a toolchain share files on disk, add the toolchain to `polyglot._SHARED_STATE_LOCKS`.
-- When the tested server is unreachable, `LLMClient.call` sets `server_down` and sends no more requests. The scheduler then starts no new test, writes the report with `"incomplete"`, and exits with `EXIT_INCOMPLETE` (3). Do not add retries or waits for a server that is down.
+- When the tested server is unreachable, `LLMClient.call` sets `server_down` and sends no more requests. The scheduler then starts no new test, writes the report with `"incomplete"`, and exits with `EXIT_INCOMPLETE` (3). Before that, a refused or unreachable connection is retried only after the short waits in `client.UNREACHABLE_RETRY_DELAYS` (a restart or model reload). Do not add other retries or waits for a server that is down.
 
 ## Conventions
 
