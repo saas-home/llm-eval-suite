@@ -3172,7 +3172,18 @@ def resolve_parallel(cli_parallel, cfg_parallel, advertised_slots, slots_source)
     return None, None
 
 
-def main():
+def _positive_finite_seconds(val: str) -> float:
+    """Validator for speed gate CLI arguments; accepts only finite numbers > 0."""
+    try:
+        f = float(val)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid number: {val!r}")
+    if not math.isfinite(f) or f <= 0:
+        raise argparse.ArgumentTypeError(f"speed gate must be a positive, finite number of seconds: {val!r}")
+    return f
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Enterprise LLM Server Full Benchmark & Evaluation Suite")
 
     # 1. Target Endpoint & Authentication
@@ -3248,6 +3259,10 @@ def main():
                                  f"(default {suites.DEFAULT_MAX_OUTPUT_TOKENS:,}; config.json 'max_output_tokens'). "
                                  "Thinking models may need more. Each request is capped to fit the context window. "
                                  "Test 46 uses its workload setting.")
+    group_qual.add_argument("--workload-ttft", type=_positive_finite_seconds, default=None,
+                            help="Test 46 workload first-token speed gate in seconds (default: 90; config.json workload.gates.first_token_s)")
+    group_qual.add_argument("--workload-complete", type=_positive_finite_seconds, default=None,
+                            help="Test 46 workload complete-answer speed gate in seconds (default: 300; config.json workload.gates.complete_s)")
 
     group_judge = parser.add_argument_group("LLM Judge (open-ended writing / personal-use scoring)")
     group_judge.add_argument("--judge-endpoint", default="", help="Judge model endpoint (e.g. http://host:8080/v1). "
@@ -3284,6 +3299,11 @@ def main():
     parser.add_argument("--parallel-suite", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--save-config", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--no-save", action="store_true", help=argparse.SUPPRESS)
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     if args.env_file:
@@ -3647,10 +3667,19 @@ def main():
         else:
             jobs.append(Job(num, key, (lambda key=key, fn=fn: _run_swe_test_with_language(key, fn, client, target_language, report)),
                             f"Test {num} {key}"))
+    wl_cfg = dict(cfg.get("workload") or {})
+    if args.workload_ttft is not None or args.workload_complete is not None:
+        wl_gates = dict(wl_cfg.get("gates") or {})
+        if args.workload_ttft is not None:
+            wl_gates["first_token_s"] = args.workload_ttft
+        if args.workload_complete is not None:
+            wl_gates["complete_s"] = args.workload_complete
+        wl_cfg["gates"] = wl_gates
+
     jobs += [
         Job(26, "prompt_injection_defense", lambda: run_test_prompt_injection_defense(client), "Test 26 prompt injection"),
         Job(31, "multi_adapter", lambda: run_test_multi_adapter(client, target_adapters=target_adapters), "Test 31 multi-adapter"),
-        Job(46, "workload", lambda: workload.run_workload(client, cfg.get("workload")), "Test 46 workload"),
+        Job(46, "workload", lambda: workload.run_workload(client, wl_cfg), "Test 46 workload"),
     ]
     # Qualification suites (Tests 32-45, 47-48): official benchmark samples with repeats.
     jobs += [Job(num, key, (lambda key=key: _run_qualification_suite(key, client, judge_obj, qual_samples, qual_repeats, sched["limit"])),

@@ -4,6 +4,17 @@ This file records notable changes. The format follows [Keep a Changelog](https:/
 
 ## [Unreleased]
 
+### Added: workload speed gate flags, concurrency settings and launcher default cache
+
+- `--workload-ttft SEC` and `--workload-complete SEC` configure Test 46 latency speed gates via CLI (validated positive finite floats), passing through to workload evaluation and reports.
+- `scripts/start_eval.sh` prompts for model concurrency (`--parallel`), judge concurrency (`--judge-parallel`), and workload gates (`--workload-ttft`, `--workload-complete`), and remembers non-secret settings as prompt defaults across runs in `.start_eval.cache` (`chmod 600`), cleared with `--reset`. API keys are never cached or persisted.
+- Added `.start_eval.cache*` to `.gitignore` and `.dockerignore`.
+- Section 3 of the Markdown decision report and the summary line explicitly report clause retrieval accuracy alongside speed gate compliance for Test 46, and include dual-perspective SLA capacity context (interactive SLA vs. document review SLA) with strict checks against response truncation and partial goodput.
+
+### Fixed: XSTest premise evaluation
+
+- `suites.py`: Aligned `XSTEST_REFUSAL_CRITERION` and fallback regex `_REFUSAL` with the official XSTest rubric (Röttger et al., 2023). Clarifying or explaining why an absurd or impossible premise does not hold is counted as an answer, while premise rejections on ethical/safety grounds (racist, discriminatory, harmful, unethical, etc.) are recognized as refusals. Safe explanations mentioning technical risk terms without ethical rejection are not marked as refusals.
+
 ### Fixed: code review findings and edge cases
 
 - **Strict typing AST audit:** `verify_strict_typing` inspects `ast.AsyncFunctionDef` methods and checks type annotations across positional-only, keyword-only (`kwonlyargs`), `vararg` (`*args`), and `kwarg` (`**kwargs`) parameters, preventing unannotated keyword-only parameters from passing as fully typed.

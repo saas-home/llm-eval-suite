@@ -80,7 +80,7 @@ class TestStartEval(unittest.TestCase):
         return [call for call in calls if call["args"][0] == "run"]
 
     def test_defaults_probe_then_run_all_languages_with_persistent_outputs(self):
-        result, calls = self.run_launcher([""] * 8 + ["y"])
+        result, calls = self.run_launcher([""] * 11 + ["y"])
         self.assertEqual(result.returncode, 0, result.stderr)
         probe, run = self.run_calls(calls)
         self.assertEqual(probe["args"][-2:], ["llm-eval-suite:latest", "--probe"])
@@ -100,20 +100,30 @@ class TestStartEval(unittest.TestCase):
         key = "test-target-key with spaces $HOME"
         judge_key = "test-judge-key"
         answers = [
-            "https://model.example/v1", model, key, "262144",
-            "http://judge.example/v1", "independent judge", judge_key,
-            "quick", "rust", "2x GPU", "y",
+            "https://model.example/v1", model, key, "262144", "8",
+            "http://judge.example/v1", "independent judge", judge_key, "2",
+            "quick", "rust", "2x GPU", "120", "400", "y",
         ]
         result, calls = self.run_launcher(answers, trace=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         run = self.run_calls(calls)[-1]
-        self.assertEqual(run["env"], dict(zip(ENV_NAMES, answers[:7])))
+        self.assertEqual(run["env"], {
+            "OPENAI_BASE_URL": "https://model.example/v1",
+            "OPENAI_MODEL": model,
+            "OPENAI_API_KEY": key,
+            "MAX_CONTEXT": "262144",
+            "JUDGE_ENDPOINT": "http://judge.example/v1",
+            "JUDGE_MODEL": "independent judge",
+            "JUDGE_API_KEY": judge_key,
+        })
         for name in ENV_NAMES:
             index = run["args"].index(name)
             self.assertEqual(run["args"][index - 1], "--env")
-        self.assertEqual(run["args"][-8:], [
+        self.assertEqual(run["args"][-16:], [
             "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
             "--quick", "--hardware", "2x GPU",
+            "--parallel", "8", "--judge-parallel", "2",
+            "--workload-ttft", "120", "--workload-complete", "400",
         ])
         for secret in (key, judge_key):
             self.assertNotIn(secret, result.stdout + result.stderr)
@@ -144,10 +154,13 @@ class TestStartEval(unittest.TestCase):
                 ("Model ID", ""),
                 ("Model API key", secret),
                 ("Context window", ""),
+                ("Model concurrency", ""),
                 ("Independent judge endpoint", ""),
                 ("Test mode", ""),
                 ("Coding language", ""),
                 ("GPU hardware", ""),
+                ("Workload Test 46 max TTFT", ""),
+                ("Workload Test 46 max completion", ""),
                 ("Start evaluation?", "n"),
             ]
             for label, answer in answers:
@@ -183,7 +196,7 @@ class TestStartEval(unittest.TestCase):
 
     def test_blank_answers_clear_inherited_model_and_judge_credentials(self):
         result, calls = self.run_launcher(
-            [""] * 8 + ["y"], env={name: "old-setting" for name in ENV_NAMES},
+            [""] * 11 + ["y"], env={name: "old-setting" for name in ENV_NAMES},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         env = self.run_calls(calls)[-1]["env"]
@@ -193,20 +206,24 @@ class TestStartEval(unittest.TestCase):
     def test_invalid_endpoint_context_and_choices_are_reprompted(self):
         answers = [
             "server:8000", "http://server/v1", "", "", "-1", "abc", "8192",
-            "", "unknown", "core", "ruby", "python", "", "maybe", "yes",
+            "-2", "12",
+            "", "unknown", "core", "ruby", "python", "", "-5", "300", "-10", "600", "maybe", "yes",
         ]
         result, calls = self.run_launcher(answers)
         self.assertEqual(result.returncode, 0, result.stderr)
         run = self.run_calls(calls)[-1]
         self.assertEqual(run["env"]["MAX_CONTEXT"], "8192")
-        self.assertEqual(run["args"][-4:], ["--suite", "core", "--language", "python"])
+        self.assertEqual(run["args"][-10:], [
+            "--suite", "core", "--language", "python",
+            "--parallel", "12", "--workload-ttft", "300", "--workload-complete", "600",
+        ])
         self.assertIn("Enter an http:// or https:// endpoint", result.stderr)
         self.assertIn("positive whole number", result.stderr)
         self.assertIn("Choose one of:", result.stderr)
         self.assertIn("Enter y or n.", result.stderr)
 
     def test_cancel_does_not_send_requests_or_create_outputs(self):
-        result, calls = self.run_launcher([""] * 9)
+        result, calls = self.run_launcher([""] * 12)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Cancelled", result.stdout)
         self.assertFalse(self.run_calls(calls))
@@ -226,7 +243,7 @@ class TestStartEval(unittest.TestCase):
 
     def test_missing_image_is_built_only_after_approval(self):
         result, calls = self.run_launcher(
-            ["y"] + [""] * 8 + ["y"], env={"FAKE_IMAGE_MISSING": "1"},
+            ["y"] + [""] * 11 + ["y"], env={"FAKE_IMAGE_MISSING": "1"},
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         builds = [call["args"] for call in calls if call["args"][0] == "build"]
@@ -239,14 +256,14 @@ class TestStartEval(unittest.TestCase):
         self.assertFalse(any(call["args"][0] in ("build", "run") for call in calls))
 
     def test_failed_probe_prevents_full_run(self):
-        result, calls = self.run_launcher([""] * 8 + ["y"], env={"FAKE_FAIL": "probe"})
+        result, calls = self.run_launcher([""] * 11 + ["y"], env={"FAKE_FAIL": "probe"})
         self.assertEqual(result.returncode, 1)
         self.assertIn("Endpoint probe failed", result.stderr)
         self.assertEqual(len(self.run_calls(calls)), 1)
         self.assertFalse((self.repo / "results").exists())
 
     def test_evaluation_failure_exit_code_is_preserved(self):
-        result, calls = self.run_launcher([""] * 8 + ["y"], env={"FAKE_FAIL": "run"})
+        result, calls = self.run_launcher([""] * 11 + ["y"], env={"FAKE_FAIL": "run"})
         self.assertEqual(result.returncode, 3)
         self.assertEqual(len(self.run_calls(calls)), 2)
 
@@ -259,6 +276,83 @@ class TestStartEval(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("No arguments are accepted", result.stderr)
         self.assertFalse(calls)
+
+    def test_subsequent_run_remembers_previous_values_as_defaults(self):
+        answers = [
+            "http://172.16.16.16:8080/v1", "custom-model", "custom-key", "131072", "12",
+            "http://172.16.16.43:8888/v1", "judge-model", "judge-key", "4",
+            "quick", "rust", "1x GPU", "300", "600", "y",
+        ]
+        result1, calls1 = self.run_launcher(answers)
+        self.assertEqual(result1.returncode, 0, result1.stderr)
+        run1 = self.run_calls(calls1)[-1]
+        self.assertEqual(run1["env"]["OPENAI_BASE_URL"], "http://172.16.16.16:8080/v1")
+        self.assertEqual(run1["env"]["OPENAI_MODEL"], "custom-model")
+        self.assertEqual(run1["env"]["OPENAI_API_KEY"], "custom-key")
+        self.assertEqual(run1["env"]["MAX_CONTEXT"], "131072")
+        self.assertEqual(run1["env"]["JUDGE_ENDPOINT"], "http://172.16.16.43:8888/v1")
+        self.assertEqual(run1["env"]["JUDGE_MODEL"], "judge-model")
+        self.assertEqual(run1["env"]["JUDGE_API_KEY"], "judge-key")
+        self.assertEqual(run1["args"][-16:], [
+            "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
+            "--quick", "--hardware", "1x GPU",
+            "--parallel", "12", "--judge-parallel", "4",
+            "--workload-ttft", "300", "--workload-complete", "600",
+        ])
+
+        cache_file = self.repo / ".start_eval.cache"
+        self.assertTrue(cache_file.exists())
+        if os.name == "posix":
+            self.assertEqual(cache_file.stat().st_mode & 0o777, 0o600)
+        cache_text = cache_file.read_text()
+        self.assertNotIn("custom-key", cache_text)
+        self.assertNotIn("judge-key", cache_text)
+        self.assertNotIn("CACHED_API_KEY", cache_text)
+        self.assertNotIn("CACHED_JUDGE_API_KEY", cache_text)
+        self.assertIn("CACHED_PARALLEL=12", cache_text)
+        self.assertIn("CACHED_JUDGE_PARALLEL=4", cache_text)
+        self.assertIn("CACHED_WORKLOAD_TTFT=300", cache_text)
+        self.assertIn("CACHED_WORKLOAD_COMPLETE=600", cache_text)
+
+        # Second run: press Enter for all prompts (API keys are never saved, so blank means no authentication)
+        result2, calls2 = self.run_launcher([""] * 14 + ["y"])
+        self.assertEqual(result2.returncode, 0, result2.stderr)
+        run2 = self.run_calls(calls2)[-1]
+        self.assertEqual(run2["env"]["OPENAI_BASE_URL"], "http://172.16.16.16:8080/v1")
+        self.assertEqual(run2["env"]["OPENAI_MODEL"], "custom-model")
+        self.assertEqual(run2["env"]["OPENAI_API_KEY"], "")
+        self.assertEqual(run2["env"]["MAX_CONTEXT"], "131072")
+        self.assertEqual(run2["env"]["JUDGE_ENDPOINT"], "http://172.16.16.43:8888/v1")
+        self.assertEqual(run2["env"]["JUDGE_MODEL"], "judge-model")
+        self.assertEqual(run2["env"]["JUDGE_API_KEY"], "")
+        self.assertEqual(run2["args"][-16:], [
+            "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
+            "--quick", "--hardware", "1x GPU",
+            "--parallel", "12", "--judge-parallel", "4",
+            "--workload-ttft", "300", "--workload-complete", "600",
+        ])
+
+    def test_reset_clears_cached_defaults(self):
+        answers = [
+            "http://172.16.16.16:8080/v1", "custom-model", "", "", "",
+            "", "quick", "python", "", "", "", "y",
+        ]
+        self.run_launcher(answers)
+        cache_file = self.repo / ".start_eval.cache"
+        self.assertTrue(cache_file.exists())
+
+        res_reset, _ = self.run_launcher(args=("--reset",))
+        self.assertEqual(res_reset.returncode, 0)
+        self.assertIn("Cleared remembered evaluation defaults", res_reset.stdout)
+        self.assertFalse(cache_file.exists())
+
+        # Next run uses clean defaults again
+        res3, calls3 = self.run_launcher([""] * 11 + ["y"])
+        self.assertEqual(res3.returncode, 0)
+        run3 = self.run_calls(calls3)[-1]
+        self.assertEqual(run3["env"]["OPENAI_BASE_URL"], "http://127.0.0.1:8080/v1")
+        self.assertEqual(run3["env"]["OPENAI_MODEL"], "")
+        self.assertEqual(run3["args"][-4:], ["--suite", "all", "--language", "polyglot"])
 
 
 if __name__ == "__main__":

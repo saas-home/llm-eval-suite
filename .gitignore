@@ -33,6 +33,8 @@ ENV/
 config.json
 !config.json.example
 !.env.example
+.start_eval.cache
+
 
 # Local logs & debug dumps
 *.log

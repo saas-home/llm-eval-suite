@@ -435,6 +435,125 @@ class TestWorkloadSettings(unittest.TestCase):
         self.assertEqual((w["users"], w["gates"]["first_token_s"], w["gates"]["complete_s"]), (8, 30, 300))
         self.assertNotIn("unknown", w)
 
+    def test_cli_flags_workload_ttft_and_complete(self):
+        import eval as ev
+        parser = ev.build_parser()
+        args = parser.parse_args(["--workload-ttft", "250.5", "--workload-complete", "500"])
+        self.assertEqual(args.workload_ttft, 250.5)
+        self.assertEqual(args.workload_complete, 500.0)
+
+        for invalid in ["nan", "inf", "-5", "0"]:
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(["--workload-ttft", invalid])
+                with self.assertRaises(SystemExit):
+                    parser.parse_args(["--workload-complete", invalid])
+
+    def test_workload_line_reports_accuracy_and_gates(self):
+        import report_md
+        report = {
+            "results": {
+                "workload": {
+                    "workload": {"prompt_tokens": 200000, "answer_tokens": 2000, "stagger_s": [0.0, 1.0],
+                                 "gates": {"first_token_s": 90, "complete_s": 300, "per_user_tok_s": 15}},
+                    "users": [{"first_token_s": 240.0}, {"first_token_s": 260.0}],
+                    "goodput_users": 0,
+                    "correct_users": 2,
+                    "solo": {"meets_gates": True},
+                    "servers_for_users": 2,
+                    "basis": "1 user(s) per server"
+                }
+            }
+        }
+        line = report_md._workload_line(report)
+        self.assertIn("2 of 2 clauses found correctly", line)
+        self.assertIn("0 of 2 users within the gates", line)
+
+    def test_workload_sizing_sla_context(self):
+        import report_md
+        report = {
+            "results": {
+                "workload": {
+                    "workload": {"prompt_tokens": 200000, "answer_tokens": 2000, "stagger_s": [0.0, 1.0],
+                                 "gates": {"first_token_s": 90, "complete_s": 300, "per_user_tok_s": 15}},
+                    "users": [
+                        {"start_offset_s": 0.0, "prompt_tokens": 200000, "first_token_s": 240.0,
+                         "answer_start_s": 245.0, "complete_s": 320.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "meets_gates": False, "gate_checks": {"first_token": False, "complete": False}},
+                        {"start_offset_s": 1.0, "prompt_tokens": 200000, "first_token_s": 260.0,
+                         "answer_start_s": 265.0, "complete_s": 330.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "meets_gates": False, "gate_checks": {"first_token": False, "complete": False}},
+                    ],
+                    "goodput_users": 0,
+                    "correct_users": 2,
+                    "solo": {"start_offset_s": 0.0, "prompt_tokens": 200000, "first_token_s": 70.0,
+                             "answer_start_s": 75.0, "complete_s": 120.0, "decode_tok_s": 30.0, "score": 1.0,
+                             "meets_gates": True},
+                    "servers_for_users": 2,
+                    "sizing": {"users_per_server": 1, "servers_for_users": 2, "basis": "1 user alone met the gates"},
+                }
+            }
+        }
+        lines = report_md._sizing(report)
+        text = "\n".join(lines)
+        self.assertIn("SLA context:", text)
+        self.assertIn("enterprise document review SLA", text)
+        self.assertIn("2 and 3 concurrent users were not directly measured", text)
+
+    def test_workload_sizing_truncated_response_excluded_from_sla(self):
+        import report_md
+        report = {
+            "results": {
+                "workload": {
+                    "workload": {"prompt_tokens": 200000, "answer_tokens": 2000, "stagger_s": [0.0, 1.0],
+                                 "gates": {"first_token_s": 90, "complete_s": 300, "per_user_tok_s": 15}},
+                    "users": [
+                        {"start_offset_s": 0.0, "prompt_tokens": 200000, "first_token_s": 240.0,
+                         "answer_start_s": 245.0, "complete_s": 320.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "finish_reason": "length", "meets_gates": False},
+                        {"start_offset_s": 1.0, "prompt_tokens": 200000, "first_token_s": 260.0,
+                         "answer_start_s": 265.0, "complete_s": 330.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "finish_reason": "stop", "meets_gates": False},
+                    ],
+                    "goodput_users": 0,
+                    "correct_users": 2,
+                    "solo": {"first_token_s": 70.0, "meets_gates": True},
+                    "servers_for_users": 2,
+                    "sizing": {"users_per_server": 1, "servers_for_users": 2, "basis": "1 user alone met the gates"},
+                }
+            }
+        }
+        lines = report_md._sizing(report)
+        text = "\n".join(lines)
+        self.assertNotIn("all 2 users completed within an enterprise document review SLA", text)
+
+    def test_workload_sizing_partial_goodput_under_relaxed_gate(self):
+        import report_md
+        report = {
+            "results": {
+                "workload": {
+                    "workload": {"prompt_tokens": 200000, "answer_tokens": 2000, "stagger_s": [0.0, 1.0],
+                                 "gates": {"first_token_s": 300, "complete_s": 600, "per_user_tok_s": 15}},
+                    "users": [
+                        {"start_offset_s": 0.0, "prompt_tokens": 200000, "first_token_s": 240.0,
+                         "complete_s": 320.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "finish_reason": "stop", "meets_gates": True},
+                        {"start_offset_s": 1.0, "prompt_tokens": 200000, "first_token_s": 350.0,
+                         "complete_s": 650.0, "decode_tok_s": 25.0, "score": 1.0,
+                         "finish_reason": "stop", "meets_gates": False},
+                    ],
+                    "goodput_users": 1,
+                    "correct_users": 2,
+                    "solo": {"first_token_s": 70.0, "meets_gates": True},
+                    "servers_for_users": 2,
+                    "sizing": {"users_per_server": 1, "servers_for_users": 2, "basis": "1 of 2 users met the gates"},
+                }
+            }
+        }
+        lines = report_md._sizing(report)
+        text = "\n".join(lines)
+        self.assertNotIn("while 1 server carried all", text)
+
     def test_prompt_shrinks_to_fit_context(self):
         w = workload.resolve_workload(None, 131072)
         self.assertEqual(w["prompt_tokens"], 131072 - 8192 - workload.PROMPT_MARGIN_TOKENS)

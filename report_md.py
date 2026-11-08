@@ -192,9 +192,11 @@ def _workload_line(report: Dict[str, Any]) -> Optional[str]:
     w = wl.get("workload", {})
     g = w.get("gates", {})
     n, good = len(wl["users"]), wl.get("goodput_users", 0)
+    correct = wl.get("correct_users")
     firsts = [u["first_token_s"] for u in wl["users"] if "first_token_s" in u]
+    accuracy_note = f" ({correct} of {n} clauses found correctly)" if correct is not None else ""
     text = (f"**Workload ({n} users, new {w.get('prompt_tokens', 0):,}-token documents, ~{w.get('answer_tokens', 0):,}"
-            f"-token answers): {good} of {n} users within the gates** (first token ≤ {g.get('first_token_s')} s, "
+            f"-token answers): {good} of {n} users within the gates**{accuracy_note} (first token ≤ {g.get('first_token_s')} s, "
             f"complete answer ≤ {g.get('complete_s')} s, ≥ {g.get('per_user_tok_s')} tok/s per user).")
     if firsts:
         text += f" Users waited {min(firsts):.0f}-{max(firsts):.0f} s for the first token."
@@ -342,10 +344,13 @@ def _sizing(report: Dict[str, Any]) -> List[str]:
 
     if wl and "users" in wl:
         w = wl.get("workload", {})
+        stagger = w.get("stagger_s") or [0, 0]
+        s0 = f"{stagger[0]:.0f}" if isinstance(stagger[0], (int, float)) else str(stagger[0])
+        s1 = f"{stagger[1]:.0f}" if isinstance(stagger[1], (int, float)) else str(stagger[1])
         lines += ["### Workload test, per user", "",
                   f"Each user sends a new document set of about {w.get('prompt_tokens', 0):,} tokens (nothing cached), "
                   f"asks for one clause and a ~{w.get('answer_tokens', 0):,}-token review, with thinking on. Users "
-                  f"arrive {w.get('stagger_s', ['?', '?'])[0]:.0f}-{w.get('stagger_s', ['?', '?'])[1]:.0f} s apart.", ""]
+                  f"arrive {s0}-{s1} s apart.", ""]
         rows = []
         for i, u in enumerate([solo] + wl["users"]):
             who = "alone" if i == 0 else str(i)
@@ -360,8 +365,12 @@ def _sizing(report: Dict[str, Any]) -> List[str]:
         lines += _table(["User", "Arrives (s)", "Prompt tokens", "First token (s)", "Answer starts (s)",
                          "Complete (s)", "Decode (tok/s)", "Clause", "Gates"], rows) + [""]
         good = wl.get("goodput_users", 0)
+        correct = wl.get("correct_users")
         sz = workload.sizing(wl)
         kv_sessions = wl.get("kv_sessions_at_workload")
+        if correct is not None:
+            pct = f" ({round(100.0 * correct / n)}%)" if n else ""
+            lines.append(f"- **Clause accuracy:** {correct} of {n} users found the correct clause{pct}.")
         lines.append(f"- **Goodput:** {good} of {n} users at once met every gate"
                      + (" (the user alone did)" if (solo.get("meets_gates") and not good) else "") + ".")
         if kv_sessions is not None:
@@ -375,6 +384,23 @@ def _sizing(report: Dict[str, Any]) -> List[str]:
             lines.append("- **Servers needed:** not estimated: not even one user alone met the gates. Faster prefill "
                          "(more or faster GPUs), shorter prompts, or reusing documents across questions "
                          "(prefix caching) would be needed.")
+        users_list = wl.get("users") or []
+        doc_sla_users = sum(1 for u in users_list
+                            if not u.get("error") and u.get("finish_reason") != "length"
+                            and (u.get("first_token_s") or 9999) <= 300
+                            and (u.get("complete_s") or 9999) <= 600)
+        gate_ttft = (w.get("gates") or {}).get("first_token_s", 90)
+        if gate_ttft <= 90 and doc_sla_users == len(users_list) and len(users_list) > 1 and good < len(users_list):
+            lines.append(f"- **SLA context:** all {len(users_list)} users completed within an enterprise document review SLA "
+                         f"(first token <= 300 s, complete <= 600 s) on this single server. The {sz['servers_for_users']}-server estimate reflects "
+                         f"the strict interactive SLA (first token <= {gate_ttft} s). "
+                         "Note that 2 and 3 concurrent users were not directly measured; capacity may fall between 1 and "
+                         f"{sz['servers_for_users']} servers.")
+        elif gate_ttft > 90 and sz.get("servers_for_users") == 1 and doc_sla_users == len(users_list) and len(users_list) > 1:
+            if (solo.get("first_token_s") or 9999) <= 90:
+                lines.append(f"- **SLA context:** while 1 server carried all {n} users under this document SLA, achieving a strict "
+                             f"interactive SLA (first token <= 90 s) under this concurrency would require approximately {n} servers "
+                             "(1 user per server without queuing). Note that 2 and 3 concurrent users were not directly measured.")
         lines.append("")
     return lines
 

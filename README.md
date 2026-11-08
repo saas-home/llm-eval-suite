@@ -74,11 +74,14 @@ rebuild it with the command above after changing the suite.
 API-key entry is hidden. Model and judge details are passed through Docker's
 `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_API_KEY`, `MAX_CONTEXT` and `JUDGE_*`
 environment variables; no configuration or credential file is written or mounted.
-Blank API-key answers mean no authentication, even if your shell has an existing
-key. Docker administrators can still inspect container environment variables.
-Reports and logs are saved in this checkout's `results/` and `logs/`, regardless
-of where you launch the script. Model code still has the container's network access;
-see [Running model code safely](#running-model-code-safely).
+Non-secret choices (endpoint, model ID, context window, test mode, language and
+hardware) are remembered across runs as prompt defaults in `.start_eval.cache`
+(`chmod 600`). API keys are never cached or saved. Use `./scripts/start_eval.sh --reset`
+to clear remembered defaults. Blank API-key answers mean no authentication, even if
+your shell has an existing key. Docker administrators can still inspect container
+environment variables. Reports and logs are saved in this checkout's `results/`
+and `logs/`, regardless of where you launch the script. Model code still has the
+container's network access; see [Running model code safely](#running-model-code-safely).
 
 For manual commands instead:
 
@@ -449,7 +452,7 @@ Put run settings in `config.json` (or `.env`). A CLI flag overrides the file.
 
 `max_output_tokens` (or `--max-output-tokens`) is the output budget per answer, thinking included, for the coding and accuracy tests. The default is 32,768. Thinking models can need more. For example, Qwen3.8-Flash-Next's card allows 262,144 reasoning tokens. The tool caps the budget so that the estimated prompt, a safety margin and the answer fit the context. The estimate cannot guarantee a fit for every tokenizer. Sometimes fewer than 1,024 tokens are left for the answer, or less than a smaller requested budget. Then the core test is skipped, or the qualification item is left unscored. The model does not fail on an answer the context cut off. If a self-correction retry no longer fits, the earlier graded attempt counts. Test 46 uses its `workload` setting.
 
-Test 46 is skipped with a reason if its output budget and a full focus contract cannot fit the server's context window. Reduce the workload's `max_output_tokens` or use a server with a larger context.
+Test 46 is skipped with a reason if its output budget and a full focus contract cannot fit the server's context window. Reduce the workload's `max_output_tokens` or use a server with a larger context. Speed gates default to 90 seconds for time to first token and 300 seconds for complete answers; override them with `--workload-ttft SEC` and `--workload-complete SEC` (positive finite numbers).
 
 The Docker image does not contain `config.json`. Mount it (`-v "$PWD/config.json:/app/config.json:ro"`) or use the flags `--sampling`, `--hardware`, `--max-output-tokens` and `--compare-with`.
 
