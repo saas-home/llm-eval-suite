@@ -101,8 +101,8 @@ class TestStartEval(unittest.TestCase):
         judge_key = "test-judge-key"
         answers = [
             "https://model.example/v1", model, key, "262144", "8",
-            "http://judge.example/v1", "independent judge", judge_key, "2",
-            "quick", "rust", "2x GPU", "120", "400", "y",
+            "all", "http://judge.example/v1", "independent judge", judge_key, "2",
+            "rust", "2x GPU", "120", "400", "y",
         ]
         result, calls = self.run_launcher(answers, trace=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -119,9 +119,9 @@ class TestStartEval(unittest.TestCase):
         for name in ENV_NAMES:
             index = run["args"].index(name)
             self.assertEqual(run["args"][index - 1], "--env")
-        self.assertEqual(run["args"][-16:], [
-            "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
-            "--quick", "--hardware", "2x GPU",
+        self.assertEqual(run["args"][-15:], [
+            "llm-eval-suite:latest", "--suite", "all", "--language", "rust",
+            "--hardware", "2x GPU",
             "--parallel", "8", "--judge-parallel", "2",
             "--workload-ttft", "120", "--workload-complete", "400",
         ])
@@ -155,8 +155,8 @@ class TestStartEval(unittest.TestCase):
                 ("Model API key", secret),
                 ("Context window", ""),
                 ("Model concurrency", ""),
-                ("Independent judge endpoint", ""),
                 ("Test mode", ""),
+                ("Independent judge endpoint", ""),
                 ("Coding language", ""),
                 ("GPU hardware", ""),
                 ("Workload Test 46 max TTFT", ""),
@@ -207,7 +207,7 @@ class TestStartEval(unittest.TestCase):
         answers = [
             "server:8000", "http://server/v1", "", "", "-1", "abc", "8192",
             "-2", "12",
-            "", "unknown", "core", "ruby", "python", "", "-5", "300", "-10", "600", "maybe", "yes",
+            "unknown", "core", "ruby", "python", "", "-5", "300", "-10", "600", "maybe", "yes",
         ]
         result, calls = self.run_launcher(answers)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -280,8 +280,8 @@ class TestStartEval(unittest.TestCase):
     def test_subsequent_run_remembers_previous_values_as_defaults(self):
         answers = [
             "http://172.16.16.16:8080/v1", "custom-model", "custom-key", "131072", "12",
-            "http://172.16.16.43:8888/v1", "judge-model", "judge-key", "4",
-            "quick", "rust", "1x GPU", "300", "600", "y",
+            "all", "http://172.16.16.43:8888/v1", "judge-model", "judge-key", "4",
+            "rust", "1x GPU", "300", "600", "y",
         ]
         result1, calls1 = self.run_launcher(answers)
         self.assertEqual(result1.returncode, 0, result1.stderr)
@@ -293,9 +293,9 @@ class TestStartEval(unittest.TestCase):
         self.assertEqual(run1["env"]["JUDGE_ENDPOINT"], "http://172.16.16.43:8888/v1")
         self.assertEqual(run1["env"]["JUDGE_MODEL"], "judge-model")
         self.assertEqual(run1["env"]["JUDGE_API_KEY"], "judge-key")
-        self.assertEqual(run1["args"][-16:], [
-            "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
-            "--quick", "--hardware", "1x GPU",
+        self.assertEqual(run1["args"][-15:], [
+            "llm-eval-suite:latest", "--suite", "all", "--language", "rust",
+            "--hardware", "1x GPU",
             "--parallel", "12", "--judge-parallel", "4",
             "--workload-ttft", "300", "--workload-complete", "600",
         ])
@@ -325,9 +325,9 @@ class TestStartEval(unittest.TestCase):
         self.assertEqual(run2["env"]["JUDGE_ENDPOINT"], "http://172.16.16.43:8888/v1")
         self.assertEqual(run2["env"]["JUDGE_MODEL"], "judge-model")
         self.assertEqual(run2["env"]["JUDGE_API_KEY"], "")
-        self.assertEqual(run2["args"][-16:], [
-            "llm-eval-suite:latest", "--suite", "core", "--language", "rust",
-            "--quick", "--hardware", "1x GPU",
+        self.assertEqual(run2["args"][-15:], [
+            "llm-eval-suite:latest", "--suite", "all", "--language", "rust",
+            "--hardware", "1x GPU",
             "--parallel", "12", "--judge-parallel", "4",
             "--workload-ttft", "300", "--workload-complete", "600",
         ])
@@ -335,7 +335,7 @@ class TestStartEval(unittest.TestCase):
     def test_reset_clears_cached_defaults(self):
         answers = [
             "http://172.16.16.16:8080/v1", "custom-model", "", "", "",
-            "", "quick", "python", "", "", "", "y",
+            "quick", "python", "", "", "", "y",
         ]
         self.run_launcher(answers)
         cache_file = self.repo / ".start_eval.cache"
@@ -353,6 +353,23 @@ class TestStartEval(unittest.TestCase):
         self.assertEqual(run3["env"]["OPENAI_BASE_URL"], "http://127.0.0.1:8080/v1")
         self.assertEqual(run3["env"]["OPENAI_MODEL"], "")
         self.assertEqual(run3["args"][-4:], ["--suite", "all", "--language", "polyglot"])
+
+    def test_quick_and_core_mode_skips_judge_prompts(self):
+        answers = [
+            "http://172.16.16.25:8080/v1", "quick-model", "", "", "8",
+            "quick", "python", "2x GPU", "300", "600", "y",
+        ]
+        result, calls = self.run_launcher(answers)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("Independent judge endpoint", result.stderr)
+        run = self.run_calls(calls)[-1]
+        self.assertEqual(run["env"]["JUDGE_ENDPOINT"], "")
+        self.assertEqual(run["args"][-14:], [
+            "llm-eval-suite:latest", "--suite", "core", "--language", "python",
+            "--quick", "--hardware", "2x GPU",
+            "--parallel", "8",
+            "--workload-ttft", "300", "--workload-complete", "600",
+        ])
 
 
 if __name__ == "__main__":

@@ -28,6 +28,10 @@ This file records notable changes. The format follows [Keep a Changelog](https:/
 
 - `scripts/start_eval.sh` asks for model and optional independent-judge details, test mode, language and hardware, then probes the endpoint and runs the Docker evaluation with persistent reports and logs. API-key entry is hidden, model settings are passed by environment variable name, and no credential files are saved or mounted. Missing images are built only with approval.
 
+### Changed: launcher judge prompts follow test mode
+
+- `scripts/start_eval.sh` now asks for test mode before the judge prompts and asks for the independent judge endpoint, model, API key and concurrency only in `all` mode; core and quick runs never prompt for a judge. Cached judge settings survive a run in a non-judge mode instead of being wiped from `.start_eval.cache`.
+
 ### Security: model code runs as its own user
 
 - In the Docker image, model-written code (every compile, test and run) now runs as the user `evalcode` (uid and gid 64999), not as root. It owns only the folder of the current run, so it cannot change the reports in `results/` or `logs/`, or read a mounted `config.json` or `.env` set to `chmod 600`. The image also removes build leftovers from `/tmp`.

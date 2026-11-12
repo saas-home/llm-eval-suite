@@ -128,6 +128,16 @@ load_state() {
 save_state() {
     local file=$1
     local tmp="${file}.tmp.$$"
+    local save_judge_endpoint save_judge_model save_judge_parallel
+    if [[ "$MODE" == all ]]; then
+        save_judge_endpoint=$JUDGE_ENDPOINT
+        save_judge_model=$JUDGE_MODEL
+        save_judge_parallel=$JUDGE_PARALLEL
+    else
+        save_judge_endpoint=${PREV_JUDGE_ENDPOINT:-}
+        save_judge_model=${PREV_JUDGE_MODEL:-}
+        save_judge_parallel=${PREV_JUDGE_PARALLEL:-}
+    fi
     (
         umask 077
         cat > "$tmp" <<EOF
@@ -135,9 +145,9 @@ CACHED_ENDPOINT=$OPENAI_BASE_URL
 CACHED_MODEL=$OPENAI_MODEL
 CACHED_MAX_CONTEXT=$MAX_CONTEXT
 CACHED_PARALLEL=$PARALLEL
-CACHED_JUDGE_ENDPOINT=$JUDGE_ENDPOINT
-CACHED_JUDGE_MODEL=$JUDGE_MODEL
-CACHED_JUDGE_PARALLEL=$JUDGE_PARALLEL
+CACHED_JUDGE_ENDPOINT=$save_judge_endpoint
+CACHED_JUDGE_MODEL=$save_judge_model
+CACHED_JUDGE_PARALLEL=$save_judge_parallel
 CACHED_MODE=$MODE
 CACHED_LANGUAGE=$LANGUAGE
 CACHED_HARDWARE=$HARDWARE
@@ -206,29 +216,32 @@ while true; do
     printf 'Enter a positive whole number or leave blank.\n' >&2
 done
 
-endpoint 'Independent judge endpoint (blank = objective grading)' "$PREV_JUDGE_ENDPOINT"
-JUDGE_ENDPOINT=$REPLY
-JUDGE_MODEL=
-JUDGE_API_KEY=
-JUDGE_PARALLEL=
-if [[ -n "$JUDGE_ENDPOINT" ]]; then
-    prompt 'Judge model ID (blank = auto-discover; must differ from tested model)' "$PREV_JUDGE_MODEL"
-    JUDGE_MODEL=$REPLY
-    prompt 'Judge API key (blank = no authentication)' "" secret
-    JUDGE_API_KEY=$REPLY
-    while true; do
-        prompt 'Judge concurrency / parallel requests (blank = auto-detect via judge /health)' "$PREV_JUDGE_PARALLEL"
-        JUDGE_PARALLEL=$REPLY
-        if [[ -z "$JUDGE_PARALLEL" || "$JUDGE_PARALLEL" =~ ^[1-9][0-9]*$ ]]; then
-            break
-        fi
-        printf 'Enter a positive whole number or leave blank.\n' >&2
-    done
-fi
-
 DEFAULT_MODE=${PREV_MODE:-all}
 choose 'Test mode: all / core / quick' "$DEFAULT_MODE" all core quick
 MODE=$REPLY
+
+JUDGE_ENDPOINT=
+JUDGE_MODEL=
+JUDGE_API_KEY=
+JUDGE_PARALLEL=
+if [[ "$MODE" == all ]]; then
+    endpoint 'Independent judge endpoint (blank = objective grading)' "$PREV_JUDGE_ENDPOINT"
+    JUDGE_ENDPOINT=$REPLY
+    if [[ -n "$JUDGE_ENDPOINT" ]]; then
+        prompt 'Judge model ID (blank = auto-discover; must differ from tested model)' "$PREV_JUDGE_MODEL"
+        JUDGE_MODEL=$REPLY
+        prompt 'Judge API key (blank = no authentication)' "" secret
+        JUDGE_API_KEY=$REPLY
+        while true; do
+            prompt 'Judge concurrency / parallel requests (blank = auto-detect via judge /health)' "$PREV_JUDGE_PARALLEL"
+            JUDGE_PARALLEL=$REPLY
+            if [[ -z "$JUDGE_PARALLEL" || "$JUDGE_PARALLEL" =~ ^[1-9][0-9]*$ ]]; then
+                break
+            fi
+            printf 'Enter a positive whole number or leave blank.\n' >&2
+        done
+    fi
+fi
 
 DEFAULT_LANGUAGE=${PREV_LANGUAGE:-polyglot}
 choose 'Coding language: polyglot / python / typescript / go / java / rust / csharp' \
